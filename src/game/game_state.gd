@@ -29,6 +29,16 @@ var roster: Array[PartyMember] = []
 var deepest_floor: int = 0
 var runs_attempted: int = 0
 
+## 恒久通貨「残響」。毎ランの道中スコアに応じて必ず支払われる。
+##
+## 最深階の更新やボス撃破のような一度きりの達成に紐付けると、達成したあとの
+## ランで前進が止まり、周回する理由が消える。だから「今回どれだけやれたか」に
+## 対して毎回払う。深く潜り、多く倒し、多く稼いだぶんだけ増える。
+var echo: int = 0
+
+## 買ったアップグレード（upgrade_id -> 段数）。
+var upgrades: Dictionary = {}
+
 # --- ラン中のみ（全滅で消える） ---
 var run_active: bool = false
 var run_seed: int = 0
@@ -36,6 +46,13 @@ var floor_number: int = 1
 var gold: int = 0
 var steps: int = 0
 var rng: DetRng = null
+
+## 撃破数と、そのランで「稼いだ」ゴールドの累計。
+##
+## スコアに使うのは所持金ではなく累計。所持金で測ると、出店で使うほど
+## 恒久報酬が減ることになり、買わずに抱えるのが最適解になってしまう。
+var kills: int = 0
+var gold_earned: int = 0
 
 ## 持ち物（item_id -> 個数）。ゴールドと同じくランの中でしか存在しない。
 ## 「買ったものを持ち帰れる」ようにすると、出店が拠点の延長になって
@@ -71,13 +88,27 @@ func start_new_run(seed_value: int = -1) -> void:
 	floor_number = 1
 	gold = 0
 	steps = 0
+	kills = 0
+	gold_earned = 0
 	inventory = {}
 	run_active = true
 	runs_attempted += 1
 	for m in active_party():
 		m.reset_for_run()
+	_apply_upgrades_to_run()
 	run_started.emit(run_seed)
 	floor_changed.emit(floor_number)
+
+
+## 買ったアップグレードをランの初期状態に反映する。
+##
+## 能力値には触らない。レベルを失うことがランの代償なので、そこを恒久強化で
+## 埋めると代償そのものが消える。手に入るのは「立ち上がりの楽さ」だけにする。
+func _apply_upgrades_to_run() -> void:
+	gold = upgrade_value("start_gold")
+	var herbs := upgrade_value("start_herb")
+	if herbs > 0:
+		add_item("herb", herbs)
 
 
 ## シードだけは実時間から取る。ここから先は一切の乱数がこの種から決まる。
@@ -99,12 +130,23 @@ func descend() -> void:
 
 ## ランの終了。ここで失うものを捨て、持ち帰るものだけを残して保存する。
 func end_run(victory: bool) -> Dictionary:
+	# 道中スコアは失う側の値（階・撃破・稼ぎ）から作り、残響だけを残す側へ移す。
+	# 全滅でも必ず何かが増えるので、失敗したランも次のランの足しになる。
+	var score := run_score(victory)
+	var earned_echo := echo_for_score(score)
+	echo += earned_echo
+
 	var summary := {
 		"victory": victory,
 		"seed": run_seed,
 		"floor": floor_number,
 		"gold": gold,
+		"gold_earned": gold_earned,
+		"kills": kills,
 		"steps": steps,
+		"score": score,
+		"echo": earned_echo,
+		"echo_total": echo,
 		"members": [],
 	}
 	for m in active_party():
@@ -121,6 +163,8 @@ func end_run(victory: bool) -> Dictionary:
 
 	run_active = false
 	gold = 0
+	gold_earned = 0
+	kills = 0
 	steps = 0
 	floor_number = 1
 	inventory = {}
@@ -139,6 +183,14 @@ func spend_gold(amount: int) -> bool:
 		return false
 	gold -= amount
 	return true
+
+
+## ゴールドを得る。稼いだ累計も同時に伸ばす（スコアはこちらで測る）。
+func earn_gold(amount: int) -> void:
+	if amount <= 0:
+		return
+	gold += amount
+	gold_earned += amount
 
 
 func add_item(item_id: String, count: int = 1) -> void:
@@ -171,6 +223,83 @@ func inventory_ids() -> Array:
 
 
 # --------------------------------------------------------------------------
+# 残響（恒久通貨）とアップグレード
+# --------------------------------------------------------------------------
+
+## スコアの重み。すべて整数演算で閉じる（同じランからは必ず同じ点が出る）。
+const SCORE_PER_FLOOR := 100
+const SCORE_PER_KILL := 12
+const SCORE_GOLD_DIVISOR := 4
+const SCORE_VICTORY_BONUS := 600
+## このスコアごとに残響 1 枚。
+##
+## 全アップグレードを極めるのに 163 必要なので、10 階を制覇したランで 39、
+## 浅い階で全滅したランで 5〜10 ほど入る計算にしてある。1 回の生還で
+## 全部揃ってしまうと、拠点で選ぶ楽しみがその時点で終わる。
+const SCORE_PER_ECHO := 50
+
+
+## そのランの道中スコア。深く潜り、多く倒し、多く稼いだぶんだけ伸びる。
+func run_score(victory: bool) -> int:
+	var score := floor_number * SCORE_PER_FLOOR
+	score += kills * SCORE_PER_KILL
+	@warning_ignore("integer_division")
+	score += gold_earned / SCORE_GOLD_DIVISOR
+	if victory:
+		score += SCORE_VICTORY_BONUS
+	return score
+
+
+@warning_ignore("integer_division")
+func echo_for_score(score: int) -> int:
+	return score / SCORE_PER_ECHO
+
+
+func upgrade_level(id: String) -> int:
+	return int(upgrades.get(id, 0))
+
+
+func upgrade_maxed(id: String) -> bool:
+	return upgrade_level(id) >= int(Database.upgrade(id).get("levels", 0))
+
+
+## 次の 1 段の値段。段が上がるほど高くなる。
+func upgrade_price(id: String) -> int:
+	var u := Database.upgrade(id)
+	if u.is_empty():
+		return 0
+	return int(u.get("cost", 0)) + int(u.get("cost_step", 0)) * upgrade_level(id)
+
+
+## 買えるかどうかの判定だけを切り出す。保存を伴わないので、
+## ここだけならテストから安全に叩ける（buy_upgrade はセーブを書き換える）。
+func can_buy_upgrade(id: String) -> bool:
+	if run_active or Database.upgrade(id).is_empty() or upgrade_maxed(id):
+		return false
+	return echo >= upgrade_price(id)
+
+
+func buy_upgrade(id: String) -> bool:
+	if not can_buy_upgrade(id):
+		return false
+	echo -= upgrade_price(id)
+	upgrades[id] = upgrade_level(id) + 1
+	save_game()
+	return true
+
+
+## その効果の現在値（段数 x 1 段ぶんの増分の合計）。
+## 効果を持つアップグレードが増えても、参照側はこの 1 本だけを見ればよい。
+func upgrade_value(effect: String) -> int:
+	var total := 0
+	for id in Database.upgrade_ids():
+		var u := Database.upgrade(String(id))
+		if String(u.get("effect", "")) == effect:
+			total += int(u.get("value", 0)) * upgrade_level(String(id))
+	return total
+
+
+# --------------------------------------------------------------------------
 # 拠点
 # --------------------------------------------------------------------------
 
@@ -195,9 +324,11 @@ func change_job(member: PartyMember, job_id: String) -> bool:
 
 func save_game() -> void:
 	var data := {
-		"version": 1,
+		"version": 2,
 		"deepest_floor": deepest_floor,
 		"runs_attempted": runs_attempted,
+		"echo": echo,
+		"upgrades": upgrades,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -220,6 +351,9 @@ func load_game() -> bool:
 	var data: Dictionary = parsed
 	deepest_floor = int(data.get("deepest_floor", 0))
 	runs_attempted = int(data.get("runs_attempted", 0))
+	# version 1 のセーブには残響もアップグレードも無い。既定値で素直に読める。
+	echo = int(data.get("echo", 0))
+	upgrades = data.get("upgrades", {})
 	roster.clear()
 	for entry in data.get("roster", []):
 		roster.append(PartyMember.from_dict(entry))

@@ -25,7 +25,7 @@ const ROSTER_RECT := Rect2(6, 34, 130, 122)
 const DETAIL_RECT := Rect2(140, 34, 238, 122)
 const MENU_RECT := Rect2(6, 160, 372, 74)
 
-const ROW_HEIGHT := 20
+const ROW_HEIGHT := 18
 const NOTICE_TIME := 2.0
 
 ## 前の画面を閉じた決定キーが、そのままこの画面の決定として流れ込むのを防ぐ。
@@ -44,7 +44,7 @@ const PORTRAITS := {
 ## 覚えた技の一覧は 4 列 x 3 段。職業 4 x ランク 3 = 12 個で必ず収まる。
 const ABILITY_COLUMNS := 4
 
-enum State { MEMBER, JOB }
+enum State { MEMBER, JOB, UPGRADE }
 
 var members: Array[PartyMember] = []
 
@@ -53,6 +53,8 @@ var _state: State = State.MEMBER
 var _index := 0
 var _job_ids: Array = []
 var _job_index := 0
+var _upgrade_ids: Array = []
+var _upgrade_index := 0
 var _notice := ""
 var _notice_timer := 0.0
 var _input_lock := 0.0
@@ -61,6 +63,8 @@ var _input_lock := 0.0
 func open() -> void:
 	members = GameState.active_party()
 	_job_ids = Database.job_ids()
+	_upgrade_ids = Database.upgrade_ids()
+	_upgrade_index = 0
 	_state = State.MEMBER
 	_index = 0
 	_notice = ""
@@ -92,9 +96,13 @@ func _notify(text: String) -> void:
 	queue_redraw()
 
 
-## 「出撃する」の行番号。名簿が伸びても常に末尾に置く。
-func _depart_row() -> int:
+## 名簿の下に並ぶ 2 つの行。「出撃する」は名簿が伸びても常に末尾に置く。
+func _upgrade_row() -> int:
 	return members.size()
+
+
+func _depart_row() -> int:
+	return members.size() + 1
 
 
 func _selected() -> PartyMember:
@@ -114,6 +122,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_input_member()
 		State.JOB:
 			_input_job()
+		State.UPGRADE:
+			_input_upgrade()
 
 
 func _input_member() -> void:
@@ -131,6 +141,10 @@ func _input_member() -> void:
 		if _index == _depart_row():
 			close()
 			departed.emit()
+		elif _index == _upgrade_row():
+			_state = State.UPGRADE
+			_upgrade_index = 0
+			queue_redraw()
 		else:
 			_open_job_menu()
 	elif Input.is_action_just_pressed("cancel"):
@@ -139,6 +153,14 @@ func _input_member() -> void:
 			_index = _depart_row()
 			Sound.play("cancel")
 			queue_redraw()
+
+
+## 開発用。アップグレードの画面を撮るために使う。
+func debug_open_upgrades() -> void:
+	_index = _upgrade_row()
+	_upgrade_index = 0
+	_state = State.UPGRADE
+	queue_redraw()
 
 
 ## 開発用。職業えらびの画面を撮るために、名簿の 1 人を選んでそこまで進める。
@@ -188,6 +210,42 @@ func _input_job() -> void:
 
 func _job_rows() -> int:
 	return int(ceil(_job_ids.size() / 2.0))
+
+
+func _input_upgrade() -> void:
+	if _upgrade_ids.is_empty():
+		_state = State.MEMBER
+		queue_redraw()
+		return
+	if Input.is_action_just_pressed("cancel"):
+		Sound.play("cancel")
+		_state = State.MEMBER
+		queue_redraw()
+	elif Input.is_action_just_pressed("ui_down"):
+		_upgrade_index = (_upgrade_index + 1) % _upgrade_ids.size()
+		Sound.play("cursor")
+		queue_redraw()
+	elif Input.is_action_just_pressed("ui_up"):
+		_upgrade_index = (_upgrade_index - 1 + _upgrade_ids.size()) % _upgrade_ids.size()
+		Sound.play("cursor")
+		queue_redraw()
+	elif Input.is_action_just_pressed("confirm"):
+		_buy_upgrade()
+
+
+func _buy_upgrade() -> void:
+	var id := String(_upgrade_ids[_upgrade_index])
+	var label := String(Database.upgrade(id).get("name", id))
+	if GameState.upgrade_maxed(id):
+		Sound.play("cancel")
+		_notify("%s は これいじょう のばせない" % label)
+		return
+	if not GameState.buy_upgrade(id):
+		Sound.play("cancel")
+		_notify("残響が たりない")
+		return
+	Sound.play("confirm")
+	_notify("%s が %d 段に なった" % [label, GameState.upgrade_level(id)])
 
 
 func _apply_job() -> void:
@@ -251,8 +309,8 @@ func _draw() -> void:
 func _draw_header() -> void:
 	PixelUI.draw_window(self, HEADER_RECT, WINDOW_TEX)
 	PixelUI.draw_text(self, HEADER_RECT.position + Vector2(12, 17), "銀の砦", PixelUI.C_ACTIVE, 13)
-	var record := "最深 地下%d階　%d回目の潜行" % [
-		maxi(GameState.deepest_floor, 1), GameState.runs_attempted + 1
+	var record := "残響 %d　最深 地下%d階　%d回目" % [
+		GameState.echo, maxi(GameState.deepest_floor, 1), GameState.runs_attempted + 1
 	]
 	var x := HEADER_RECT.end.x - 12 - PixelUI.text_width(record, 10)
 	PixelUI.draw_text(self, Vector2(x, HEADER_RECT.position.y + 17), record, PixelUI.C_TEXT_DIM, 10)
@@ -269,17 +327,25 @@ func _draw_roster() -> void:
 		PixelUI.draw_text(self, base, m.name, PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM, 12)
 		PixelUI.draw_text(self, base + Vector2(44, 0), _job_name(m.job_id), PixelUI.C_TEXT_DIM, 9)
 
-	var depart := ROSTER_RECT.position + Vector2(20, 20 + _depart_row() * ROW_HEIGHT)
-	if _index == _depart_row():
-		draw_texture(CURSOR_TEX, (depart + Vector2(-13, -8)).floor())
-	var color := PixelUI.C_ACTIVE if _index == _depart_row() else PixelUI.C_TEXT_DIM
-	PixelUI.draw_text(self, depart, "出撃する", color, 12)
+	_draw_roster_row(_upgrade_row(), "アップグレード")
+	_draw_roster_row(_depart_row(), "出撃する")
+
+
+func _draw_roster_row(row: int, label: String) -> void:
+	var at := ROSTER_RECT.position + Vector2(20, 20 + row * ROW_HEIGHT)
+	if _index == row:
+		draw_texture(CURSOR_TEX, (at + Vector2(-13, -8)).floor())
+	var color := PixelUI.C_ACTIVE if _index == row else PixelUI.C_TEXT_DIM
+	PixelUI.draw_text(self, at, label, color, 12)
 
 
 func _draw_detail() -> void:
 	PixelUI.draw_window(self, DETAIL_RECT, WINDOW_TEX)
 	if _index == _depart_row():
 		_draw_departure_note()
+		return
+	if _index == _upgrade_row():
+		_draw_upgrade_note()
 		return
 
 	var member := _selected()
@@ -339,14 +405,64 @@ func _draw_departure_note() -> void:
 		)
 
 
+## 残響の使い道の一覧。何段まで伸ばしたかと、次の 1 段の値段を並べる。
+func _draw_upgrade_note() -> void:
+	var origin := DETAIL_RECT.position
+	PixelUI.draw_text(self, origin + Vector2(14, 24), "残響 %d" % GameState.echo, PixelUI.C_ACTIVE, 13)
+	PixelUI.draw_text(
+		self, origin + Vector2(14, 42), "潜れば潜るほど 毎回もらえる。", PixelUI.C_TEXT_DIM, 10
+	)
+	PixelUI.draw_text(self, origin + Vector2(104, 58), "段", PixelUI.C_TEXT_DIM, 9)
+	PixelUI.draw_text(self, origin + Vector2(140, 58), "ひつよう", PixelUI.C_TEXT_DIM, 9)
+
+	for i in _upgrade_ids.size():
+		var id := String(_upgrade_ids[i])
+		var u := Database.upgrade(id)
+		var row := origin + Vector2(14, 72 + i * 14)
+		var level := GameState.upgrade_level(id)
+		var maxed := GameState.upgrade_maxed(id)
+		var on := _state == State.UPGRADE and i == _upgrade_index
+		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
+		if on:
+			draw_texture(CURSOR_TEX, (row + Vector2(-11, -8)).floor())
+		PixelUI.draw_text(self, row, String(u.get("name", id)), tint, 10)
+		PixelUI.draw_text(
+			self, row + Vector2(90, 0),
+			"%d/%d" % [level, int(u.get("levels", 0))],
+			PixelUI.C_ACTIVE if level > 0 else PixelUI.C_TEXT_DIM, 10
+		)
+		var price := "極" if maxed else "%d" % GameState.upgrade_price(id)
+		PixelUI.draw_text(self, row + Vector2(140, 0), price, PixelUI.C_TEXT_DIM, 10)
+
+
 func _draw_menu() -> void:
 	PixelUI.draw_window(self, MENU_RECT, WINDOW_TEX)
 	if _state == State.JOB:
 		_draw_job_menu()
+	elif _state == State.UPGRADE or _index == _upgrade_row():
+		_draw_upgrade_desc()
 	elif _index == _depart_row():
 		_draw_hint()
 	else:
 		_draw_learned()
+
+
+func _draw_upgrade_desc() -> void:
+	var origin := MENU_RECT.position
+	if _upgrade_ids.is_empty():
+		return
+	var id := String(_upgrade_ids[_upgrade_index])
+	var u := Database.upgrade(id)
+	PixelUI.draw_text(
+		self, origin + Vector2(16, 18), String(u.get("name", id)), PixelUI.C_ACTIVE, 11
+	)
+	PixelUI.draw_text(
+		self, origin + Vector2(16, 36), String(u.get("desc", "")), PixelUI.C_TEXT, 11
+	)
+	var tail := "Ｚで のばす　Ｘで もどる"
+	if _state != State.UPGRADE:
+		tail = "Ｚで えらぶ"
+	PixelUI.draw_text(self, origin + Vector2(16, 56), tail, PixelUI.C_TEXT_DIM, 10)
 
 
 func _draw_learned() -> void:

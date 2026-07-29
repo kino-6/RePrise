@@ -27,6 +27,7 @@ func _initialize() -> void:
 	_test_boss_encounter()
 	_test_every_floor_populated()
 	_test_shop()
+	_test_echo_and_upgrades()
 	_test_mastery_persists()
 	_test_job_change()
 
@@ -309,6 +310,72 @@ func _test_shop() -> void:
 			blocked.append(seed_value)
 	_check("出店は 39 シード中の一部にだけ出る", found > 0 and found < 39, str(found))
 	_check("出店が階を詰ませない", blocked.is_empty(), str(blocked))
+
+
+## 恒久通貨「残響」。毎ランのスコアに対して必ず払われることが要点で、
+## 一度きりの達成報酬にすると達成後に周回する理由が消える。
+##
+## GameState はオートロードなので headless では起動しない。スクリプトを
+## 直接 new() して使う（_ready() は走らないのでセーブも読まない）。
+## 保存を伴う buy_upgrade は呼ばない——テストで user://save.json を
+## 壊してはいけない。判定は can_buy_upgrade に切り出してある。
+func _test_echo_and_upgrades() -> void:
+	Database.reload()
+	var gs: Node = load("res://src/game/game_state.gd").new()
+
+	# --- スコア ---
+	gs.floor_number = 5
+	gs.kills = 10
+	gs.gold_earned = 200
+	var lost: int = gs.run_score(false)
+	_equal("スコアは階と撃破と稼ぎから決まる", lost, 5 * 100 + 10 * 12 + 200 / 4)
+
+	var won: int = gs.run_score(true)
+	_check("生還はスコアが上乗せされる", won > lost)
+
+	# 使ったぶんスコアが減るなら、出店で買わないのが最適解になってしまう
+	gs.gold = 0
+	_equal("所持金を使ってもスコアは減らない", gs.run_score(false), lost)
+
+	_check("全滅でも残響が入る", gs.echo_for_score(lost) > 0)
+	gs.floor_number = 1
+	gs.kills = 0
+	gs.gold_earned = 0
+	_check("何もできなかったランでも 0 以上", gs.echo_for_score(gs.run_score(false)) >= 0)
+
+	# --- アップグレード ---
+	var ids := Database.upgrade_ids()
+	_check("アップグレードが読める", ids.size() >= 2, str(ids))
+	var id := String(ids[0])
+
+	gs.echo = 0
+	_check("残響が足りなければ買えない", not gs.can_buy_upgrade(id))
+	gs.echo = 9999
+	_check("足りていれば買える", gs.can_buy_upgrade(id))
+
+	gs.run_active = true
+	_check("ラン中は買えない", not gs.can_buy_upgrade(id))
+	gs.run_active = false
+
+	# 段が上がるほど高くなる
+	var first_price: int = gs.upgrade_price(id)
+	gs.upgrades[id] = 1
+	_check("2 段目は 1 段目より高い", gs.upgrade_price(id) > first_price)
+
+	# 上限まで伸ばしたら買えない
+	gs.upgrades[id] = int(Database.upgrade(id).get("levels", 0))
+	_check("上限まで伸ばしたら買えない", not gs.can_buy_upgrade(id))
+	_check("上限判定が効いている", gs.upgrade_maxed(id))
+
+	# 効果値は段数に比例する
+	var effect := String(Database.upgrade(id).get("effect", ""))
+	var per_level := int(Database.upgrade(id).get("value", 0))
+	var levels := int(Database.upgrade(id).get("levels", 0))
+	_equal("効果は段数に比例する", gs.upgrade_value(effect), per_level * levels)
+	gs.upgrades.clear()
+	_equal("買っていなければ効果は 0", gs.upgrade_value(effect), 0)
+
+	gs.free()
 
 
 func _test_boss_encounter() -> void:

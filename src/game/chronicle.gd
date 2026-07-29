@@ -23,7 +23,19 @@ static func write(summary: Dictionary) -> PackedStringArray:
 	else:
 		lines.append("一行は 地下 %d 階で ついえた。" % floor_no)
 
-	lines.append("持ち帰った金貨 %d 枚。" % gold)
+	lines.append(
+		"%d 体を倒し、金貨 %d 枚を得た。" % [int(summary.get("kills", 0)), int(summary.get("gold_earned", gold))]
+	)
+
+	# 残響は必ず支払われる。全滅したランも次の足しになる、という手応えを
+	# 数字で見せる場所がここしかない。
+	lines.append(
+		"道中の記録 %d 点。残響を %d 得た（計 %d）。" % [
+			int(summary.get("score", 0)),
+			int(summary.get("echo", 0)),
+			int(summary.get("echo_total", 0)),
+		]
+	)
 
 	var learned_all: Array = []
 	for m in members:

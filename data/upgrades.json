@@ -1,0 +1,31 @@
+{
+  "_comment": "恒久アップグレード。残響（毎ランの道中スコアに応じて必ず支払われる恒久通貨）で買う。effect の値は 1 段ごとの増分で、level 段まで積める。cost は 1 段目の値段で、段が上がるごとに cost_step ぶん高くなる。能力値そのものは上げない——レベルを失うことがランの代償なので、そこを恒久強化で埋めると代償が消える。",
+
+  "provisions": {
+    "name": "旅支度",
+    "desc": "出撃するとき ゴールドを持って出られる。",
+    "effect": "start_gold", "value": 40,
+    "levels": 3, "cost": 6, "cost_step": 5
+  },
+
+  "handmemory": {
+    "name": "手の記憶",
+    "desc": "職業の熟練が 早く身につく。",
+    "effect": "mastery_gain", "value": 15,
+    "levels": 3, "cost": 10, "cost_step": 8
+  },
+
+  "connections": {
+    "name": "商いの伝手",
+    "desc": "道中の出店に 品が多く並ぶ。",
+    "effect": "shop_stock", "value": 1,
+    "levels": 2, "cost": 12, "cost_step": 10
+  },
+
+  "preparation": {
+    "name": "備え",
+    "desc": "出撃するとき やくそうを持って出られる。",
+    "effect": "start_herb", "value": 1,
+    "levels": 3, "cost": 8, "cost_step": 6
+  }
+}

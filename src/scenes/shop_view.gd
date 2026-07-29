@@ -47,8 +47,10 @@ func open(map: DungeonMap, floor_number: int) -> void:
 	_ids = Database.item_ids_for_floor(floor_number)
 	# 在庫はこのフロアで一度だけ用意する。出入りしても戻らない。
 	if _map.shop_stock.is_empty():
+		# 「商いの伝手」を買っているぶんだけ品が多く並ぶ。
+		var extra := GameState.upgrade_value("shop_stock")
 		for id in _ids:
-			_map.shop_stock[id] = int(Database.item(String(id)).get("stock", 1))
+			_map.shop_stock[id] = int(Database.item(String(id)).get("stock", 1)) + extra
 	_index = 0
 	_notice = ""
 	_notice_timer = 0.0

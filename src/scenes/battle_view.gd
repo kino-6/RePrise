@@ -198,14 +198,19 @@ func _resolve_outcome() -> void:
 		var reward := system.rewards()
 		lines.append("たたかいに かった！")
 		lines.append("%d の けいけんちと %d ゴールドを えた" % [reward["exp"], reward["gold"]])
-		GameState.gold += int(reward["gold"])
+		GameState.earn_gold(int(reward["gold"]))
+		GameState.kills += system.enemies.size()
+
+		# 「手の記憶」を買っているぶんだけ熟練の入りが良くなる。
+		var mastery := int(reward["mastery"])
+		mastery += mastery * GameState.upgrade_value("mastery_gain") / 100
 
 		for m in members:
 			if m.hp <= 0:
 				continue  # 倒れていた者には入らない
 			if m.gain_exp(int(reward["exp"])) > 0:
 				lines.append("%sは レベル %d に あがった！" % [m.name, m.level])
-			for ability_id in m.gain_mastery(int(reward["mastery"])):
+			for ability_id in m.gain_mastery(mastery):
 				# ラン中に覚えた技は、全滅しても拠点に残る
 				var ability_name: String = Database.ability(ability_id).get("name", ability_id)
 				lines.append("%sは %s を おぼえた！" % [m.name, ability_name])

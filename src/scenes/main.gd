@@ -127,8 +127,16 @@ func _capture(which: String) -> void:
 				await get_tree().create_timer(0.1).timeout
 				if battle.is_awaiting_command():
 					break
+		"upgrade":
+			GameState.echo = 42
+			stronghold.debug_open_upgrades()
 		"win":
 			_start_run()
+			# 記録の見え方を確かめたいので、それらしい戦績を入れておく
+			GameState.kills = 24
+			GameState.gold_earned = 380
+			while GameState.floor_number < GameState.FINAL_FLOOR:
+				GameState.descend()
 			result.show_summary(GameState.end_run(true))
 			_set_mode(Mode.RESULT)
 		"commands":
@@ -294,6 +302,6 @@ func _on_shop_entered() -> void:
 
 func _on_chest(amount: int) -> void:
 	Sound.play("chest")
-	GameState.gold += amount
+	GameState.earn_gold(amount)
 	hud.toast("たからばこ！ %d ゴールド" % amount)
 	_refresh_hud()

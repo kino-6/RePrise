@@ -15,6 +15,7 @@ static var jobs: Dictionary = {}
 static var abilities: Dictionary = {}
 static var monsters: Dictionary = {}
 static var items: Dictionary = {}
+static var upgrades: Dictionary = {}
 
 static var _loaded := false
 
@@ -29,6 +30,7 @@ static func reload() -> void:
 	abilities = _load_json("res://data/abilities.json")
 	monsters = _load_json("res://data/monsters.json")
 	items = _load_json("res://data/items.json")
+	upgrades = _load_json("res://data/upgrades.json")
 	_loaded = true
 
 
@@ -84,6 +86,24 @@ static func all_items() -> Dictionary:
 static func item(id: String) -> Dictionary:
 	_ensure()
 	return items.get(id, {})
+
+
+static func all_upgrades() -> Dictionary:
+	_ensure()
+	return upgrades
+
+
+static func upgrade(id: String) -> Dictionary:
+	_ensure()
+	return upgrades.get(id, {})
+
+
+## 並び順を確定させてから返す（拠点の一覧が起動ごとに入れ替わらないように）。
+static func upgrade_ids() -> Array:
+	_ensure()
+	var ids := upgrades.keys()
+	ids.sort()
+	return ids
 
 
 ## その階の出店に並ぶ品。深いほど品揃えが増える。
