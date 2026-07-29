@@ -20,6 +20,7 @@ func _initialize() -> void:
 	_test_scheduler_preview_matches_reality()
 	_test_scheduler_tiebreak()
 	_test_action_cost_matters()
+	_test_cover_and_buff_expiry()
 	_test_dungeon_determinism()
 	_test_dungeon_reachable()
 	_test_database_loaded()
@@ -30,6 +31,7 @@ func _initialize() -> void:
 	_test_echo_and_upgrades()
 	_test_mastery_persists()
 	_test_job_change()
+	_test_advanced_jobs()
 
 	print("---")
 	print("成功 %d / 失敗 %d" % [_passed, _failed])
@@ -179,6 +181,56 @@ func _test_action_cost_matters() -> void:
 	var heavy_wait := CtbScheduler.wait_for(12, 200)
 	var light_wait := CtbScheduler.wait_for(12, 60)
 	_check("待ち時間はコストに比例", heavy_wait > light_wait * 3)
+
+
+## かばうと素早さ変化の寿命。
+##
+## かばうが「守り手が代わりに受ける」になっていないと技の名前が嘘になり、
+## 素早さ変化が切れないと一度かけたら勝ちの永続バフになる。どちらも
+## 静かに壊れるので、ロジックだけを直接まわして確かめる。
+func _test_cover_and_buff_expiry() -> void:
+	Database.reload()
+	var system := BattleSystem.new()
+	var tank := _make_battler(1, "たて", 10)
+	var frail := _make_battler(2, "よわい", 12)
+	var foe := _make_battler(3, "てき", 8, false)
+	foe.atk = 40
+	var party: Array[Battler] = [tank, frail]
+	var foes: Array[Battler] = [foe]
+	system.start(party, foes, DetRng.new(7), 1)
+
+	# たてが よわい をかばう
+	system.perform(tank, "guard_stance", frail)
+	_check("かばわれた側に守り手が付く", frail.protected_by == tank)
+
+	var frail_hp := frail.hp
+	var tank_hp := tank.hp
+	system.perform(foe, "attack", frail)
+	_equal("かばわれた側は傷つかない", frail.hp, frail_hp)
+	_check("守り手が代わりに受ける", tank.hp < tank_hp)
+
+	# 守り手が動いたら、かばいは解ける
+	system.begin_turn()
+	while system.scheduler.next_actor() != tank:
+		system.scheduler.consume(system.scheduler.next_actor(), CtbScheduler.STANDARD_COST)
+	system.begin_turn()
+	_check("守り手が動くとかばいが解ける", frail.protected_by == null)
+
+	# 素早さ変化は BUFF_TURNS 手番で切れる
+	var runner := _make_battler(4, "はしる", 12)
+	var other := _make_battler(5, "ほか", 12, false)
+	var s2 := BattleSystem.new()
+	s2.start([runner] as Array[Battler], [other] as Array[Battler], DetRng.new(7), 1)
+	s2.perform(runner, "haste", runner)
+	_check("素早さが上がる", runner.agi_scale > 100)
+	_equal("残り手番が積まれる", runner.agi_scale_turns, BattleSystem.BUFF_TURNS)
+
+	# 相手を遠くへ押しやって、runner の手番だけを BUFF_TURNS 回まわす
+	for _i in BattleSystem.BUFF_TURNS:
+		s2.scheduler.consume(other, CtbScheduler.STANDARD_COST * 10)
+		s2.begin_turn()
+	_equal("いずれ素早さが元に戻る", runner.agi_scale, 100)
+	_equal("残り手番も 0 になる", runner.agi_scale_turns, 0)
 
 
 # --------------------------------------------------------------------------
@@ -445,6 +497,57 @@ func _test_mastery_persists() -> void:
 	m.reset_for_run()
 	_equal("レベルは 1 に戻る", m.level, 1)
 	_check("熟練度は残る", m.mastery_points("soldier") == 24)
+
+
+## 上級職。熟練を貯める動機をラン単位からゲーム単位へ伸ばすための仕掛けなので、
+## 「本人が条件を満たすまで就けない」が崩れると意味が無くなる。
+func _test_advanced_jobs() -> void:
+	Database.reload()
+
+	var locked := []
+	for job_id in Database.job_ids():
+		if not Database.job(job_id).get("unlock", {}).is_empty():
+			locked.append(job_id)
+	_check("解放条件を持つ職業がある", not locked.is_empty(), str(Database.job_ids()))
+
+	var m := PartyMember.create("テスト", "soldier")
+	var target := String(locked[0])
+	var unlock: Dictionary = Database.job(target).get("unlock", {})
+
+	_check("最初は上級職に就けない", not m.can_take_job(target))
+	_check("足りない条件が示される", not m.unmet_requirements(target).is_empty())
+	_check("条件を満たす前は転職も拒否される", not m.change_job(target))
+	_equal("拒否されたら職業は変わらない", m.job_id, "soldier")
+
+	# 条件の職業をひとつだけ満たしても、まだ足りない
+	var required: Array = unlock.keys()
+	required.sort()
+	_check("条件は 2 つ以上ある", required.size() >= 2, str(required))
+	_grant_rank(m, String(required[0]), int(unlock[required[0]]))
+	_check("片方だけでは就けない", not m.can_take_job(target))
+
+	_grant_rank(m, String(required[1]), int(unlock[required[1]]))
+	_check("両方を満たすと就ける", m.can_take_job(target))
+	_check("条件が残っていない", m.unmet_requirements(target).is_empty())
+	_check("上級職へ転職できる", m.change_job(target))
+	_equal("職業が上級職になる", m.job_id, target)
+
+	# 基本職は誰でも最初から就ける
+	_check("基本職に条件は無い", PartyMember.create("素", "thief").can_take_job("soldier"))
+
+	# 別の仲間は自分で条件を満たすまで就けない（誰かが極めれば全員、にはしない）
+	_check("他の仲間には解放が波及しない", not PartyMember.create("別", "mage").can_take_job(target))
+
+
+## 指定した職業の熟練を、目的のランクに届くまで積む。
+func _grant_rank(m: PartyMember, job_id: String, rank: int) -> void:
+	var before := m.job_id
+	m.job_id = job_id
+	for entry in Database.job(job_id).get("mastery", []):
+		if int(entry.get("rank", 0)) == rank:
+			m.gain_mastery(int(entry.get("need", 0)))
+			break
+	m.job_id = before
 
 
 ## 拠点での転職。GameState はオートロードなので --headless --script からは触れない。

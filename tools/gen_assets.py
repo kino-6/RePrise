@@ -74,6 +74,9 @@ HERO_ACCENTS = {
     "priest": ("#58E0B8", "#189070"),   # 翠
     "mage": ("#F878C8", "#B02878"),     # 桃
     "thief": ("#F86868", "#B01C34"),    # 紅
+    # 上級職。基本職 2 つを混ぜた中間色にして、出自が見えるようにする。
+    "paladin": ("#F8E070", "#B08018"),  # 金（蒼 x 翠 の格上げ）
+    "ninja": ("#A878F8", "#5820B0"),    # 紫（紅 x 桃）
 }
 
 
@@ -537,39 +540,46 @@ GEL_HALF = [
     "................",
 ]
 
+# コウモリ。32x32 では他の敵（48px 級）の隣で子どもに見えたので描き直した。
+#
+# 右端は鏡像の合わせ目なので、体が中心をまたぐ行では**右端に輪郭を置かない**。
+# ここに K を置くと合わせ目で線が二重になり、胴が左右に割れて別の生き物になる。
+# 耳だけは合わせ目まで届かせず、あいだの窪みをそのまま形にしている。
 BAT_HALF = [
-    "................",
-    "................",
-    "..............KK",
-    ".............KFF",
-    "...........KKFFF",
-    "..........KFFFFF",
-    "....KKK...KFFFFF",
-    "..KKmmKK.KFFEEFF",
-    ".KmmmmmmKKFFFFFF",
-    "KmmmlllmmmFFfFFF",
-    "Kmmlllllllmfffff",
-    "Kmllllllllmfffff",
-    "Kmlllllllllmffff",
-    "Kdlllllllllmffff",
-    "Kddllllllllmffff",
-    "Kdddlllllllmffff",
-    "KKddddllllmmFFFF",
-    ".KKdddddlmmFFFFF",
-    "..KKddddmmKFFFFF",
-    "....KKddmKKFFFFF",
-    "......KKmK.KFFFF",
-    "........KK.KFFFF",
-    "...........KFfFF",
-    "...........KFfFF",
-    "...........KKfFF",
-    "............KFWF",
-    "............KKWF",
-    ".............KKF",
-    "..............KK",
-    "................",
-    "................",
-    "................",
+    "........................",
+    "........................",
+    "..................KK....",
+    ".................KFFK...",
+    ".................KFFK...",
+    "................KFFFFFFF",
+    "..............KFFFFFFFFF",
+    ".............KFFFFFFFFFF",
+    "............KFFEEFFFFFFF",
+    "............KFFEEFFFFFFF",
+    "............KFFFFFFFFFFF",
+    "............KFFFFWWFFFFF",
+    "........KKKKKFFFFFFFFFFF",
+    ".....KKmmmKKFFFFFFFFFFFF",
+    "..KKmmmmmmmKFFFFFFFFFFFF",
+    "KKmmmmmmmmmKFFFFFFFFFFFF",
+    "KmmmlllllllKFFFFFFFFFFFF",
+    "KmmllllllllKFFFFFFFFFFFF",
+    "KmlllllllllKFFFFFFFFFFFF",
+    "KdlllllllllKKFFFFFFFFFFF",
+    "KddlllllllllKFFFFFFFFFFF",
+    "KdddllllllllKFFFFFFFFFFF",
+    "KKdddlllllllKFFFFFFFFFFF",
+    ".KKddddllllllKFFFFFFFFFF",
+    "..KKddddlllllKFFFFFFFFFF",
+    "....KKdddlllllKFFFFFFFFF",
+    "......KKddddllKFFFFFFFFF",
+    "........KKdddlKFFFFFFFFF",
+    "..........KKddKKFFFFFFFF",
+    "............KKKKFFFFFFFF",
+    "................KFFFFFFF",
+    "................KKFFFFFF",
+    "..................KKFFFF",
+    "....................KKKK",
 ]
 
 
@@ -920,7 +930,7 @@ def main() -> None:
     build_tileset()
     build_heroes()
     build_blob("gel", GEL, width=24, height=40)
-    build_monster("bat", BAT_HALF, BAT)
+    build_monster("bat", BAT_HALF, BAT, width=24)
     build_monster("skull", SKULL_HALF, BONE, width=24)
     build_monster("shade", SHADE_HALF, SHADE, width=24)
     build_monster("golem", GOLEM_HALF, GOLEM, width=24)

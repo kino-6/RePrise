@@ -8,8 +8,9 @@ extends Node2D
 ## 輪が拠点に戻るのが要点。失ったレベルと残った熟練度を並べて見せる場が無いと、
 ## メタ進行が数字の裏側だけで進んでしまう。
 
-enum Mode { STRONGHOLD, EXPLORE, BATTLE, SHOP, RESULT }
+enum Mode { TITLE, STRONGHOLD, EXPLORE, BATTLE, SHOP, RESULT }
 
+var title: TitleView
 var stronghold: StrongholdView
 var shop: ShopView
 var explore: ExploreView
@@ -30,6 +31,10 @@ var _boss_battle := false
 
 
 func _ready() -> void:
+	title = TitleView.new()
+	title.visible = false
+	add_child(title)
+
 	stronghold = StrongholdView.new()
 	stronghold.visible = false
 	add_child(stronghold)
@@ -52,6 +57,7 @@ func _ready() -> void:
 	result.visible = false
 	add_child(result)
 
+	title.started.connect(_enter_stronghold)
 	stronghold.departed.connect(_start_run)
 	explore.encounter_triggered.connect(_on_encounter)
 	explore.descended.connect(_on_descend)
@@ -62,7 +68,7 @@ func _ready() -> void:
 	battle.battle_finished.connect(_on_battle_finished)
 	result.dismissed.connect(_enter_stronghold)
 
-	_enter_stronghold()
+	_enter_title()
 	_handle_debug_args()
 
 
@@ -78,9 +84,12 @@ func _handle_debug_args() -> void:
 
 func _capture(which: String) -> void:
 	match which:
+		"title":
+			pass  # 起動直後がタイトル
 		"stronghold":
-			pass  # 起動直後がすでに拠点
+			_enter_stronghold()
 		"job":
+			_enter_stronghold()
 			stronghold.debug_open_job_menu(0)
 		"explore":
 			_start_run()
@@ -128,6 +137,7 @@ func _capture(which: String) -> void:
 				if battle.is_awaiting_command():
 					break
 		"upgrade":
+			_enter_stronghold()
 			GameState.echo = 42
 			stronghold.debug_open_upgrades()
 		"win":
@@ -181,6 +191,12 @@ func _capture(which: String) -> void:
 # --------------------------------------------------------------------------
 
 
+func _enter_title() -> void:
+	Sound.play_bgm("stronghold")
+	title.open()
+	_set_mode(Mode.TITLE)
+
+
 ## 拠点へ戻る。ラン中に呼ばれることは無い（end_run のあとだけ）。
 func _enter_stronghold() -> void:
 	Sound.play_bgm("stronghold")
@@ -210,6 +226,7 @@ func _enter_floor() -> void:
 
 func _set_mode(mode: Mode) -> void:
 	_mode = mode
+	title.visible = mode == Mode.TITLE
 	stronghold.visible = mode == Mode.STRONGHOLD
 	shop.visible = mode == Mode.SHOP
 	explore.visible = mode == Mode.EXPLORE
@@ -217,6 +234,8 @@ func _set_mode(mode: Mode) -> void:
 	battle.visible = mode == Mode.BATTLE
 	result.visible = mode == Mode.RESULT
 	explore.set_active(mode == Mode.EXPLORE)
+	if mode != Mode.TITLE:
+		title.close()
 	if mode != Mode.STRONGHOLD:
 		stronghold.close()
 	if mode != Mode.SHOP:

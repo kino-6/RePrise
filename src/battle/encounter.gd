@@ -61,8 +61,9 @@ static func _to_battler(monster_id: String, floor_number: int, battler_id: int) 
 	b.source_id = monster_id
 	b.is_ally = false
 
-	# 深い階ほど強くする。10% ずつの単純な線形強化で、まずは調整しやすさを優先。
-	var scale := 100 + (floor_number - 1) * 10
+	# 深い階ほど強くする。深層では新しい種族も出るので、階層補正まで 10% 刻みだと
+	# 二重に効いて味方の成長が追いつかない（測定で 200 ラン全滅した）。
+	var scale := 100 + (floor_number - 1) * 9
 	b.max_hp = maxi(int(m.get("hp", 10)) * scale / 100, 1)
 	b.hp = b.max_hp
 	b.max_mp = int(m.get("mp", 0))

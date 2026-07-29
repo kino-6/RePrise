@@ -251,6 +251,11 @@ func _buy_upgrade() -> void:
 func _apply_job() -> void:
 	var member := _selected()
 	var job_id := String(_job_ids[_job_index])
+	if not member.can_take_job(job_id):
+		# 条件を満たしていない。閉じずにその場で理由を出す。
+		Sound.play("cancel")
+		_notify("まだ %s には なれない" % _job_name(job_id))
+		return
 	if GameState.change_job(member, job_id):
 		Sound.play("confirm")
 		_notify("%sは %s に なった！" % [member.name, _job_name(job_id)])
@@ -368,19 +373,22 @@ func _draw_detail() -> void:
 	]
 	PixelUI.draw_text(self, origin + Vector2(14, 40), head, PixelUI.C_TEXT_DIM, 10)
 
-	PixelUI.draw_text(self, origin + Vector2(14, 58), "じゅくれんど", PixelUI.C_TEXT_DIM, 9)
+	PixelUI.draw_text(self, origin + Vector2(14, 52), "じゅくれんど", PixelUI.C_TEXT_DIM, 9)
+	# 上級職ぶん行が増えたので行間を詰める。6 職で枠に収まる高さにしてある。
 	for i in _job_ids.size():
 		var job_id := String(_job_ids[i])
-		var row := origin + Vector2(14, 74 + i * 14)
+		var row := origin + Vector2(14, 62 + i * 12)
 		var current := job_id == shown_job
 		var tint := PixelUI.C_ACTIVE if current else PixelUI.C_TEXT_DIM
-		PixelUI.draw_text(self, row, _job_name(job_id), tint, 10)
+		if not member.can_take_job(job_id):
+			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
+		PixelUI.draw_text(self, row, _job_name(job_id), tint, 9)
 		PixelUI.draw_text(
-			self, row + Vector2(66, 0),
-			_stars(member.mastery_rank(job_id), _max_rank(job_id)), tint, 10
+			self, row + Vector2(64, 0),
+			_stars(member.mastery_rank(job_id), _max_rank(job_id)), tint, 9
 		)
 		PixelUI.draw_text(
-			self, row + Vector2(118, 0), _mastery_text(member, job_id), PixelUI.C_TEXT_DIM, 9
+			self, row + Vector2(112, 0), _mastery_text(member, job_id), PixelUI.C_TEXT_DIM, 9
 		)
 
 
@@ -506,22 +514,38 @@ func _draw_hint() -> void:
 func _draw_job_menu() -> void:
 	var member := _selected()
 	var origin := MENU_RECT.position
-	PixelUI.draw_text(
-		self, origin + Vector2(16, 16), "%s の しょくぎょう" % member.name, PixelUI.C_TEXT_DIM, 9
-	)
+	var highlighted := String(_job_ids[_job_index])
+
+	# まだ就けない職業は、説明の代わりに「あと何が要るか」を出す。
+	# 選べない理由が見えないと、上級職はただ灰色の行になってしまう。
+	if member.can_take_job(highlighted):
+		PixelUI.draw_text(
+			self, origin + Vector2(16, 18),
+			String(Database.job(highlighted).get("desc", "")), PixelUI.C_TEXT, 11
+		)
+	else:
+		PixelUI.draw_text(
+			self, origin + Vector2(16, 18),
+			"つくには %s が いる" % "　".join(member.unmet_requirements(highlighted)),
+			PixelUI.C_HP_LOW, 11
+		)
 
 	var rows := _job_rows()
 	for i in _job_ids.size():
 		var job_id := String(_job_ids[i])
+		@warning_ignore("integer_division")
 		var col := i / rows
 		var row := i % rows
-		var at := origin + Vector2(24 + col * 178, 34 + row * 15)
+		var at := origin + Vector2(24 + col * 178, 36 + row * 14)
 		var on := i == _job_index
+		var locked := not member.can_take_job(job_id)
 		if on:
 			draw_texture(CURSOR_TEX, (at + Vector2(-9, -8)).floor())
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		if job_id == member.job_id:
 			tint = PixelUI.C_ACTIVE
+		elif locked:
+			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
 		PixelUI.draw_text(self, at, _job_name(job_id), tint, 11)
 		PixelUI.draw_text(
 			self, at + Vector2(70, 0),
@@ -529,11 +553,9 @@ func _draw_job_menu() -> void:
 		)
 		PixelUI.draw_text(
 			self, at + Vector2(120, 0),
-			"待×%d" % int(Database.job(job_id).get("cost_scale", 100)), PixelUI.C_TEXT_DIM, 9
+			"—" if locked else "待×%d" % int(Database.job(job_id).get("cost_scale", 100)),
+			PixelUI.C_TEXT_DIM, 9
 		)
-
-	var desc := String(Database.job(String(_job_ids[_job_index])).get("desc", ""))
-	PixelUI.draw_text(self, origin + Vector2(16, 66), desc, PixelUI.C_TEXT, 10)
 
 
 func _draw_notice() -> void:

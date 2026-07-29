@@ -135,9 +135,13 @@ func gain_mastery(points: int) -> Array[String]:
 # --------------------------------------------------------------------------
 
 
-## 次のレベルまでに必要な経験値。ランが短いので上がりは早めにしてある。
+## 次のレベルまでに必要な経験値。
+##
+## 10 階 x 4 戦の 40 戦で最終階に見合うレベルへ届く必要がある。
+## 係数はヘッドレス測定（tests/balance.gd）に合わせて決めたもので、
+## 勘で触ると到達率が一気に崩れる。
 func exp_to_next() -> int:
-	return 8 * level * level + 12 * level
+	return 6 * level * level + 10 * level
 
 
 ## 経験値を加算し、上がったレベル数を返す。
@@ -156,6 +160,34 @@ func gain_exp(amount: int) -> int:
 	return gained
 
 
+## その職業に就けるか。上級職は本人が解放条件を満たしている必要がある。
+##
+## 「誰かが極めたから全員が就ける」にはしない。そうすると 1 人を育てるだけで
+## 済んでしまい、4 人それぞれの経歴という手応えが消える。
+func can_take_job(target_job: String) -> bool:
+	var job := Database.job(target_job)
+	if job.is_empty():
+		return false
+	for required_job in job.get("unlock", {}).keys():
+		var need := int(job["unlock"][required_job])
+		if mastery_rank(String(required_job)) < need:
+			return false
+	return true
+
+
+## まだ就けない職業の、残っている条件。拠点で「あと何が要るか」を出すのに使う。
+func unmet_requirements(target_job: String) -> Array[String]:
+	var missing: Array[String] = []
+	var job := Database.job(target_job)
+	for required_job in job.get("unlock", {}).keys():
+		var need := int(job["unlock"][required_job])
+		var have := mastery_rank(String(required_job))
+		if have < need:
+			var label: String = Database.job(String(required_job)).get("name", required_job)
+			missing.append("%s ★%d" % [label, need])
+	return missing
+
+
 ## 転職。熟練度は職業ごとに別勘定で貯まり、覚えた技は職業に紐付かないので、
 ## ここでやることは「現在職を差し替えて能力値を計算し直す」だけでよい。
 ##
@@ -163,6 +195,8 @@ func gain_exp(amount: int) -> int:
 ## ラン中は呼ばない前提（拠点でのみ転職できる）。
 func change_job(new_job: String) -> bool:
 	if new_job == job_id or not Database.all_jobs().has(new_job):
+		return false
+	if not can_take_job(new_job):
 		return false
 	job_id = new_job
 	reset_for_run()

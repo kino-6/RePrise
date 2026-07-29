@@ -88,5 +88,43 @@
     "desc": "自分の手番を強引に引き寄せる。",
     "kind": "buff", "target": "self",
     "cost": 30, "mp": 5, "power": 0, "effect": "haste"
+  },
+
+  "bulwark": {
+    "name": "まもりのかまえ",
+    "desc": "味方全員を かばう構えに入る。",
+    "kind": "buff", "target": "all_allies",
+    "cost": 120, "mp": 6, "power": 0, "effect": "defend_up"
+  },
+  "smite": {
+    "name": "せいだん",
+    "desc": "光をまとって斬る。",
+    "kind": "physical", "target": "one_enemy",
+    "cost": 150, "mp": 3, "power": 165
+  },
+  "mass_heal": {
+    "name": "ベホイミ",
+    "desc": "味方全員の傷を癒す。",
+    "kind": "heal", "target": "all_allies",
+    "cost": 140, "mp": 10, "power": 40
+  },
+
+  "shuriken": {
+    "name": "しゅりけん",
+    "desc": "敵全体へ刃を投げる。軽い。",
+    "kind": "physical", "target": "all_enemies",
+    "cost": 120, "mp": 2, "power": 85
+  },
+  "smoke": {
+    "name": "けむりだま",
+    "desc": "敵全体の動きを鈍らせる。",
+    "kind": "debuff", "target": "all_enemies",
+    "cost": 90, "mp": 5, "power": 0, "effect": "slow"
+  },
+  "assassinate": {
+    "name": "ひっさつ",
+    "desc": "一点を突く。非常に重い。",
+    "kind": "physical", "target": "one_enemy",
+    "cost": 165, "mp": 8, "power": 240
   }
 }

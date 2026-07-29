@@ -42,6 +42,7 @@ python tools/gen_audio.py                             # 音を生成
 python tools/verify_audio.py                          # 音の検算（無音・音程・クリップ）
 godot --headless --import                             # class_name を登録（新クラス追加後は必須）
 godot --headless --script res://tests/test_core.gd    # 決定性テスト（常に緑に保つ）
+godot --headless --script res://tests/balance.gd      # 到達率と勝率を実測する
 godot --path . -- --shot=battle                       # 画面を 1 枚撮って終了
 godot --path . -- --shot=stronghold                   # 拠点（explore / job / result も可）
 godot --path .                                        # 起動
@@ -50,6 +51,9 @@ godot --path .                                        # 起動
 ## 検証のしかた
 
 - コードを足したら `test_core.gd` を通す。決定性に関わる変更は必ずテストを追加する。
+- **数値（経験値曲線・敵の能力・階層補正）を触ったら `balance.gd` で測り直す。**
+  勘で調整しない。現状は自動操縦で「主に挑めた 32% / 倒した 16%」に合わせてある。
+  自動操縦は道具も出店も使わないので、ここで出る数字は人が操作したときの下限。
 - 見た目を変えたら `--shot=` で撮って**実際に画像を見る**。目視せずに「できた」と言わない。
 - 音を変えたら `verify_audio.py` を通す。耳で確認できないので機械検算に頼る。
 

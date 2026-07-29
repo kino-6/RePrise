@@ -33,6 +33,13 @@ func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_n
 	floor_number = floor_no
 	is_over = false
 	stolen_gold = 0
+	# 前の戦闘の残りかす（かばい・素早さ変化）を持ち越さない。
+	# Battler は使い捨てだが、味方は同じ個体を作り直しているとは限らない。
+	for b in party + foes:
+		b.protected_by = null
+		b.agi_scale = 100
+		b.agi_scale_turns = 0
+		b.guarding = false
 	scheduler = CtbScheduler.new()
 	scheduler.add_all(allies)
 	scheduler.add_all(enemies)
@@ -43,11 +50,30 @@ func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_n
 # --------------------------------------------------------------------------
 
 
-## 次の手番を開始し、行動者を返す。防御はこの時点で切れる。
+## 素早さ変化が続く手番数。長すぎると一度かければ勝ちになり、
+## 短すぎると重いコストを払う意味が無くなる。
+const BUFF_TURNS := 4
+
+
+## 次の手番を開始し、行動者を返す。
+## 防御・かばい・素早さ変化の寿命は、すべてこの 1 か所で切る。
+## 効果ごとに解除場所が散ると、必ずどれかが解除され忘れて永続化する。
 func begin_turn() -> Battler:
 	var actor := scheduler.next_actor()
-	if actor != null:
-		actor.guarding = false
+	if actor == null:
+		return null
+
+	actor.guarding = false
+
+	# 自分がかばっていた相手を解放する。守り続けるにはかばい直す。
+	for b in scheduler.all():
+		if b.protected_by == actor:
+			b.protected_by = null
+
+	if actor.agi_scale_turns > 0:
+		actor.agi_scale_turns -= 1
+		if actor.agi_scale_turns == 0:
+			actor.agi_scale = 100
 	return actor
 
 
@@ -96,11 +122,16 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 	match kind:
 		"physical", "magical":
 			for t in targets:
-				var dmg := _damage(actor, t, power, kind == "magical")
-				t.apply_damage(dmg)
-				lines.append("%sに　%d の ダメージ！" % [t.name, dmg])
-				if not t.is_alive():
-					lines.append("%sを　たおした！" % t.name)
+				# かばわれていれば、守り手が代わりに受ける。
+				var receiver := t
+				if t.protected_by != null and t.protected_by.is_alive() and t.protected_by != actor:
+					receiver = t.protected_by
+					lines.append("%sが　%sを かばった！" % [receiver.name, t.name])
+				var dmg := _damage(actor, receiver, power, kind == "magical")
+				receiver.apply_damage(dmg)
+				lines.append("%sに　%d の ダメージ！" % [receiver.name, dmg])
+				if not receiver.is_alive():
+					lines.append("%sを　たおした！" % receiver.name)
 		"heal":
 			for t in targets:
 				if String(ab.get("target", "")) == "one_ally_dead":
@@ -164,15 +195,23 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 		match effect:
 			"haste":
 				t.agi_scale = 150
+				t.agi_scale_turns = BUFF_TURNS
 				lines.append("%sの　すばやさが あがった！" % t.name)
 			"slow":
 				t.agi_scale = 70
+				t.agi_scale_turns = BUFF_TURNS
 				# 素早さが落ちた効果を行動順にも即座に反映させる
 				t.next_at += CtbScheduler.wait_for(t.effective_agi(), 40)
 				lines.append("%sの　すばやさが さがった！" % t.name)
 			"defend_up":
-				t.guarding = true
-				lines.append("%sを　かばう たいせいに はいった" % t.name)
+				# 自分は自分をかばえない。全体版（まもりのかまえ）で自分が
+				# 対象に入ったときは、素直に身構えるだけにする。
+				if t == actor:
+					actor.guarding = true
+					lines.append("%sは　みをまもっている" % actor.name)
+				else:
+					t.protected_by = actor
+					lines.append("%sが　%sを かばう たいせいに はいった" % [actor.name, t.name])
 			"steal":
 				var loot := rng.range_i(2, 6 + floor_number * 2)
 				stolen_gold += loot

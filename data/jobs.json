@@ -1,5 +1,5 @@
 {
-  "_comment": "職業。cost_scale が CTB 上のテンポの個性（100 が標準、低いほど手数型）。mastery は熟練度ランクごとに覚える技で、覚えた技は転職しても失われない。",
+  "_comment": "職業。cost_scale が CTB 上のテンポの個性（100 が標準、低いほど手数型）。mastery は熟練度ランクごとに覚える技で、覚えた技は転職しても失われない。unlock は上級職の解放条件（職業 ID -> 必要な熟練ランク）で、その本人が満たしていないと就けない。ダーマ神殿と同じく、誰かが極めたから全員が就ける、にはしない。",
 
   "soldier": {
     "name": "せんし",
@@ -46,6 +46,32 @@
       { "rank": 1, "need": 24, "ability": "quick_stab" },
       { "rank": 2, "need": 72, "ability": "steal" },
       { "rank": 3, "need": 160, "ability": "shadow_step" }
+    ]
+  },
+
+  "paladin": {
+    "name": "せいきし",
+    "desc": "護りと癒しを兼ねる。重いが崩れない。",
+    "cost_scale": 120,
+    "unlock": { "soldier": 2, "priest": 2 },
+    "growth": { "hp": 8, "mp": 3, "atk": 3, "def": 4, "agi": 2 },
+    "mastery": [
+      { "rank": 1, "need": 32, "ability": "bulwark" },
+      { "rank": 2, "need": 96, "ability": "smite" },
+      { "rank": 3, "need": 200, "ability": "mass_heal" }
+    ]
+  },
+
+  "ninja": {
+    "name": "にんじゃ",
+    "desc": "速さのまま魔を使う。守りは薄い。",
+    "cost_scale": 80,
+    "unlock": { "thief": 2, "mage": 2 },
+    "growth": { "hp": 5, "mp": 4, "atk": 3, "def": 1, "agi": 5 },
+    "mastery": [
+      { "rank": 1, "need": 32, "ability": "shuriken" },
+      { "rank": 2, "need": 96, "ability": "smoke" },
+      { "rank": 3, "need": 200, "ability": "assassinate" }
     ]
   }
 }

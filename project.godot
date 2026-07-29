@@ -1,4 +1,4 @@
-; RetroRogueRPG — SFC 風ローグライク RPG
+; RePrise — SFC 風 CTB ローグライク RPG
 ;
 ; 表示は 256x224（SFC の標準解像度）で作り、ウィンドウへは整数倍で引き伸ばす。
 ; ここを崩すとドットが不均一に潰れて一気に「SFC 風」でなくなるので、
@@ -8,7 +8,7 @@ config_version=5
 
 [application]
 
-config/name="RetroRogueRPG"
+config/name="RePrise"
 run/main_scene="res://src/scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 

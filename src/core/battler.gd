@@ -39,6 +39,13 @@ var next_at: int = 0
 var guarding: bool = false
 ## 素早さ倍率を 100 分率で持つ（ヘイスト 150 / スロウ 50）。整数のまま扱う。
 var agi_scale: int = 100
+## 素早さ倍率の残り手番。0 になったら 100 に戻る。
+## これが無いと、一度かけたピオラが戦闘終了まで効き続ける永続バフになる。
+var agi_scale_turns: int = 0
+
+## この者をかばっている者。攻撃はそちらが肩代わりする。
+## かばい手が動いたら解除されるので、守り続けるには毎回かばい直す必要がある。
+var protected_by: Battler = null
 
 
 func is_alive() -> bool:
