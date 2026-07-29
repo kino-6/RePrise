@@ -341,8 +341,60 @@ TILE_SHOP = [
 ]
 
 
+## タイルシートの寸法（16x16 を 9 枚、横一列）。取り込みの検算に使う。
+TILESET_SIZE = (TILE * 9, TILE)
+
+## 床と壁の明度差の下限。
+##
+## この 2 枚は「通れる／通れない」を伝える唯一の手がかりなので、
+## 質感の良さより先に**離れて見えること**が要る。実際に、取り込んだ候補が
+## 床 46.3 / 壁 43.3（差 3.0、色相も同じ紺）で、どこを歩けるのか読めなかった。
+MIN_FLOOR_WALL_LUMA = 12.0
+
+
+def _mean_luma(sheet: Canvas, index: int) -> float:
+    """タイル 1 枚の平均明度。透明は数えない。"""
+    px = [
+        sheet.get(index * TILE + x, y)
+        for y in range(TILE)
+        for x in range(TILE)
+        if sheet.get(index * TILE + x, y)[3]
+    ]
+    if not px:
+        return 0.0
+    return sum(0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2] for p in px) / len(px)
+
+
+def _tileset_readable(sheet: Canvas) -> tuple[bool, str]:
+    """床と壁が見分けられるか。見分けられない絵は、綺麗でも採用しない。"""
+    floor = _mean_luma(sheet, 0)
+    wall = _mean_luma(sheet, 2)
+    gap = abs(floor - wall)
+    if gap >= MIN_FLOOR_WALL_LUMA:
+        return True, ""
+    return False, (
+        "床と壁の明度差が %.1f しかない（%.1f 以上必要）。床 %.1f / 壁 %.1f。"
+        % (gap, MIN_FLOOR_WALL_LUMA, floor, wall)
+    )
+
+
 def build_tileset() -> None:
-    """9 枚を横一列に並べた 144x16 のタイルシート。"""
+    """9 枚を横一列に並べた 144x16 のタイルシート。
+
+    外で描いたものがあればそれを採用する。並び順（床・ひび割れ床・壁・天面・
+    階段・扉・宝箱・虚空・出店）は DungeonMap の enum と一致させること。
+    """
+    imported = _load_sheet("candidate_tiles_dungeon", TILESET_SIZE)
+    if imported is not None:
+        readable, reason = _tileset_readable(imported)
+        if readable:
+            imported.to_png(ASSETS / "tiles" / "dungeon.png")
+            imported.scaled(6).to_png(PREVIEW / "dungeon.png")
+            print("  取り込み: dungeon.png（chara_image/candidate_tiles_dungeon.png）")
+            return
+        # 採用しない。ここで黙って通すと、綺麗だが遊べない地形が出来上がる。
+        print("  見送り: candidate_tiles_dungeon.png — " + reason)
+
     tiles = [
         tile_floor(),
         tile_floor(cracked=True),
@@ -755,46 +807,47 @@ HERO_SOURCE_DIR = ROOT / "docs" / "chara_image"
 ## 「SFC らしさは技巧ではなく制約の徹底から出る」という前提を、
 ## 外から来た絵にも同じように当てはめる。
 HERO_SHEET_SIZE = (CHAR_W * 3, CHAR_H * 4)
-HERO_MAX_COLORS = 15
+MAX_COLORS = 15
 
 
-def _verify_hero_sheet(job: str, sheet: Canvas) -> None:
-    """取り込んだシートが SFC の制約を守っているかを検算する。
+def _verify_sheet(label: str, sheet: Canvas, size: tuple[int, int]) -> None:
+    """取り込んだ絵が SFC の制約を守っているかを検算する。
 
     黙って通すと、色数もアルファもばらばらな絵が assets/ に混ざり、
-    「なぜか 1 人だけ浮いている」の原因が追えなくなる。
+    「なぜか 1 枚だけ浮いている」の原因が追えなくなる。
+    SFC らしさは技巧ではなく制約の徹底から出るので、外から来た絵にも同じ条件を課す。
     """
-    if (sheet.w, sheet.h) != HERO_SHEET_SIZE:
+    if (sheet.w, sheet.h) != size:
         raise ValueError(
-            "%s: シートは %dx%d でなければならない（%dx%d だった）"
-            % (job, HERO_SHEET_SIZE[0], HERO_SHEET_SIZE[1], sheet.w, sheet.h)
+            "%s: %dx%d でなければならない（%dx%d だった）"
+            % (label, size[0], size[1], sheet.w, sheet.h)
         )
 
     alphas = {p[3] for p in sheet.px}
     if not alphas <= {0, 255}:
-        raise ValueError("%s: アルファは 0 か 255 だけにする（%s があった）" % (job, sorted(alphas)))
+        raise ValueError("%s: アルファは 0 か 255 だけにする（%s があった）" % (label, sorted(alphas)))
 
     colors = {p[:3] for p in sheet.px if p[3] == 255}
-    if len(colors) > HERO_MAX_COLORS:
+    if len(colors) > MAX_COLORS:
         raise ValueError(
-            "%s: 透明を除いて %d 色まで（%d 色あった）" % (job, HERO_MAX_COLORS, len(colors))
+            "%s: 透明を除いて %d 色まで（%d 色あった）" % (label, MAX_COLORS, len(colors))
         )
 
     off = [c for c in colors if snes("#%02X%02X%02X" % c) != c]
     if off:
         raise ValueError(
             "%s: BGR555 に乗っていない色が %d 個ある（例 #%02X%02X%02X）"
-            % (job, len(off), off[0][0], off[0][1], off[0][2])
+            % (label, len(off), off[0][0], off[0][1], off[0][2])
         )
 
 
-def _load_hero_sheet(job: str) -> Canvas | None:
-    """外で描いた歩行シートを読む。無ければ None。"""
-    path = HERO_SOURCE_DIR / f"candidate_hero_{job}.png"
+def _load_sheet(stem: str, size: tuple[int, int]) -> Canvas | None:
+    """外で描いた絵を読む。無ければ None（＝ ASCII マップから起こす方に落ちる）。"""
+    path = HERO_SOURCE_DIR / f"{stem}.png"
     if not path.exists():
         return None
     sheet = load_png(path)
-    _verify_hero_sheet(job, sheet)
+    _verify_sheet(stem, sheet, size)
     return sheet
 
 
@@ -816,7 +869,7 @@ def build_heroes() -> None:
     for job in HERO_ACCENTS:
         # 外で描いたシートがあればそれを使う。ASCII マップは土台として残す
         # （素材が無い環境でも生成が通り、差分もレビューできる状態を保つため）。
-        imported = _load_hero_sheet(job)
+        imported = _load_sheet(f"candidate_hero_{job}", HERO_SHEET_SIZE)
         if imported is not None:
             imported.to_png(ASSETS / "sprites" / f"hero_{job}.png")
             imported.scaled(4).to_png(PREVIEW / f"hero_{job}.png")
