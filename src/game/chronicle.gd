@@ -33,7 +33,7 @@ static func write(summary: Dictionary) -> PackedStringArray:
 				learned_all.append(ability_name)
 
 	if learned_all.is_empty():
-		lines.append("この旅で 得た technique は なかった。")
+		lines.append("この旅で 得た技は なかった。")
 	else:
 		lines.append("だが %s の技は 残った。" % ", ".join(learned_all))
 

@@ -156,6 +156,19 @@ func gain_exp(amount: int) -> int:
 	return gained
 
 
+## 転職。熟練度は職業ごとに別勘定で貯まり、覚えた技は職業に紐付かないので、
+## ここでやることは「現在職を差し替えて能力値を計算し直す」だけでよい。
+##
+## 失うのはレベルだけ、というダーマ神殿の扱いをそのまま採用している。
+## ラン中は呼ばない前提（拠点でのみ転職できる）。
+func change_job(new_job: String) -> bool:
+	if new_job == job_id or not Database.all_jobs().has(new_job):
+		return false
+	job_id = new_job
+	reset_for_run()
+	return true
+
+
 func reset_for_run() -> void:
 	level = 1
 	exp_points = 0

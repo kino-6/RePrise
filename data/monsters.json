@@ -1,5 +1,5 @@
 {
-  "_comment": "floor_min / floor_max で出現階層を絞る。cost_scale で敵にもテンポの個性を持たせる。",
+  "_comment": "floor_min / floor_max で出現階層を絞る。cost_scale で敵にもテンポの個性を持たせる。boss:true は通常の出現表から外れ、主の間でしか出ない（階層補正もかからず、ここの数値がそのまま最終試験の難度になる）。",
 
   "gel": {
     "name": "ゲル",
@@ -29,5 +29,46 @@
     "exp": 40, "gold": 30,
     "abilities": ["attack", "power_slash"],
     "floor_min": 3, "floor_max": 8
+  },
+
+  "skull": {
+    "name": "されこうべ",
+    "sprite": "skull",
+    "hp": 44, "mp": 6, "atk": 14, "def": 8, "agi": 14,
+    "cost_scale": 95,
+    "exp": 18, "gold": 12,
+    "abilities": ["attack", "quick_stab"],
+    "floor_min": 4, "floor_max": 9
+  },
+
+  "shade": {
+    "name": "かげのもの",
+    "sprite": "shade",
+    "hp": 52, "mp": 24, "atk": 12, "def": 6, "agi": 16,
+    "cost_scale": 110,
+    "exp": 26, "gold": 18,
+    "abilities": ["attack", "fire", "slow"],
+    "floor_min": 6, "floor_max": 10
+  },
+
+  "golem": {
+    "name": "いしのしもべ",
+    "sprite": "golem",
+    "hp": 130, "mp": 0, "atk": 20, "def": 18, "agi": 7,
+    "cost_scale": 150,
+    "exp": 55, "gold": 40,
+    "abilities": ["attack", "power_slash"],
+    "floor_min": 7, "floor_max": 10
+  },
+
+  "warden": {
+    "name": "奈落の番人",
+    "sprite": "warden",
+    "boss": true,
+    "hp": 600, "mp": 60, "atk": 52, "def": 20, "agi": 16,
+    "cost_scale": 120,
+    "exp": 400, "gold": 300,
+    "abilities": ["attack", "power_slash", "whirlwind", "blast"],
+    "floor_min": 10, "floor_max": 10
   }
 }

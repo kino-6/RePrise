@@ -183,6 +183,52 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 
 
 # --------------------------------------------------------------------------
+# 道具
+# --------------------------------------------------------------------------
+
+
+## 道具を使う。技と同じく手番を消費するので、
+## 「回復に 1 手番を割く」という CTB 上の判断がそのまま成立する。
+##
+## 在庫の増減は呼び出し側（GameState）の責任にして、ここは効果の解決だけを持つ。
+## 戦闘ロジックがランの持ち物を書き換え始めると、戦闘だけを切り出して
+## 何千回も回すことができなくなる。
+func use_item(actor: Battler, item_id: String, target: Battler) -> Array[String]:
+	var it := Database.item(item_id)
+	if it.is_empty():
+		push_error("未定義の道具: %s" % item_id)
+		return []
+
+	var lines: Array[String] = []
+	var who := target if target != null else actor
+	lines.append("%sは %s を つかった！" % [actor.name, it.get("name", item_id)])
+
+	var power := int(it.get("power", 0))
+	match String(it.get("effect", "")):
+		"heal_hp":
+			if not who.is_alive():
+				lines.append("しかし　なにも おこらなかった")
+			else:
+				lines.append("%sの きずが %d かいふくした" % [who.name, who.heal(power)])
+		"heal_mp":
+			var before := who.mp
+			who.mp = mini(who.mp + power, who.max_mp)
+			lines.append("%sの まりょくが %d もどった" % [who.name, who.mp - before])
+		"revive":
+			if who.is_alive():
+				lines.append("しかし　なにも おこらなかった")
+			else:
+				who.hp = maxi(who.max_hp * power / 100, 1)
+				lines.append("%sは いきを ふきかえした！" % who.name)
+		_:
+			lines.append("しかし　なにも おこらなかった")
+
+	scheduler.consume(actor, actor.scaled_cost(int(it.get("cost", CtbScheduler.STANDARD_COST))))
+	_check_finished()
+	return lines
+
+
+# --------------------------------------------------------------------------
 # 敵の行動（決定的な単純 AI）
 # --------------------------------------------------------------------------
 

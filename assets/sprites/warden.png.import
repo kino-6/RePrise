@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dvl0lltjaey4a"
-path="res://.godot/imported/screen_explore.png-8936d1bc3421fb9c66e09af3683e3e66.ctex"
+uid="uid://2tsf3tqu57e8"
+path="res://.godot/imported/warden.png-9d188787ed558fb982526889d50c768e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://docs/preview/screen_explore.png"
-dest_files=["res://.godot/imported/screen_explore.png-8936d1bc3421fb9c66e09af3683e3e66.ctex"]
+source_file="res://assets/sprites/warden.png"
+dest_files=["res://.godot/imported/warden.png-9d188787ed558fb982526889d50c768e.ctex"]
 
 [params]
 

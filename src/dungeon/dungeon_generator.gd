@@ -15,8 +15,12 @@ const ROOM_MAX := Vector2i(10, 7)
 const ROOM_LIMIT := 8
 
 
-static func generate(rng: DetRng, floor_number: int) -> DungeonMap:
+## final_floor を立てると、出口が下り階段ではなく主の間の扉になる。
+## 地形そのものは同じ手順で作る（最終階だけ別生成にすると、そこだけ
+## 到達性テストの外側に出てしまうため）。
+static func generate(rng: DetRng, floor_number: int, final_floor: bool = false) -> DungeonMap:
 	var map := DungeonMap.new(MAP_W, MAP_H)
+	map.is_final = final_floor
 	_carve_rooms(map, rng)
 	if map.rooms.is_empty():
 		# 万一 1 部屋も置けなかった場合の保険。空マップを返すと詰むので必ず 1 部屋作る。
@@ -112,7 +116,10 @@ static func _place_features(map: DungeonMap, rng: DetRng, floor_number: int) -> 
 			best_distance = d
 			farthest = room
 	map.stairs_pos = _center(farthest)
-	map.set_tile(map.stairs_pos.x, map.stairs_pos.y, DungeonMap.T_STAIRS)
+	map.set_tile(
+		map.stairs_pos.x, map.stairs_pos.y,
+		DungeonMap.T_DOOR if map.is_final else DungeonMap.T_STAIRS
+	)
 
 	# ひび割れ床（見た目の変化のみ）
 	for y in map.height:
@@ -137,3 +144,31 @@ static func _place_features(map: DungeonMap, rng: DetRng, floor_number: int) -> 
 			continue
 		map.chests.append(spot)
 		map.set_tile(spot.x, spot.y, DungeonMap.T_CHEST)
+
+	_place_shop(map, rng)
+
+
+## 出店。毎階あると補給が作業になり、無さすぎるとゴールドが死ぬので、
+## 半分くらいの階に出す。最終階だけは必ず出す（主に挑む前の最後の支度）。
+static func _place_shop(map: DungeonMap, rng: DetRng) -> void:
+	if not map.is_final and not rng.chance(55):
+		return
+	# 開始部屋と階段の部屋は避ける。出会い頭と直前では支度の意味が薄い。
+	var candidates: Array[Rect2i] = []
+	for room in map.rooms:
+		if room.has_point(map.start_pos) or room.has_point(map.stairs_pos):
+			continue
+		candidates.append(room)
+	if candidates.is_empty():
+		candidates = map.rooms.duplicate()
+
+	rng.shuffle(candidates)
+	for room in candidates:
+		var spot := _center(room)
+		if spot == map.start_pos or spot == map.stairs_pos:
+			continue
+		if not map.is_walkable(spot.x, spot.y):
+			continue
+		map.shop_pos = spot
+		map.set_tile(spot.x, spot.y, DungeonMap.T_SHOP)
+		return

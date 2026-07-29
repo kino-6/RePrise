@@ -23,7 +23,12 @@ func _initialize() -> void:
 	_test_dungeon_determinism()
 	_test_dungeon_reachable()
 	_test_database_loaded()
+	_test_final_floor()
+	_test_boss_encounter()
+	_test_every_floor_populated()
+	_test_shop()
 	_test_mastery_persists()
+	_test_job_change()
 
 	print("---")
 	print("成功 %d / 失敗 %d" % [_passed, _failed])
@@ -219,6 +224,112 @@ func _reachable(map: DungeonMap, from: Vector2i, to: Vector2i) -> bool:
 	return false
 
 
+## 最終階だけは出口の意味が変わる。ここが壊れるとランに終わりが無くなり、
+## 「生還」という結果が永久に出せなくなる。
+func _test_final_floor() -> void:
+	var open_map := DungeonGenerator.generate(DetRng.new(555), 10, false)
+	var final_map := DungeonGenerator.generate(DetRng.new(555), 10, true)
+
+	# 最終階でも地形の作り方は同じ。別生成にすると到達性の検査から外れてしまう。
+	_equal("最終階でも開始位置は変わらない", final_map.start_pos, open_map.start_pos)
+	_equal("最終階でも出口の位置は変わらない", final_map.stairs_pos, open_map.stairs_pos)
+
+	var open_exit := open_map.get_tile(open_map.stairs_pos.x, open_map.stairs_pos.y)
+	var final_exit := final_map.get_tile(final_map.stairs_pos.x, final_map.stairs_pos.y)
+	_equal("通常階の出口は下り階段", open_exit, DungeonMap.T_STAIRS)
+	_equal("最終階の出口は主の間の扉", final_exit, DungeonMap.T_DOOR)
+	_check("扉は通行できる", final_map.is_walkable(final_map.stairs_pos.x, final_map.stairs_pos.y))
+
+	# 扉に辿り着けない最終階を出すと、そのランは勝ちようが無くなる。
+	var all_ok := true
+	var checked := 0
+	for seed_value in range(1, 40):
+		var map := DungeonGenerator.generate(DetRng.new(seed_value * 977), 10, true)
+		checked += 1
+		if not _reachable(map, map.start_pos, map.stairs_pos):
+			all_ok = false
+			print("    シード %d で主の間に到達できない" % seed_value)
+	_check("%d 個のシードすべてで主の間に到達できる" % checked, all_ok)
+
+
+## 出現表に穴があると、その階だけ遭遇判定が空振りして無傷で歩ける。
+## 静かに壊れる種類の不具合なので、階層を全部なめて確認する。
+func _test_every_floor_populated() -> void:
+	Database.reload()
+	# 最終階の値は GameState が持つ。ここで数字を書き写すと二重管理になるので、
+	# スクリプトの定数を直接読む（オートロードは headless では起動しない）。
+	var game_state: GDScript = load("res://src/game/game_state.gd")
+	var final_floor: int = game_state.get_script_constant_map()["FINAL_FLOOR"]
+	_check("最終階が 2 階以上に設定されている", final_floor >= 2, str(final_floor))
+
+	var empty := []
+	for floor_no in range(1, final_floor + 1):
+		if Database.monster_ids_for_floor(floor_no).is_empty():
+			empty.append(floor_no)
+	_check("1〜%d 階すべてに敵がいる" % final_floor, empty.is_empty(), "敵のいない階: %s" % str(empty))
+
+	# 絵が無いと battle_view が既定の姿で代用し、別の敵として静かに表示される。
+	var missing := []
+	for id in Database.all_monsters().keys():
+		var path := "res://assets/sprites/%s.png" % String(Database.monster(id).get("sprite", ""))
+		if not ResourceLoader.exists(path):
+			missing.append("%s -> %s" % [id, path])
+	_check("敵の絵がすべて存在する", missing.is_empty(), str(missing))
+
+
+## 出店。ゴールドの唯一の使い道なので、出なさすぎても詰まらせても成立しない。
+func _test_shop() -> void:
+	Database.reload()
+	_check("道具が読める", Database.all_items().size() >= 2)
+
+	# 深い階ほど品揃えが増える（浅い階に高級品が並ばない）
+	var shallow := Database.item_ids_for_floor(1)
+	var deep := Database.item_ids_for_floor(9)
+	_check("浅い階の品揃えは狭い", shallow.size() < deep.size(), "%s / %s" % [shallow, deep])
+	for id in shallow:
+		_check("浅い階の品は深い階にも並ぶ (%s)" % id, id in deep)
+
+	# 主の間の前には必ず店がある（最後の支度をさせる）
+	var final_map := DungeonGenerator.generate(DetRng.new(31337), 10, true)
+	_check("最終階には必ず出店がある", final_map.shop_pos.x >= 0)
+
+	# 出店が通路を塞ぐと、その階の階段に届かなくなる
+	var blocked := []
+	var found := 0
+	for seed_value in range(1, 40):
+		var map := DungeonGenerator.generate(DetRng.new(seed_value * 977), 5)
+		if map.shop_pos.x < 0:
+			continue
+		found += 1
+		if not map.is_walkable(map.shop_pos.x, map.shop_pos.y):
+			blocked.append(seed_value)
+		if map.shop_pos == map.start_pos or map.shop_pos == map.stairs_pos:
+			blocked.append(seed_value)
+		if not _reachable(map, map.start_pos, map.stairs_pos):
+			blocked.append(seed_value)
+	_check("出店は 39 シード中の一部にだけ出る", found > 0 and found < 39, str(found))
+	_check("出店が階を詰ませない", blocked.is_empty(), str(blocked))
+
+
+func _test_boss_encounter() -> void:
+	Database.reload()
+	_check("最終階に主がいる", not Database.boss_ids_for_floor(10).is_empty())
+
+	# 主が通常の遭遇に混ざると、道中でいきなり最終試験が始まってしまう。
+	var leaked := []
+	for id in Database.boss_ids_for_floor(10):
+		if id in Database.monster_ids_for_floor(10):
+			leaked.append(id)
+	_check("主は通常の出現表に出ない", leaked.is_empty(), str(leaked))
+
+	var foes := Encounter.build_boss(DetRng.new(1), 10)
+	_equal("主の編成は 1 体", foes.size(), 1)
+	# 階層補正をかけると、調整点がデータと補正式の 2 か所に散る。
+	var raw := Database.monster(foes[0].source_id)
+	_equal("主に階層補正はかからない", foes[0].max_hp, int(raw.get("hp", 0)))
+	_check("主は複数の技を持つ", foes[0].abilities.size() >= 3)
+
+
 # --------------------------------------------------------------------------
 
 
@@ -267,3 +378,30 @@ func _test_mastery_persists() -> void:
 	m.reset_for_run()
 	_equal("レベルは 1 に戻る", m.level, 1)
 	_check("熟練度は残る", m.mastery_points("soldier") == 24)
+
+
+## 拠点での転職。GameState はオートロードなので --headless --script からは触れない。
+## 転職の実体は PartyMember 側にあるので、そちらを直接検査する。
+func _test_job_change() -> void:
+	var m := PartyMember.create("テスト", "soldier")
+	m.gain_mastery(30)
+	var hp_before := m.max_hp()
+
+	_check("同じ職業への転職は拒否", not m.change_job("soldier"))
+	_check("存在しない職業への転職は拒否", not m.change_job("dancer"))
+	_equal("拒否されたら職業は変わらない", m.job_id, "soldier")
+
+	_check("転職できる", m.change_job("mage"))
+	_check("能力値が転職先のものになる", m.max_hp() != hp_before)
+	_equal("転職直後は満タン", m.hp, m.max_hp())
+	_equal("前職の熟練度は残る", m.mastery_points("soldier"), 30)
+	_check("前職で覚えた技も残る", "power_slash" in m.available_abilities())
+	_equal("転職先の熟練度は 0 から", m.mastery_points("mage"), 0)
+
+	# 貯めた熟練度は戻ってきたときにそのまま効く（ダーマ神殿の往復）
+	m.gain_mastery(24)
+	_equal("転職先でも熟練が貯まる", m.mastery_rank("mage"), 1)
+	_check("元の職業に戻せる", m.change_job("soldier"))
+	_equal("戻ると前職のランクが復活する", m.mastery_rank(), 1)
+	_check("両方の技を持ったまま", m.available_abilities().has("fire")
+		and m.available_abilities().has("power_slash"))

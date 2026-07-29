@@ -14,6 +14,7 @@ extends RefCounted
 static var jobs: Dictionary = {}
 static var abilities: Dictionary = {}
 static var monsters: Dictionary = {}
+static var items: Dictionary = {}
 
 static var _loaded := false
 
@@ -27,6 +28,7 @@ static func reload() -> void:
 	jobs = _load_json("res://data/jobs.json")
 	abilities = _load_json("res://data/abilities.json")
 	monsters = _load_json("res://data/monsters.json")
+	items = _load_json("res://data/items.json")
 	_loaded = true
 
 
@@ -74,6 +76,28 @@ static func monster(id: String) -> Dictionary:
 	return monsters.get(id, {})
 
 
+static func all_items() -> Dictionary:
+	_ensure()
+	return items
+
+
+static func item(id: String) -> Dictionary:
+	_ensure()
+	return items.get(id, {})
+
+
+## その階の出店に並ぶ品。深いほど品揃えが増える。
+## 並び順を確定させてから返す（キーの列挙順に依存すると品揃えが揺れる）。
+static func item_ids_for_floor(floor_number: int) -> Array:
+	_ensure()
+	var result: Array = []
+	for id in items.keys():
+		if floor_number >= int(items[id].get("floor_min", 1)):
+			result.append(id)
+	result.sort()
+	return result
+
+
 static func job_ids() -> Array:
 	_ensure()
 	var ids := jobs.keys()
@@ -83,11 +107,29 @@ static func job_ids() -> Array:
 
 ## その階層に出現しうるモンスター ID。並び順を確定させてから返す
 ## （キーの列挙順に依存すると、同じシードでも別の敵が出かねない）。
+##
+## ボスは通常の遭遇には混ぜない。主の間でしか出会わないから主なので。
 static func monster_ids_for_floor(floor_number: int) -> Array:
 	_ensure()
 	var result: Array = []
 	for id in monsters.keys():
 		var m: Dictionary = monsters[id]
+		if bool(m.get("boss", false)):
+			continue
+		if floor_number >= int(m.get("floor_min", 1)) and floor_number <= int(m.get("floor_max", 99)):
+			result.append(id)
+	result.sort()
+	return result
+
+
+## その階層の主。通常の出現表とは別に引く。
+static func boss_ids_for_floor(floor_number: int) -> Array:
+	_ensure()
+	var result: Array = []
+	for id in monsters.keys():
+		var m: Dictionary = monsters[id]
+		if not bool(m.get("boss", false)):
+			continue
 		if floor_number >= int(m.get("floor_min", 1)) and floor_number <= int(m.get("floor_max", 99)):
 			result.append(id)
 	result.sort()

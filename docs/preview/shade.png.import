@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bgci1yt6ydk1m"
-path="res://.godot/imported/screen_battle.png-33a7bc17d999138f64725d0b829d6bd7.ctex"
+uid="uid://dl4vduop6yaim"
+path="res://.godot/imported/shade.png-22bc416f9dc5714562545a509a665475.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://docs/preview/screen_battle.png"
-dest_files=["res://.godot/imported/screen_battle.png-33a7bc17d999138f64725d0b829d6bd7.ctex"]
+source_file="res://docs/preview/shade.png"
+dest_files=["res://.godot/imported/shade.png-22bc416f9dc5714562545a509a665475.ctex"]
 
 [params]
 

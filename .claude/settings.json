@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python)",
+      "PowerShell(python *)",
+      "PowerShell(python3 *)",
+      "PowerShell(py *)",
+      "PowerShell(pip *)",
+      "Bash(python)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(py *)",
+      "Bash(pip *)",
+      "PowerShell(godot)",
+      "PowerShell(godot *)",
+      "Bash(godot *)",
+      "PowerShell(git *)",
+      "Bash(git *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Select-Object *)",
+      "PowerShell(Select-String *)",
+      "PowerShell(Write-Output *)",
+      "PowerShell(Out-Null)",
+      "PowerShell(Measure-Object *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(Move-Item *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(rm *)",
+      "Bash(mv *)",
+      "WebSearch",
+      "WebFetch"
+    ],
+    "deny": [
+      "PowerShell(Remove-Item C:\\Windows*)",
+      "PowerShell(Remove-Item C:\\Users\\*\\Documents*)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)"
+    ]
+  }
+}

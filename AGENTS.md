@@ -5,6 +5,11 @@
 - **いちいち確認を取らない。** ローカル環境の資産（PowerShell / Python / Godot /
   Ollama / nvidia-smi など）は自由に使ってよい。PC を壊す、セキュリティ上まずい、
   外部へ何かを公開する、といった類でなければ、そのまま実行して進める。
+- **`powershell` / `python` / `godot` の実行は許可済み。** 実行ポリシー上そのまま叩いてよく、
+  一回ごとに伺いを立てない。`git` の読み取り系、ファイル・ディレクトリの確認も同じ。
+  手を止めるのは破壊的な操作（削除・`--force` 付きの push・外部への送信）だけでよい。
+- **外部ネットワークの調査も許可を取らずに実施する。** 曖昧な記憶で答えるより、
+  Web 検索・ページ取得で裏を取ってから出す。
 - 「これで進めていいですか」を繰り返さない。設計判断は推奨案を 1 つ選んで進め、
   後から差し替えがしんどい分岐（戦闘方式・パーティ人数など）だけ先に確認する。
 - 作業の途中経過を細かく報告しない。区切りで、決めたことと動いた証拠をまとめて出す。
@@ -38,6 +43,7 @@ python tools/verify_audio.py                          # 音の検算（無音・
 godot --headless --import                             # class_name を登録（新クラス追加後は必須）
 godot --headless --script res://tests/test_core.gd    # 決定性テスト（常に緑に保つ）
 godot --path . -- --shot=battle                       # 画面を 1 枚撮って終了
+godot --path . -- --shot=stronghold                   # 拠点（explore / job / result も可）
 godot --path .                                        # 起動
 ```
 

@@ -38,6 +38,19 @@ static func build(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[
 	return result
 
 
+## 主の間の編成。ボス 1 体だけを、階層補正なしの素の強さで出す。
+##
+## 通常敵は階層で線形に強化しているが、ボスは「そこに座っている 1 体」なので
+## データに書いた数値がそのまま最終試験の難度になる。調整点を 1 か所に保つ。
+static func build_boss(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[Battler]:
+	var pool := Database.boss_ids_for_floor(floor_number)
+	var result: Array[Battler] = []
+	if pool.is_empty():
+		return result
+	result.append(_to_battler(rng.pick(pool), 1, first_id))
+	return result
+
+
 @warning_ignore("integer_division")
 static func _to_battler(monster_id: String, floor_number: int, battler_id: int) -> Battler:
 	var m := Database.monster(monster_id)

@@ -8,6 +8,10 @@ extends Node
 const SAVE_PATH := "user://save.json"
 const PARTY_SIZE := 4
 
+## 最終階。ここには下り階段が無く、主の間の扉だけがある。
+## ランに終わりを与えるための唯一の数字なので、ここ以外に散らさない。
+const FINAL_FLOOR := 10
+
 ## 初期メンバー。拠点で控えを増やしていく想定だが、連れて行けるのは常に 4 人。
 const DEFAULT_PARTY := [
 	{ "name": "アレン", "job": "soldier" },
@@ -32,6 +36,11 @@ var floor_number: int = 1
 var gold: int = 0
 var steps: int = 0
 var rng: DetRng = null
+
+## 持ち物（item_id -> 個数）。ゴールドと同じくランの中でしか存在しない。
+## 「買ったものを持ち帰れる」ようにすると、出店が拠点の延長になって
+## 道中の判断が薄まるので、ここは必ず捨てる側に置く。
+var inventory: Dictionary = {}
 
 
 func _ready() -> void:
@@ -62,6 +71,7 @@ func start_new_run(seed_value: int = -1) -> void:
 	floor_number = 1
 	gold = 0
 	steps = 0
+	inventory = {}
 	run_active = true
 	runs_attempted += 1
 	for m in active_party():
@@ -113,9 +123,69 @@ func end_run(victory: bool) -> Dictionary:
 	gold = 0
 	steps = 0
 	floor_number = 1
+	inventory = {}
 	save_game()
 	run_ended.emit(victory, summary)
 	return summary
+
+
+# --------------------------------------------------------------------------
+# ゴールドと持ち物（ランの中でしか存在しない資源）
+# --------------------------------------------------------------------------
+
+
+func spend_gold(amount: int) -> bool:
+	if amount < 0 or gold < amount:
+		return false
+	gold -= amount
+	return true
+
+
+func add_item(item_id: String, count: int = 1) -> void:
+	if count <= 0 or not Database.all_items().has(item_id):
+		return
+	inventory[item_id] = item_count(item_id) + count
+
+
+func item_count(item_id: String) -> int:
+	return int(inventory.get(item_id, 0))
+
+
+## 1 個消費する。持っていなければ false。
+func consume_item(item_id: String) -> bool:
+	var have := item_count(item_id)
+	if have <= 0:
+		return false
+	if have == 1:
+		inventory.erase(item_id)
+	else:
+		inventory[item_id] = have - 1
+	return true
+
+
+## 所持品の一覧。並び順を確定させる（辞書の列挙順に依存させない）。
+func inventory_ids() -> Array:
+	var ids := inventory.keys()
+	ids.sort()
+	return ids
+
+
+# --------------------------------------------------------------------------
+# 拠点
+# --------------------------------------------------------------------------
+
+
+## 拠点での転職。恒久データが動くので、その場で保存する。
+##
+## ラン中は禁じる。潜行中に職業を変えられると「レベルを失う」というランの
+## 代償が抜け道になり、熟練度の持ち帰りが手応えでなくなる。
+func change_job(member: PartyMember, job_id: String) -> bool:
+	if run_active:
+		return false
+	if not member.change_job(job_id):
+		return false
+	save_game()
+	return true
 
 
 # --------------------------------------------------------------------------

@@ -9,8 +9,18 @@ export_presets.cfg
 # ドット絵は数 KB なので逆に追跡する（差分がレビューできる利点が勝る）。
 assets/audio/**/*.wav
 
-# 開発用の撮影物
+# 開発用の撮影物。ランごとに中身が変わるので基本は追跡しない。
+# README が貼っている数枚だけは例外にする（追跡しないとリンクが壊れる）。
+# .import は撮影物には不要（ゲームからは参照していない）。
 docs/preview/screen_*.png
+docs/preview/screen_*.png.import
+!docs/preview/screen_battle.png
+!docs/preview/screen_explore.png
+!docs/preview/screen_stronghold.png
+!docs/preview/screen_shop.png
+
+# 個人用の設定。共有するのは .claude/settings.json のほう。
+.claude/settings.local.json
 
 # OS
 Thumbs.db

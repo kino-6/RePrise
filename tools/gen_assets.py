@@ -109,6 +109,65 @@ BAT = Palette(
     },
 )
 
+BONE = Palette(
+    "bone",
+    {
+        "K": "#14100C",  # 輪郭
+        "d": "#6E6252",  # 骨 影
+        "m": "#A89880",  # 骨 中
+        "l": "#D8CCB4",  # 骨
+        "W": "#F4EEDC",  # 骨 最明
+        "E": "#E8503C",  # 眼窩の火
+        "r": "#3A2A1E",  # 具足 影
+        "R": "#6A4A30",  # 具足
+    },
+)
+
+SHADE = Palette(
+    "shade",
+    {
+        "K": "#0A0A12",  # 輪郭
+        "d": "#1C1830",  # 裾 影
+        "m": "#302A50",  # 衣
+        "l": "#4A3E72",  # 衣 明
+        "W": "#A894D8",  # 縁の光
+        "E": "#78E8F0",  # 眼（青白）
+        "e": "#2A6870",  # 眼 影
+    },
+)
+
+GOLEM = Palette(
+    "golem",
+    {
+        "K": "#100E14",  # 輪郭
+        "d": "#2A2A30",  # 石 影
+        "m": "#45454E",  # 石
+        "l": "#62626E",  # 石 明
+        "h": "#85858F",  # 石 ハイライト
+        "W": "#B4B4BE",  # 稜線
+        "E": "#F0A038",  # 刻まれた印（琥珀）
+    },
+)
+
+# 最終階の主。主人公と同じ「黒基調 + 金の縁取り + 差し色 1 色」で組み、
+# 差し色だけを紅にする。味方と同じ様式で描くと「同じ世界のもの」に見え、
+# 寄せ集めの敵より最後の 1 体らしくなる。
+WARDEN = Palette(
+    "warden",
+    {
+        "K": "#0A0810",  # 輪郭
+        "d": "#1A1626",  # 鎧 影
+        "m": "#2E2842",  # 鎧
+        "l": "#4A4266",  # 鎧 明
+        "h": "#6E668C",  # 鎧 ハイライト
+        "W": "#C8C0E0",  # 縁の光
+        "G": "#F0D28C",  # 金
+        "g": "#A8802C",  # 金 影
+        "E": "#F85038",  # 眼（差し色）
+        "e": "#7A1810",  # 眼 影
+    },
+)
+
 UI = Palette(
     "ui",
     {
@@ -241,8 +300,30 @@ TILE_CHEST = [
 ]
 
 
+# 道中の出店。床の上に建っているので、下地は床色で塗りつぶす
+# （宝箱と違って背景が透けると、通路の途中に浮いて見える）。
+TILE_SHOP = [
+    "ffffffffffffffff",
+    "fKKKKKKKKKKKKKKf",
+    "fKRRRRRRRRRRRRKf",
+    "fKGGRRGGRRGGRRKf",
+    "fKGGRRGGRRGGRRKf",
+    "fKRRRRRRRRRRRRKf",
+    "fKrrrrrrrrrrrrKf",
+    "fKeeeeeeeeeeeeKf",
+    "fKeGGeeeeGGeeeKf",
+    "fKeeeeeeeeeeeeKf",
+    "fKrrrrrrrrrrrrKf",
+    "fKRRRRRRRRRRRRKf",
+    "fKrrrrrrrrrrrrKf",
+    "fKKKKKKKKKKKKKKf",
+    "ffffffffffffffff",
+    "ffffffffffffffff",
+]
+
+
 def build_tileset() -> None:
-    """8 枚を横一列に並べた 128x16 のタイルシート。"""
+    """9 枚を横一列に並べた 144x16 のタイルシート。"""
     tiles = [
         tile_floor(),
         tile_floor(cracked=True),
@@ -252,6 +333,7 @@ def build_tileset() -> None:
         from_ascii(TILE_DOOR, STONE),
         from_ascii(TILE_CHEST, STONE),
         Canvas(TILE, TILE),  # 7: 虚空（マップ外）
+        from_ascii(TILE_SHOP, STONE),
     ]
     sheet = Canvas(TILE * len(tiles), TILE)
     for i, t in enumerate(tiles):
@@ -491,6 +573,215 @@ BAT_HALF = [
 ]
 
 
+# 主は 64x64。通常敵（32x32 / ゲル 48x40）の倍近い寸法にして、
+# 扉を抜けた瞬間に「これは別物だ」と大きさで分からせる。
+# SFC 期のボスが軒並み 64px 級だったのは、この一目の落差のため。
+WARDEN_HALF = [
+    "................................",
+    "................................",
+    "...KKK..........................",
+    "..KhhK..........................",
+    "..KhhK..........................",
+    "..KhhK..........................",
+    "..KhhK.................KKKKKKKKK",
+    "..KhhK..............KKKhhhhhhhhh",
+    "..KhhK............KKhhhhhhhhhhhh",
+    "..KhhK..........KKhhhhhlllllllll",
+    "..KhhK.........KhhhhhhlllllllllG",
+    "..KhhK........KhhhhhhlllllllllGG",
+    "..KhhKK......KKhhhhhhlllllllGGGG",
+    "..KhhhKKKKKKKhhhhhhhllllllGGGGGG",
+    "...KhhhhhhhhhhhhhhhhlllllGGGGGGG",
+    "....KhhhhhhhhhhhhhhhllllGGGGGGGG",
+    "....KhhhhhhhhhhhhhhlllGGGGGGGGGG",
+    "....KhhhhhhhhhhhhhllGGGGGGGGGGGG",
+    "....KhhhhhhhhhhhhlGGGGGGGGGGGGGG",
+    "....Khhhhhhhhhhhhggggggggggggggg",
+    "....KhhhhhhhhhhhKddddddddddddddd",
+    "....KhhhhhhhhhhKdddddddddddddddd",
+    "....KhhhhhhhhhKddddddddddddddddd",
+    "....KhhhhhhhhKdddddddddddddddddd",
+    "....KhhhhhhhhKddddeeeeeeeedddddd",
+    "....KhhhhhhhhKdddeEEEEEEEEeddddd",
+    "....KhhhhhhhhKdddeEEEEEEEEeddddd",
+    "....KhhhhhhhhKddddeeeeeeeedddddd",
+    "....KhhhhhhhhKdddddddddddddddddd",
+    "....KhhhhhhhhhKddddddddddddddddd",
+    "....KhhhhhhhhhhKdddddddddddddddd",
+    "....KhhhhhhhhhhhKddddddddddddddd",
+    "....KhhhhhhhhhhhhKdddddddddddddd",
+    "...KhhhhhhhhhhhhhhKggggggggggggg",
+    "..KhhhhhhhhhhhhhhhhKGGGGGGGGGGGG",
+    ".KhhhhhhhhhhhhhhhhhhKGGGGGGGGGGG",
+    "KhhhhhhhhhhhhhhhhhhhhKgggggggggg",
+    "KWWWWWWWWWWWWWWWWWWWWWKmmmmmmmmm",
+    "KWllllllllllllllllllllWKmmmmmmmm",
+    "KWlllllllllllllllllllWKmmmmmmmmm",
+    ".KWlllllllllllllllllWKmmmmmmmmmm",
+    ".KWllllllllllllllllWKmmmmmmmmmmm",
+    "..KWllllllllllllllWKmmmmmmmmmmmm",
+    "..KWlllllllllllllWKmmmmmmmmmmmmm",
+    "...KWlllllllllllWKmmmmmmmmmmmmmm",
+    "...KWllllllllllWKmmmmmmmmmmmmmmm",
+    "....KWllllllllWKmmmmmmmmmmmmmmmm",
+    "....KWlllllllWKmmmmmmmmmmmmmmmmm",
+    ".....KWlllllWKmmmmmmmmmmmmmmmmmm",
+    ".....KWllllWKmmmmmmmmmmmmmmmmmmm",
+    "......KWllWKmmmmmmmmmmmmmmmmmmmm",
+    "......KWWWKmmmmmmmmmmmmmmmmmmmmm",
+    ".......KKKGGGGGGGGGGGGGGGGGGGGGG",
+    "........Kggggggggggggggggggggggg",
+    "........Kmmmmmmmmmmmmmmmmmmmmmmm",
+    "........Kmmmmmmmmmmmmmmmmmmmmmmm",
+    ".......Kdmmmmmmmmmmmmmmmmmmmmmmm",
+    ".......Kddmmmmmmmmmmmmmmmmmmmmmm",
+    "......Kdddmmmmmmmmmmmmmmmmmmmmmm",
+    "......Kddddddddddddddddddddddddd",
+    ".....Kdddddddddddddddddddddddddd",
+    ".....KddddddGGGGGGGGGGGGGGGGGGGG",
+    "....KKKKKKKKgggggggggggggggggggg",
+    "....KKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+]
+
+
+# 中層以降の敵。ゲル（48x40）に合わせて 48x44 に揃える。
+# bat の 32x32 は画面から浮くので、以後の敵はこの寸法を基準にする。
+# されこうべ。胴や手足を 48px で描くと必ず潰れて家具に見えたので、
+# 頭蓋 1 個に絞った。眼窩・鼻腔・歯という 3 つの特徴だけで読ませる。
+SKULL_HALF = [
+    "........................",
+    "..............KKKKKKKKKK",
+    "............KKllllllllll",
+    "...........KlllllllllllW",
+    "..........KllllllllllllW",
+    ".........KlllllllllllllW",
+    ".........KlllllllllllllW",
+    "........KllllllllllllllW",
+    "........KllllllllllllllW",
+    "........KllKKKKKlllllllW",
+    "........KlKEEEEEKllllllW",
+    "........KlKEEEEEKllllllW",
+    "........KlKKEEEKKllllllW",
+    "........Klllllllllllllll",
+    "........Klllllllllllllll",
+    ".........KlllllllKKlllll",
+    ".........KllllllKKKlllll",
+    ".........KlllllllKKlllll",
+    ".........Kllllllllllllll",
+    "..........Kmmmmmmmmmmmmm",
+    "..........KKKKKKKKKKKKKK",
+    "...........KlKlKlKlKllll",
+    "...........Kllllllllllll",
+    "...........KlKlKlKlKllll",
+    "............KKmmmmmmmmmm",
+    "..............KKKKKKKKKK",
+    "........................",
+    "........................",
+    "........................",
+    "........................",
+    "........................",
+    "........................",
+]
+
+# 亡霊。フードの頂点から裾の先まで一本の紡錘にする。
+# 中身は空で、開口部に眼だけが灯っている、という一点で読ませる。
+SHADE_HALF = [
+    "........................",
+    "......................KK",
+    "....................KKdd",
+    "..................KKddmm",
+    "................KKddmmmm",
+    "..............KKddmmmmmm",
+    "............KKddmmmmmmmm",
+    "..........KKddmmmmmmmmmm",
+    ".........Kddmmmmmmmmmmmm",
+    "........Kddmmmmmmmmmmmmm",
+    "........KddmKKKKKKKKKKKK",
+    "........KddmKKEEEEEEEEEE",
+    "........KddmKKeEEEEEEEEE",
+    "........KddmKKEEEEEEEEEE",
+    "........KddmKKKKKKKKKKKK",
+    "........Kddmmmmmmmmmmmmm",
+    ".......Kddmmmmmmmmmmmmmm",
+    "......Kddmmmmmmmmmmmmmmm",
+    ".....KddmmmmmmmmmmmmmmmW",
+    ".....KdmWWWWWWWWWWWWWWWW",
+    "....KdmmWWWWWWWWWWWWWWWW",
+    "....Kdmmmmmmmmmmmmmmmmmm",
+    "....Kdmmmmmmmmmmmmmmmmmm",
+    ".....Kdmmmmmmmmmmmmmmmmm",
+    ".....Kddmmmmmmmmmmmmmmmm",
+    "......Kddmmmmmmmmmmmmmmm",
+    "......Kdddmmmmmmmmmmmmmm",
+    ".......Kdddmmmmmmmmmmmmm",
+    ".......Kddddmmmmmmmmmmmm",
+    "........Kddddmmmmmmmmmmm",
+    "........Kdddddmmmmmmmmmm",
+    ".........Kdddddmmmmmmmmm",
+    ".........Kdddddddmmmmmmm",
+    "..........Kdddddddmmmmmm",
+    "..........Kdddddddddmmmm",
+    "...........Kddddddddddmm",
+    "...........Kdddddddddddd",
+    "............Kddddddddddd",
+    ".............Kdddddddddd",
+    "..............Kddddddddd",
+    "...............Kdddddddd",
+    "................KKdddddd",
+    "..................KKdddd",
+    "....................KKKK",
+]
+
+# 石の下僕。腕と胴のあいだを抜いて、人型だと一目で分からせる。
+# 顔は作らず、刻まれた印だけを光らせる（物ではなく仕掛け、という佇まい）。
+GOLEM_HALF = [
+    "........................",
+    "........................",
+    "..............KKKKKKKKKK",
+    ".............Kllllllllll",
+    ".............Kllllllllll",
+    ".............KlKKKEEEEEE",
+    ".............KlKKKEEEEEE",
+    ".............Kllllllllll",
+    ".............Kmmmmmmmmmm",
+    ".............KKKKKKKKKKK",
+    "................KKmmmmmm",
+    "................KKmmmmmm",
+    "....KKKKKKKKKKKKKKmmmmmm",
+    "..KKhhhhhhhhhhhhhhllllll",
+    ".Khhhhhhhhhhhhhh..llllll",
+    "KhhhhhhhhhhhhhhK..llllll",
+    "KhllllllllllllK...llllll",
+    "KhllllllllllllK...llllll",
+    "KhllllllllllllK...llllll",
+    "KhllllllllllllK...llllll",
+    "KmmmmmmmmmmmmmK...llllll",
+    "KKKKKKKKKKKKKKK...llllll",
+    "..................llllll",
+    "..........KKKKKKKKllllll",
+    ".......KKKllllllllllllll",
+    ".....KKlllllllllllllllll",
+    "....Klllllllllllllllllll",
+    "....KlllllllllllllEEllll",
+    "....KlllllllllllllEEllll",
+    "....Klllllllllllllllllll",
+    "....Kmmmmmmmmmmmmmmmmmmm",
+    "....KKKKKKKKKKKKKKKKKKKK",
+    "......KKKKKKmmmmmmmmmmmm",
+    "......Klllll..Klllllllll",
+    "......Klllll..Klllllllll",
+    "......Klllll..Klllllllll",
+    "......Klllll..Klllllllll",
+    "......Kmmmmm..Kmmmmmmmmm",
+    "......KKKKKK..KKKKKKKKKK",
+    ".....Kdddddd..Kddddddddd",
+    ".....KKKKKKK..KKKKKKKKKK",
+    "........................",
+    "........................",
+    "........................",
+]
+
+
 def build_monster(name: str, half_rows: list[str], palette: Palette, width: int = 16) -> None:
     """左半分から敵グラフィックを綴じる。"""
     half = from_ascii(half_rows, palette, width)
@@ -630,6 +921,10 @@ def main() -> None:
     build_heroes()
     build_blob("gel", GEL, width=24, height=40)
     build_monster("bat", BAT_HALF, BAT)
+    build_monster("skull", SKULL_HALF, BONE, width=24)
+    build_monster("shade", SHADE_HALF, SHADE, width=24)
+    build_monster("golem", GOLEM_HALF, GOLEM, width=24)
+    build_monster("warden", WARDEN_HALF, WARDEN, width=32)
     build_window()
     build_cursor()
     print("生成完了:")

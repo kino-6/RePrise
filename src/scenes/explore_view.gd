@@ -5,6 +5,8 @@ extends Node2D
 
 signal encounter_triggered
 signal descended
+signal boss_reached
+signal shop_entered
 signal chest_opened(amount: int)
 
 const TILE := 16
@@ -108,6 +110,16 @@ func _try_move(target: Vector2i) -> void:
 
 	if tile == DungeonMap.T_STAIRS:
 		descended.emit()
+		return
+
+	# 最終階の出口は下りではなく主の間。踏んだ時点でボス戦に入る。
+	if tile == DungeonMap.T_DOOR:
+		boss_reached.emit()
+		return
+
+	# 出店は踏んで入る。踏み直せば何度でも入れる（立っている間は開かない）。
+	if tile == DungeonMap.T_SHOP:
+		shop_entered.emit()
 		return
 
 	if _should_encounter():
