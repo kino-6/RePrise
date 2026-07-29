@@ -15,6 +15,7 @@ static var jobs: Dictionary = {}
 static var abilities: Dictionary = {}
 static var monsters: Dictionary = {}
 static var items: Dictionary = {}
+static var equipment: Dictionary = {}
 static var upgrades: Dictionary = {}
 
 static var _loaded := false
@@ -30,6 +31,7 @@ static func reload() -> void:
 	abilities = _load_json("res://data/abilities.json")
 	monsters = _load_json("res://data/monsters.json")
 	items = _load_json("res://data/items.json")
+	equipment = _load_json("res://data/equipment.json")
 	upgrades = _load_json("res://data/upgrades.json")
 	_loaded = true
 
@@ -86,6 +88,38 @@ static func all_items() -> Dictionary:
 static func item(id: String) -> Dictionary:
 	_ensure()
 	return items.get(id, {})
+
+
+static func all_equipment() -> Dictionary:
+	_ensure()
+	return equipment
+
+
+static func gear(id: String) -> Dictionary:
+	_ensure()
+	return equipment.get(id, {})
+
+
+## その階の出店に並ぶ装備。品揃えが揺れないよう並び順を確定させる。
+static func gear_ids_for_floor(floor_number: int) -> Array:
+	_ensure()
+	var result: Array = []
+	for id in equipment.keys():
+		if floor_number >= int(equipment[id].get("floor_min", 1)):
+			result.append(id)
+	result.sort()
+	return result
+
+
+## 装備の一覧（スロット順 → ID 順）。つよさ画面と装備画面で同じ並びにする。
+static func gear_ids_in_slot(slot: String) -> Array:
+	_ensure()
+	var result: Array = []
+	for id in equipment.keys():
+		if String(equipment[id].get("slot", "")) == slot:
+			result.append(id)
+	result.sort()
+	return result
 
 
 static func all_upgrades() -> Dictionary:

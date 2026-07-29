@@ -35,6 +35,12 @@ var abilities: Array[String] = []
 ## CTB の仮想時間軸上で、次に行動できる時刻。
 var next_at: int = 0
 
+## 敵が次に使うと決めている技。行動順バーに出して「予告」にする。
+##
+## 相手の手が見えていないと、こちらが手を変える理由が生まれない。
+## 技だけを先に決め、対象は実行時に選ぶ（先に決めると対象が死んでいることがある）。
+var planned_ability: String = ""
+
 ## 防御中は次の行動まで被ダメージが減る。
 var guarding: bool = false
 ## 素早さ倍率を 100 分率で持つ（ヘイスト 150 / スロウ 50）。整数のまま扱う。
@@ -46,6 +52,47 @@ var agi_scale_turns: int = 0
 ## この者をかばっている者。攻撃はそちらが肩代わりする。
 ## かばい手が動いたら解除されるので、守り続けるには毎回かばい直す必要がある。
 var protected_by: Battler = null
+
+## 属性の耐性。weak なら 2 倍、resist なら半減。
+## 「敵ごとに効く手が変わる」ための装置で、これが無いと最強の 1 手を覚えた時点で
+## 考えるのをやめてしまう（docs/battle_design.md）。
+var weak: Array[String] = []
+var resist: Array[String] = []
+
+## 通常攻撃に乗る属性（炎の武器など）。
+var attack_element: String = ""
+
+## 状態異常。CTB では時間に触る効果がいちばん強く効くので、そこに絞る。
+## ねむり: 手番が来ても動けず、そのぶん後ろへ回る
+## どく  : 手番が来るたびに削れる（速い者ほど早く減る）
+var sleep_turns: int = 0
+var poison_turns: int = 0
+
+
+## 装備由来の特殊効果（"steal_up" など）。
+var effects: Array[String] = []
+
+
+func has_effect(id: String) -> bool:
+	return id in effects
+
+
+func has_status() -> bool:
+	return sleep_turns > 0 or poison_turns > 0
+
+
+func clear_status() -> void:
+	sleep_turns = 0
+	poison_turns = 0
+
+
+## 状態異常の短い表示（HUD 用）。無ければ空文字。
+func status_tag() -> String:
+	if sleep_turns > 0:
+		return "ねむり"
+	if poison_turns > 0:
+		return "どく"
+	return ""
 
 
 func is_alive() -> bool:

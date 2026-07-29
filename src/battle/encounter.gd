@@ -76,6 +76,9 @@ static func _to_battler(monster_id: String, floor_number: int, battler_id: int) 
 
 	var raw: Array = m.get("abilities", ["attack"])
 	b.abilities.assign(raw)
+	# 属性の得手不得手。これが敵ごとに違うから「効く手」が変わる。
+	b.weak.assign(m.get("weak", []))
+	b.resist.assign(m.get("resist", []))
 	return b
 
 

@@ -1,0 +1,61 @@
+{
+  "_comment": "装備。slot: weapon / armor / accessory。ゴールドと同じくラン内資源で、全滅すると失う（恒久強化が能力値に触れないという不変条件を守るため）。cost_scale は行動コストの倍率差で、重い武器ほど次の手番が遅れる。element を持つ武器は通常攻撃にその属性が乗る。",
+
+  "short_sword": {
+    "name": "みじかい剣", "slot": "weapon",
+    "atk": 4, "cost_scale": 0,
+    "price": 40, "floor_min": 1, "stock": 1
+  },
+  "war_axe": {
+    "name": "いくさ斧", "slot": "weapon",
+    "atk": 11, "cost_scale": 15,
+    "desc": "重い。次の手番が遅れる。",
+    "price": 140, "floor_min": 4, "stock": 1
+  },
+  "flame_dagger": {
+    "name": "ほのおの短刀", "slot": "weapon",
+    "atk": 7, "cost_scale": -10, "element": "fire",
+    "desc": "通常攻撃に炎が乗る。軽い。",
+    "price": 180, "floor_min": 5, "stock": 1
+  },
+  "oak_staff": {
+    "name": "かしの杖", "slot": "weapon",
+    "atk": 2, "mag": 8, "cost_scale": 0,
+    "price": 120, "floor_min": 3, "stock": 1
+  },
+
+  "leather_vest": {
+    "name": "かわのむねあて", "slot": "armor",
+    "def": 5,
+    "price": 50, "floor_min": 1, "stock": 1
+  },
+  "chain_mail": {
+    "name": "くさりかたびら", "slot": "armor",
+    "def": 12, "agi": -2,
+    "price": 160, "floor_min": 4, "stock": 1
+  },
+  "silk_robe": {
+    "name": "きぬのローブ", "slot": "armor",
+    "def": 6, "mag": 4,
+    "price": 150, "floor_min": 4, "stock": 1
+  },
+
+  "swift_band": {
+    "name": "はやての腕輪", "slot": "accessory",
+    "agi": 6, "cost_scale": -8,
+    "desc": "手番が回るのが速くなる。",
+    "price": 200, "floor_min": 5, "stock": 1
+  },
+  "guard_ring": {
+    "name": "まもりの指輪", "slot": "accessory",
+    "def": 4, "hp": 12,
+    "price": 170, "floor_min": 3, "stock": 1
+  },
+  "thief_glove": {
+    "name": "ぬすっとの手袋", "slot": "accessory",
+    "agi": 2,
+    "desc": "ぬすむ の成功率が上がる。",
+    "effect": "steal_up",
+    "price": 150, "floor_min": 2, "stock": 1
+  }
+}

@@ -41,27 +41,38 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	# 階層と所持金
-	var head := Rect2(6, 6, 112, 24)
+	var head := Rect2(8, 8, 150, 32)
 	PixelUI.draw_window(self, head, WINDOW_TEX)
-	PixelUI.draw_text(self, head.position + Vector2(10, 16), "地下 %d 階" % floor_number, PixelUI.C_TEXT, 12)
+	PixelUI.draw_text(
+		self, PixelUI.content(head).position + Vector2(6, 1),
+		Terms.FLOOR % floor_number, PixelUI.C_TEXT
+	)
 
-	var purse := Rect2(266, 6, 112, 24)
+	var purse := Rect2(354, 8, 150, 32)
 	PixelUI.draw_window(self, purse, WINDOW_TEX)
-	PixelUI.draw_text(self, purse.position + Vector2(10, 16), "%d ゴールド" % gold, PixelUI.C_TEXT, 12)
+	PixelUI.draw_text_right(
+		self, Vector2(PixelUI.content(purse).end.x - 4, PixelUI.content(purse).position.y + 1),
+		"%d %s" % [gold, Terms.GOLD], PixelUI.C_TEXT
+	)
 
 	# パーティの体力（探索中も常に見えていないと引き際が判断できない）
-	var status := Rect2(6, 200, 372, 34)
+	var status := Rect2(8, 268, 496, 44)
 	PixelUI.draw_window(self, status, WINDOW_TEX)
+	var inner := PixelUI.content(status)
 	for i in members.size():
 		var m := members[i]
-		var base := status.position + Vector2(10 + i * 92, 15)
+		var base := inner.position + Vector2(6 + i * 122, 0)
 		var ratio := float(m.hp) / maxf(float(m.max_hp()), 1.0)
 		var name_color := PixelUI.C_TEXT if m.hp > 0 else PixelUI.C_HP_LOW
-		PixelUI.draw_text(self, base, m.name, name_color, 11)
-		PixelUI.draw_text(self, base + Vector2(48, 0), "%d/%d" % [m.hp, m.max_hp()], PixelUI.C_TEXT_DIM, 10)
-		PixelUI.draw_gauge(self, Rect2(base.x, base.y + 4, 84, 5), ratio, PixelUI.hp_color(ratio))
+		PixelUI.draw_text(self, base, m.name, name_color)
+		PixelUI.draw_text(
+			self, base + Vector2(62, 2), "%d/%d" % [m.hp, m.max_hp()],
+			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
+		PixelUI.draw_gauge(self, Rect2(base.x, base.y + 19, 112, 5), ratio, PixelUI.hp_color(ratio))
 
 	if _toast != "":
-		var box := Rect2(82, 158, 220, 26)
+		var width := PixelUI.text_width(_toast) + 36.0
+		var box := Rect2((PixelUI.SCREEN.x - width) * 0.5, 212, width, 36)
 		PixelUI.draw_window(self, box, WINDOW_TEX)
-		PixelUI.draw_text(self, box.position + Vector2(12, 17), _toast, PixelUI.C_TEXT, 12)
+		PixelUI.draw_text(self, PixelUI.content(box).position + Vector2(8, 1), _toast, PixelUI.C_TEXT)

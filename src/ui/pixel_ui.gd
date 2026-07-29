@@ -6,12 +6,35 @@ extends RefCounted
 ## フォントは Windows 標準の MS ゴシックを、アンチエイリアスとサブピクセル配置を
 ## 切って使う。日本語のドットフォントを自作すると数千字を描く羽目になるが、
 ## この設定なら小サイズで十分に「SFC の文字」に見える。
+##
+## 文字の座標は**左上**で指定する。draw_string はベースライン基準なので、
+## そのまま渡すと窓枠に文字がめり込む（実際にそうなっていた）。
+## 変換は draw_text の中で 1 回だけ行い、各画面には持ち込まない。
 
-const FONT_SIZE := 12
-const LINE_HEIGHT := 14
+# 画面の基準サイズ。
+#
+# 384x240 から上げてある。漢字は 14px 未満で画数が潰れる（下記 SIZE_* 参照）ため、
+# 384 幅では「読める文字」を並べると 1 行に入る字数が足りなくなった。
+# タイル 16px / キャラ 24x32 は据え置きなので、絵の資産はそのまま使える。
+const SCREEN := Vector2i(512, 320)
 
-# 画面の基準サイズ（後期 SFC 相当）
-const SCREEN := Vector2i(384, 240)
+# 文字サイズ。tests/_font_probe.gd で実測して決めた。
+#
+# MS ゴシックの漢字は 13px を下回ると画数が団子になって読めない
+# （銀・響・深・階が特にひどい）。だから規約を 2 つ置く。
+#   * 漢字を出してよいのは SIZE_TEXT 以上
+#   * SIZE_SUB は かな・数字・記号だけ
+const SIZE_HEAD := 17  ## 窓の見出し
+const SIZE_TEXT := 14  ## 本文と一覧（漢字を出してよい下限）
+const SIZE_SUB := 12  ## 添え物の数値（かなと数字のみ）
+
+## 標準の行送り。詰めたいときだけ各画面で上書きする。
+const LINE := 18
+
+## 窓の枠が実際に塗られている厚み（window.png の外周）。
+## 9-slice の margin は 8 だが、絵として線が乗っているのは外周 4px ほど。
+## 文字はここより内側に置く。
+const FRAME := 4.0
 
 # assets/ の生成パレットと同じ色を使う。ここがずれると UI だけ浮く。
 const C_TEXT := Color8(0xF8, 0xF8, 0xF8)
@@ -40,18 +63,37 @@ static func font() -> Font:
 	return _font
 
 
-## 影付きの文字。SFC の UI はほぼ必ず 1px の影が入っていて、
-## これがあるだけで背景に負けず読めるようになる。
+## 影付きの文字。位置は**左上**で指定する。
+##
+## SFC の UI はほぼ必ず 1px の影が入っていて、これがあるだけで背景に負けず読める。
 static func draw_text(
-	canvas: CanvasItem, pos: Vector2, text: String,
-	color: Color = C_TEXT, size: int = FONT_SIZE
+	canvas: CanvasItem, top_left: Vector2, text: String,
+	color: Color = C_TEXT, size: int = SIZE_TEXT
 ) -> void:
-	canvas.draw_string(font(), pos + Vector2.ONE, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, C_SHADOW)
-	canvas.draw_string(font(), pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+	var at := Vector2(top_left.x, top_left.y + font().get_ascent(size)).floor()
+	canvas.draw_string(font(), at + Vector2.ONE, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, C_SHADOW)
+	canvas.draw_string(font(), at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 
-static func text_width(text: String, size: int = FONT_SIZE) -> float:
+## 右端を揃えて置く。数値を右寄せするために使う。
+static func draw_text_right(
+	canvas: CanvasItem, right_top: Vector2, text: String,
+	color: Color = C_TEXT, size: int = SIZE_TEXT
+) -> void:
+	draw_text(canvas, Vector2(right_top.x - text_width(text, size), right_top.y), text, color, size)
+
+
+static func text_width(text: String, size: int = SIZE_TEXT) -> float:
 	return font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+
+
+static func text_height(size: int = SIZE_TEXT) -> float:
+	return font().get_ascent(size) + font().get_descent(size)
+
+
+## 窓の内側。文字はここを基準に置けば、どのサイズでも枠に触れない。
+static func content(rect: Rect2, pad := 3.0) -> Rect2:
+	return rect.grow(-(FRAME + pad))
 
 
 const WINDOW_MARGIN := 8.0

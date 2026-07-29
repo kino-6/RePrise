@@ -8,7 +8,7 @@ extends Node2D
 ## 輪が拠点に戻るのが要点。失ったレベルと残った熟練度を並べて見せる場が無いと、
 ## メタ進行が数字の裏側だけで進んでしまう。
 
-enum Mode { TITLE, STRONGHOLD, EXPLORE, BATTLE, SHOP, RESULT }
+enum Mode { TITLE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, RESULT }
 
 var title: TitleView
 var stronghold: StrongholdView
@@ -16,6 +16,7 @@ var shop: ShopView
 var explore: ExploreView
 var hud: ExploreHud
 var battle: BattleView
+var menu: FieldMenu
 var result: ResultScreen
 
 var _mode: Mode = Mode.EXPLORE
@@ -61,6 +62,10 @@ func _ready() -> void:
 	battle.visible = false
 	add_child(battle)
 
+	menu = FieldMenu.new()
+	menu.visible = false
+	add_child(menu)
+
 	result = ResultScreen.new()
 	result.visible = false
 	add_child(result)
@@ -74,6 +79,8 @@ func _ready() -> void:
 	shop.closed.connect(func() -> void: _set_mode(Mode.EXPLORE))
 	explore.chest_opened.connect(_on_chest)
 	battle.battle_finished.connect(_on_battle_finished)
+	explore.menu_requested.connect(_open_menu)
+	menu.closed.connect(_close_menu)
 	result.dismissed.connect(_enter_stronghold)
 
 	_enter_title()
@@ -144,6 +151,18 @@ func _capture(which: String) -> void:
 				await get_tree().create_timer(0.1).timeout
 				if battle.is_awaiting_command():
 					break
+		"menu":
+			_start_run()
+			GameState.add_item("herb", 3)
+			GameState.add_gear("short_sword")
+			GameState.add_gear("leather_vest")
+			_open_menu()
+		"equip":
+			_start_run()
+			GameState.add_gear("war_axe")
+			GameState.add_gear("flame_dagger")
+			_open_menu()
+			menu.debug_open_equip()
 		"upgrade":
 			_enter_stronghold()
 			GameState.echo = 42
@@ -172,8 +191,8 @@ func _capture(which: String) -> void:
 				await get_tree().create_timer(0.1).timeout
 				if battle.is_awaiting_command():
 					break
-			# 1 ページ目は通常の戦闘撮影で見えている。確かめたいのは 7 個目以降。
-			battle.debug_turn_page(1)
+			# 技が増えたときのサブウィンドウの見え方を確かめる。
+			battle.debug_open_spell_menu()
 		"battle":
 			_start_run()
 			_on_encounter()
@@ -237,6 +256,7 @@ func _set_mode(mode: Mode) -> void:
 	title.visible = mode == Mode.TITLE
 	stronghold.visible = mode == Mode.STRONGHOLD
 	shop.visible = mode == Mode.SHOP
+	menu.visible = mode == Mode.MENU
 	explore.visible = mode == Mode.EXPLORE
 	hud.visible = mode == Mode.EXPLORE
 	battle.visible = mode == Mode.BATTLE
@@ -248,8 +268,20 @@ func _set_mode(mode: Mode) -> void:
 		stronghold.close()
 	if mode != Mode.SHOP:
 		shop.close()
+	if mode != Mode.MENU:
+		menu.close()
 	if mode == Mode.EXPLORE:
 		_refresh_hud()
+
+
+## 探索中のメニュー。歩きを止めてから開く。
+func _open_menu() -> void:
+	menu.open()
+	_set_mode(Mode.MENU)
+
+
+func _close_menu() -> void:
+	_set_mode(Mode.EXPLORE)
 
 
 func _refresh_hud() -> void:
@@ -330,5 +362,5 @@ func _on_shop_entered() -> void:
 func _on_chest(amount: int) -> void:
 	Sound.play("chest")
 	GameState.earn_gold(amount)
-	hud.toast("たからばこ！ %d ゴールド" % amount)
+	hud.toast("たからばこ！ %d %s" % [amount, Terms.GOLD])
 	_refresh_hud()

@@ -32,14 +32,22 @@ func _unhandled_input(_event: InputEvent) -> void:
 func _draw() -> void:
 	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color8(0x08, 0x0A, 0x14), true)
 
-	var head := Rect2(12, 14, 360, 30)
+	var head := Rect2(16, 18, 480, 36)
 	PixelUI.draw_window(self, head, WINDOW_TEX)
-	PixelUI.draw_text(self, head.position + Vector2(14, 21), "―― %s ――" % title, PixelUI.C_ACTIVE, 14)
+	PixelUI.draw_text(
+		self, PixelUI.content(head).position + Vector2(8, 0),
+		"―― %s ――" % title, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
+	)
 
-	var body := Rect2(12, 52, 360, 152)
+	var body := Rect2(16, 62, 480, 200)
 	PixelUI.draw_window(self, body, WINDOW_TEX)
+	var inner := PixelUI.content(body)
 	for i in lines.size():
-		PixelUI.draw_text(self, body.position + Vector2(14, 24 + i * 16), lines[i], PixelUI.C_TEXT, 12)
+		PixelUI.draw_text(self, inner.position + Vector2(8, 4 + i * 21), lines[i], PixelUI.C_TEXT)
 
 	if _ready_to_dismiss:
-		PixelUI.draw_text(self, Vector2(112, 224), "Ｚキーで つぎの たびへ", PixelUI.C_TEXT_DIM, 12)
+		var tail := "Ｚキーで つぎの たびへ"
+		PixelUI.draw_text(
+			self, Vector2((PixelUI.SCREEN.x - PixelUI.text_width(tail)) * 0.5, 282),
+			tail, PixelUI.C_TEXT_DIM
+		)

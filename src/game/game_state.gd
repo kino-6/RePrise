@@ -54,6 +54,10 @@ var rng: DetRng = null
 var kills: int = 0
 var gold_earned: int = 0
 
+## 手持ちの装備（equipment.json の ID の列）。装備中のものは PartyMember 側が持つ。
+## ゴールドと同じくラン内資源で、全滅で失う。
+var gear_stock: Array[String] = []
+
 ## 持ち物（item_id -> 個数）。ゴールドと同じくランの中でしか存在しない。
 ## 「買ったものを持ち帰れる」ようにすると、出店が拠点の延長になって
 ## 道中の判断が薄まるので、ここは必ず捨てる側に置く。
@@ -168,6 +172,7 @@ func end_run(victory: bool) -> Dictionary:
 	steps = 0
 	floor_number = 1
 	inventory = {}
+	gear_stock.clear()
 	save_game()
 	run_ended.emit(victory, summary)
 	return summary
@@ -220,6 +225,53 @@ func inventory_ids() -> Array:
 	var ids := inventory.keys()
 	ids.sort()
 	return ids
+
+
+# --------------------------------------------------------------------------
+# 装備（これもラン内資源）
+# --------------------------------------------------------------------------
+
+
+func add_gear(gear_id: String) -> void:
+	if Database.gear(gear_id).is_empty():
+		return
+	gear_stock.append(gear_id)
+
+
+func remove_gear(gear_id: String) -> bool:
+	var at := gear_stock.find(gear_id)
+	if at < 0:
+		return false
+	gear_stock.remove_at(at)
+	return true
+
+
+## その者がそのスロットに装備できる手持ち（並び順を確定させる）。
+func gear_stock_for_slot(slot: String) -> Array[String]:
+	var result: Array[String] = []
+	for id in gear_stock:
+		if String(Database.gear(id).get("slot", "")) == slot:
+			result.append(id)
+	result.sort()
+	return result
+
+
+## 装備を付け替える。外れたものは手持ちへ戻る。
+func equip_gear(member: PartyMember, gear_id: String) -> bool:
+	if not remove_gear(gear_id):
+		return false
+	var removed := member.equip(gear_id)
+	if removed != "":
+		gear_stock.append(removed)
+	return true
+
+
+func unequip_gear(member: PartyMember, slot: String) -> bool:
+	var removed := member.unequip(slot)
+	if removed == "":
+		return false
+	gear_stock.append(removed)
+	return true
 
 
 # --------------------------------------------------------------------------

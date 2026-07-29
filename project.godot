@@ -23,17 +23,38 @@ Sound="*res://src/audio/audio_manager.gd"
 
 [display]
 
-; 後期 SFC 相当。標準の 256x224 では 16x16 スプライトが画面を占めすぎて
-; ファミコン的な粗さに見えるため、横を 1.5 倍、縦をオーバースキャン込みの
-; 240 まで広げてある。あわせてキャラは 24x32（FF6 / クロノ級）へ拡大した。
-window/size/viewport_width=384
-window/size/viewport_height=240
-window/size/window_width_override=1152
-window/size/window_height_override=720
+; 512x320。もとは 384x240（後期 SFC 相当）だったが、日本語の漢字は 13px を
+; 下回ると画数が潰れて読めず、384 幅では「読める文字」を並べると 1 行に入る
+; 字数が足りなくなった。文字を優先して解像度を上げてある。
+; タイル 16px / キャラ 24x32 は据え置きなので、絵の資産はそのまま使える。
+; 画面比は 384x240 と同じ 16:10（4/3 倍）。
+window/size/viewport_width=512
+window/size/viewport_height=320
+window/size/window_width_override=1536
+window/size/window_height_override=960
 window/stretch/mode="viewport"
 window/stretch/aspect="keep"
 
 [input]
+
+; 方向キーは WASD でも動くようにする。ui_* を上書きすると既定の割り当ては
+; 失われるので、矢印キーもここに明示して並べておくこと。
+ui_up={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194320,"pressed":true),Object(InputEventKey,"physical_keycode":87,"pressed":true)]
+}
+ui_down={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194322,"pressed":true),Object(InputEventKey,"physical_keycode":83,"pressed":true)]
+}
+ui_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194319,"pressed":true),Object(InputEventKey,"physical_keycode":65,"pressed":true)]
+}
+ui_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":4194321,"pressed":true),Object(InputEventKey,"physical_keycode":68,"pressed":true)]
+}
 
 confirm={
 "deadzone": 0.5,

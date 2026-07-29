@@ -283,43 +283,59 @@ TILE_DOOR = [
     "KKKKKKKKKKKKKKKK",
 ]
 
+# 宝箱。金の蓋と錠前で「箱」だと分かる形にする。
+# 出店と見分けが付かないと、道中で何を踏んだのか分からなくなる。
 TILE_CHEST = [
     "................",
     "................",
-    "....KKKKKKKK....",
-    "...KGgggggggK...",
-    "..KGggggggggGK..",
-    "..KgggGGgggggK..",
-    "..KRRRRRRRRRRK..",
-    "..KRrrGGrrrrrK..",
-    "..KRrrGGrrrrrK..",
-    "..KRrrrrrrrrrK..",
-    "..KRRRRRRRRRRK..",
-    "..KrrrrrrrrrrK..",
-    "..KKKKKKKKKKKK..",
-    "...KddddddddK...",
-    "....KKKKKKKK....",
+    "................",
+    "...KKKKKKKKKK...",
+    "...KGGGGGGGGK...",
+    "...KgggggggGK...",
+    "...KKKKKKKKKK...",
+    "...KRRRGGRRRK...",
+    "...KRrrGGrrRK...",
+    "...KRrrrrrrRK...",
+    "...KRRRRRRRRK...",
+    "...KKKKKKKKKK...",
+    "....dddddddd....",
+    "................",
+    "................",
     "................",
 ]
 
 
-# 道中の出店。床の上に建っているので、下地は床色で塗りつぶす
-# （宝箱と違って背景が透けると、通路の途中に浮いて見える）。
+# 道中の出店。赤白の縞の幌が最大の目印で、これがあると宝箱と一目で区別が付く。
+# 床の上に建っているので下地は床色で塗りつぶす（背景が透けると通路に浮いて見える）。
+SHOP = Palette(
+    "shop",
+    {
+        "K": "#0E1220",  # 輪郭
+        "f": "#3C3226",  # 床（下地）
+        "A": "#C03A32",  # 幌 赤
+        "a": "#8C2018",  # 幌 赤 影
+        "W": "#E8DCC0",  # 幌 生成り
+        "R": "#8A5A34",  # 木
+        "r": "#5A3A20",  # 木 影
+        "G": "#F0D28C",  # 並んでいる品
+    },
+)
+
 TILE_SHOP = [
     "ffffffffffffffff",
     "fKKKKKKKKKKKKKKf",
-    "fKRRRRRRRRRRRRKf",
-    "fKGGRRGGRRGGRRKf",
-    "fKGGRRGGRRGGRRKf",
-    "fKRRRRRRRRRRRRKf",
-    "fKrrrrrrrrrrrrKf",
-    "fKeeeeeeeeeeeeKf",
-    "fKeGGeeeeGGeeeKf",
-    "fKeeeeeeeeeeeeKf",
-    "fKrrrrrrrrrrrrKf",
-    "fKRRRRRRRRRRRRKf",
-    "fKrrrrrrrrrrrrKf",
+    "fKAAWWAAWWAAWWKf",
+    "fKAAWWAAWWAAWWKf",
+    "fKaaWWaaWWaaWWKf",
     "fKKKKKKKKKKKKKKf",
+    "ffKffffffffffKff",
+    "ffKfGGfGGfGGfKff",
+    "ffKfGGfGGfGGfKff",
+    "ffKRRRRRRRRRRKff",
+    "ffKrrrrrrrrrrKff",
+    "ffKffffffffffKff",
+    "ffKffffffffffKff",
+    "ffKKffffffffKKff",
     "ffffffffffffffff",
     "ffffffffffffffff",
 ]
@@ -336,7 +352,7 @@ def build_tileset() -> None:
         from_ascii(TILE_DOOR, STONE),
         from_ascii(TILE_CHEST, STONE),
         Canvas(TILE, TILE),  # 7: 虚空（マップ外）
-        from_ascii(TILE_SHOP, STONE),
+        from_ascii(TILE_SHOP, SHOP),
     ]
     sheet = Canvas(TILE * len(tiles), TILE)
     for i, t in enumerate(tiles):
@@ -357,110 +373,374 @@ CHAR_W = 24
 CHAR_H = 32
 LEG_TOP = 28  # この行から下を「脚」として扱う
 
+# 顔の作り方について。
+#
+# 最初の版は「肌の四角形の真ん中に細い目」で、生気が無く不気味に見えた。
+# 24x32 で人の顔に見せる要点は次の 4 つ。
+#
+#   1. 目を縦に大きく取る。3px 幅 x 3 段（睫毛 / 虹彩＋光点 / 虹彩の影）。
+#      **細い目が不気味さの正体**なので、ここを削ってはいけない
+#   2. 目のまわりに肌を残す。目が髪に接すると穴が空いているように見える
+#   3. 前髪と目のあいだに額を 1 段入れる。これが無いと能面になる
+#   4. 口を描かない。この寸法では口は点にしかならず、点は表情ではなく汚れに見える
+#
+# 列の役割を固定してある。**x3..x6 と x17..x20 が髪、x7..x16 が顔と胴**。
+# ここが揃っていないと HERO_LOOKS の差分（髪を短くする・肩当てを足す）が書けない。
+
 HERO_DOWN = [
-    "........KKKKKKKK",
-    "......KKwwwwwwwwKK",
-    ".....KwwwwwwwwwwwwK",
-    "....KwwWWWwwwwWWWwwK",
-    "....KwWWWwwwwwwWWWwK",
-    "...KwwwwwwwwwwwwwwwwK",
-    "...KwwhhwwwwwwwwhhwwK",
-    "..KwwhSSSSSSSSSSSShwwK",
-    "..KwwhSSSSSSSSSSSShwwK",
-    "..KwwhSKEEKSSKEEKShwwK",
-    "..KwwhSSSSSSSSSSSShwwK",
-    "..KwwhSSSSSKKSSSSShwwK",
-    "...KwwhhsSSSSSSshhwwK",
-    "...KwwwhhKSSSSKhhwwwK",
-    "..KwwhhKBBBBBBBBKhhwwK",
-    ".KwwhhKBbbbbbbbbBKhhwwK",
-    ".KwwhhKBbEEEEEEbBKhhwwK",
-    ".KwwhhKBGGGGGGGGBKhhwwK",
-    ".KwwhhKBbbbbbbbbBKhhwwK",
-    ".KwwhhKBbbeeeebbBKhhwwK",
-    "..KwhhKBbbbbbbbbBKhhwK",
-    "..KShhKBbbbbbbbbBKhhSK",
-    "..KSSKKBbbbbbbbbBKKSSK",
-    "...KSKKBBBBBBBBBBKKSK",
-    "....KBBBBBBBBBBBBBBK",
-    "....KBbbbbbbbbbbbbBK",
-    "....KBbbeeeeeeeebbBK",
-    "....KKBBBBBBBBBBBBKK",
-    ".....KBBBK....KBBBK",
-    ".....KBbbK....KBbbK",
-    ".....KGGGK....KGGGK",
-    ".....KKKKK....KKKKK",
+    "........................",
+    "........KKKKKKKK........",
+    "......KwwwwwwwwwwK......",
+    "....KwwWWWwwwwwwwwwK....",
+    "...KwwWWWwwwwwwwwwwwK...",
+    "...KwwWWwwwwwwwwwwwwK...",
+    "...KwwwWwwwwwwwwwwwwK...",
+    "...KwwwwwwwwwwwwwwwwK...",
+    "...KwhhhhhhhhhhhhhhwK...",
+    "...KwhhSSSSSSSSSShhwK...",
+    "...KwhhSKKSSSSKKShhwK...",
+    "...KwhhSWESSSSEWShhwK...",
+    "...KwhhSeESSSSEeShhwK...",
+    "...KwhhSSSSSSSSSShhwK...",
+    "...KwhhhSSSSSSSShhhwK...",
+    "...KwhhhhSSSSSShhhhwK...",
+    "...KwhhKBBbEEbBBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBbEEEEbBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBGGGGGGBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    ".....KBBbbbbbbbbBBK.....",
+    "....KBBbbbbbbbbbbBBK....",
+    "...KBBbbbbbbbbbbbbBBK...",
+    "..KBbbeeeeeeeeeeeebbBK..",
+    "..KKBBBBBBBBBBBBBBBBKK..",
+    ".......KbbK..KbbK.......",
+    ".......KbbK..KbbK.......",
+    ".......KBBK..KBBK.......",
+    ".......KKKK..KKKK.......",
 ]
 
+# 背面。顔が無いぶん、髪の陰影だけで丸みを出す。
 HERO_UP = [
-    "........KKKKKKKK",
-    "......KKwwwwwwwwKK",
-    ".....KwwwwwwwwwwwwK",
-    "....KwwWWWwwwwWWWwwK",
-    "....KwWWWwwwwwwWWWwK",
-    "...KwwwwwwwwwwwwwwwwK",
-    "...KwwhhwwwwwwwwhhwwK",
-    "..KwwhhhhhwwwwhhhhhwwK",
-    "..KwwhhhhhhwwhhhhhhwwK",
-    "..KwwhhhhhhhhhhhhhhwwK",
-    "..KwwhhhhhhhhhhhhhhwwK",
-    "..KwwhHHhhhhhhhhHHhwwK",
-    "...KwwhHHHHHHHHHHhwwK",
-    "...KwwwhHHHHHHHHhwwwK",
-    "..KwwhhKBBBBBBBBKhhwwK",
-    ".KwwhhKBbbbbbbbbBKhhwwK",
-    ".KwwhhKBbEEEEEEbBKhhwwK",
-    ".KwwhhKBGGGGGGGGBKhhwwK",
-    ".KwwhhKBbbbbbbbbBKhhwwK",
-    ".KwwhhKBbbeeeebbBKhhwwK",
-    "..KwhhKBbbbbbbbbBKhhwK",
-    "..KShhKBbbbbbbbbBKhhSK",
-    "..KSSKKBbbbbbbbbBKKSSK",
-    "...KSKKBBBBBBBBBBKKSK",
-    "....KBBBBBBBBBBBBBBK",
-    "....KBbbbbbbbbbbbbBK",
-    "....KBbbeeeeeeeebbBK",
-    "....KKBBBBBBBBBBBBKK",
-    ".....KBBBK....KBBBK",
-    ".....KBbbK....KBbbK",
-    ".....KGGGK....KGGGK",
-    ".....KKKKK....KKKKK",
+    "........................",
+    "........KKKKKKKK........",
+    "......KwwwwwwwwwwK......",
+    "....KwwWWWwwwwwwwwwK....",
+    "...KwwWWWwwwwwwwwwwwK...",
+    "...KwwWWwwwwwwwwwwwwK...",
+    "...KwwwWwwwwwwwwwwwwK...",
+    "...KwwwwwwwwwwwwwwwwK...",
+    "...KwhhhhhhhhhhhhhhwK...",
+    "...KwhhhhhhhhhhhhhhwK...",
+    "...KwhhhhhhhhhhhhhhwK...",
+    "...KwhhhhhHHHHhhhhhwK...",
+    "...KwhhhhHHHHHHhhhhwK...",
+    "...KwhhhhHHHHHHhhhhwK...",
+    "...KwhhhhhHHHHhhhhhwK...",
+    "...KwhhhhhhHHhhhhhhwK...",
+    "...KwhhKBBbbbbbbBKhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBbEEEEbBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBGGGGGGBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    ".....KBBbbbbbbbbBBK.....",
+    "....KBBbbbbbbbbbbBBK....",
+    "...KBBbbbbbbbbbbbbBBK...",
+    "..KBbbeeeeeeeeeeeebbBK..",
+    "..KKBBBBBBBBBBBBBBBBKK..",
+    ".......KbbK..KbbK.......",
+    ".......KbbK..KbbK.......",
+    ".......KBBK..KBBK.......",
+    ".......KKKK..KKKK.......",
 ]
 
+# 横向き（左を向く）。頭の輪郭は正面と共通にしてある（被り物の差分を
+# 3 方向で使い回すため）。目は 3px 幅 1 つだけ。横顔で両目を描くと必ず破綻する。
 HERO_SIDE = [
-    ".......KKKKKKK",
-    ".....KKwwwwwwwKK",
-    "....KwwwwwwwwwwwK",
-    "...KwwWWWwwwwwwwwK",
-    "...KwWWWwwwwwwwwwK",
-    "..KwwwwwwwwwwwwwwK",
-    "..KwwhhwwwwwwwwwhK",
-    ".KwwhSSSSSSSSShhwK",
-    ".KwwhSSSSSSSSShhwK",
-    ".KwwhSKEEKSSSShhwK",
-    ".KwwhSSSSSSSSShhwK",
-    ".KwwhSSSSKKSSShhwK",
-    "..KwwhsSSSSShhwwK",
-    "..KwwwhKSSSKhwwwK",
-    ".KwwhhKBBBBBBKhhwK",
-    "KwwhhKBbbbbbbBKhhwK",
-    "KwwhhKBEEEEEEBKhhwK",
-    "KwwhhKBGGGGGGBKhhwK",
-    "KwwhhKBbbbbbbBKhhwK",
-    "KwwhhKBbeeeebBKhhwK",
-    ".KwhhKBbbbbbbBKhhwK",
-    ".KShhKBbbbbbbBKhSK",
-    ".KSSKKBbbbbbbBKKSK",
-    "..KSKKBBBBBBBBKKSK",
-    "...KBBBBBBBBBBBBK",
-    "...KBbbbbbbbbbbBK",
-    "...KBbbeeeeeebbBK",
-    "...KKBBBBBBBBBBKK",
-    "....KBBBK..KBBBK",
-    "....KBbbK..KBbbK",
-    "....KGGGK..KGGGK",
-    "....KKKKK..KKKKK",
+    "........................",
+    "........KKKKKKKK........",
+    "......KwwwwwwwwwwK......",
+    "....KwwWWWwwwwwwwwwK....",
+    "...KwwWWWwwwwwwwwwwwK...",
+    "...KwwWWwwwwwwwwwwwwK...",
+    "...KwwwWwwwwwwwwwwwwK...",
+    "...KwwwwwwwwwwwwwwwwK...",
+    "...KwhhhhhhhhhhhhhhwK...",
+    "...KSSSSSSShhhhhhhhwK...",
+    "...KSKKSSSShhhhhhhhwK...",
+    "...KSWESSSShhhhhhhhwK...",
+    "...KSeESSSShhhhhhhhwK...",
+    "...KSSSSSSShhhhhhHHwK...",
+    "...KsSSSSSShhhhhHHHwK...",
+    "...KhsSSSSShhhhHHHHwK...",
+    "...KwhhKBBbEEbBBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBbEEEEbBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBGGGGGGBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    "...KwhhKBbbbbbbBKhhwK...",
+    ".....KBBbbbbbbbbBBK.....",
+    "....KBBbbbbbbbbbbBBK....",
+    "...KBBbbbbbbbbbbbbBBK...",
+    "..KBbbeeeeeeeeeeeebbBK..",
+    "..KKBBBBBBBBBBBBBBBBKK..",
+    ".......KbbK..KbbK.......",
+    ".......KbbK..KbbK.......",
+    ".......KBBK..KBBK.......",
+    ".......KKKK..KKKK.......",
 ]
+
+# 裾。体形の差はここが一番読める。
+SKIRT_WIDE = [
+    (23, 5, "KBBbbbbbbbbBBK"),
+    (24, 4, "KBBbbbbbbbbbbBBK"),
+    (25, 3, "KBBbbbbbbbbbbbbBBK"),
+    (26, 2, "KBbbeeeeeeeeeeeebbBK"),
+    (27, 2, "KKBBBBBBBBBBBBBBBBKK"),
+]
+
+SKIRT_NARROW = [
+    (23, 6, "KBBbbbbbbBBK"),
+    (24, 5, "KBBbbbbbbbbBBK"),
+    (25, 4, "KBBbbbbbbbbbbBBK"),
+    (26, 4, "KBbbeeeeeeeebbBK"),
+    (27, 4, "KKBBBBBBBBBBBBKK"),
+]
+
+# 職業ごとの姿。
+#
+# **差し色を変えただけでは全員が同じ人に見える。** 面積の大きい色と輪郭が
+# 同じだからで、胸の 1px の線をいくら変えても意味がない。
+# DQ が少ないドットで人を見分けられるのは、次の 3 つが人ごとに違うから。
+#
+#   1. 髪のシルエット（ボブ / 長髪 / ツインテール / 束ね髪）
+#   2. 面積の大きい色（マントやローブが体の何割を占めるか）
+#   3. 頭の形（帽子・フード・ベール）
+#
+# ここではその 3 つを差分として重ねる。
+#
+#   head  : 頭まわり（0..8 行）。3 方向で共通に使える
+#   body  : 肩から胴（16..22 行）と、髪の外へ張り出す部分
+#   face  : 正面と横で位置が違うぶん（面をかぶるなど）
+#   hair  : 横の髪をどの行まで垂らすか。小さいほど短髪
+#   skirt : 裾の広がり
+#
+# 差分の書式は (行, 開始列, 文字列)。空白 1 文字は「元のまま」を意味する。
+HERO_LOOKS = {
+    # せんし: 肩で切りそろえた髪 + 金の額当て + 蒼のマント。
+    # 体の左右が丸ごと蒼になるので、遠目にも「蒼い人」で通る。
+    "soldier": {
+        "head": [(7, 3, "KGGGGGGGEEGGGGGGGK")],
+        "body": [
+            (16, 3, "KEEE"), (16, 17, "EEEK"),
+            (17, 3, "KEEE"), (17, 17, "EEEK"),
+            (18, 3, "KEee"), (18, 17, "eeEK"),
+            (19, 3, "KEee"), (19, 17, "eeEK"),
+            (20, 3, "KEee"), (20, 17, "eeEK"),
+            (21, 3, "KEee"), (21, 17, "eeEK"),
+            (22, 3, "KKee"), (22, 17, "eeKK"),
+            (16, 7, "KGGGGGGGGK"),
+            (17, 7, "KgGGGGGGgK"),
+        ],
+        "hair": 15,
+        "skirt": SKIRT_NARROW,
+    },
+    # そうりょ: 頭から肩まで白いベール。頭部が白い塊になるのが目印。
+    # 胸から裾へ翠の帯を垂らして、正面の中央に色を置く。
+    "priest": {
+        "head": [
+            (3, 4, "WWWWWWWWWWWWWWWW"),
+            (4, 3, "KWWWWWWWWWWWWWWWWK"),
+            (5, 3, "KWWWWWWWWWWWWWWWWK"),
+            (6, 3, "KWWWWWWWWWWWWWWWWK"),
+            (7, 3, "KWWwwwwwwwwwwwwWWK"),
+            (8, 3, "KWWW"), (8, 17, "WWWK"),
+        ],
+        "body": [
+            (9, 3, "KWWW"), (9, 17, "WWWK"),
+            (10, 3, "KWWW"), (10, 17, "WWWK"),
+            (11, 3, "KWWW"), (11, 17, "WWWK"),
+            (12, 3, "KWWW"), (12, 17, "WWWK"),
+            (13, 3, "KWWW"), (13, 17, "WWWK"),
+            (14, 3, "KWWW"), (14, 17, "WWWK"),
+            (15, 3, "KWWW"), (15, 17, "WWWK"),
+            (16, 3, "KWWW"), (16, 17, "WWWK"),
+            (17, 3, "KWWW"), (17, 17, "WWWK"),
+            (18, 3, "KWW"), (18, 18, "WWK"),
+            (17, 10, "EEEE"),
+            (18, 10, "EeeE"),
+            (19, 10, "EEEE"),
+            (21, 10, "EeeE"),
+            (22, 10, "EEEE"),
+        ],
+        "hair": 22,
+        "skirt": SKIRT_WIDE,
+    },
+    # まほうつかい: つば広の帽子で頭の形がいちばん違う。
+    # 胴は桃のローブで丸ごと塗る（4 人でここだけ体の中央が明るい）。
+    "mage": {
+        "head": [
+            (1, 8, "KbbbbbbK"),
+            (2, 6, "KbbbbbbbbbbK"),
+            (3, 4, "KbbbbbbbbbbbbbbK"),
+            (4, 3, "KbEEEEEEEEEEEEEEbK"),
+            (5, 0, "KKbbbbbbbbbbbbbbbbbbbbKK"),
+            (6, 0, "KBBBBBBBBBBBBBBBBBBBBBBK"),
+            (7, 4, "hhhhhhhhhhhhhhhh"),
+        ],
+        "body": [
+            (17, 7, "KEEEEEEEEK"),
+            (18, 7, "KEeeeeeeEK"),
+            (19, 7, "KEEEEEEEEK"),
+            (19, 3, "KEEE"), (19, 17, "EEEK"),
+            (20, 3, "KEee"), (20, 17, "eeEK"),
+            (21, 7, "KEEEEEEEEK"),
+            (22, 7, "KEeeeeeeEK"),
+        ],
+        "hair": 22,
+        "skirt": SKIRT_WIDE,
+    },
+    # とうぞく: ツインテールが唯一無二のシルエット。紅のフードで頭が赤くなる。
+    # 体は細く、裾も短い。
+    "thief": {
+        "head": [
+            (2, 6, "KEEEEEEEEEEK"),
+            (3, 4, "KEEEEEEEEEEEEEEK"),
+            (4, 3, "KEEEEEEEEEEEEEEEEK"),
+            (5, 3, "KEeeeeeeeeeeeeeeEK"),
+            (6, 3, "KEEEEEEEEEEEEEEEEK"),
+            (7, 3, "KEEEEEEEEEEEEEEEEK"),
+            (8, 3, "KE"), (8, 19, "EK"),
+        ],
+        "body": [
+            # 左右へ落ちるツインテール。頭の外へ張り出すので、
+            # 遠目でもこの人だけシルエットが違う。
+            # 頭と地続きにする。あいだに輪郭線を残すと、
+            # 髪ではなく耳当てが付いているように見えた。
+            (8, 1, "KK"), (8, 21, "KK"),
+            (9, 0, "KwWw"), (9, 20, "wWwK"),
+            (10, 0, "Kwww"), (10, 20, "wwwK"),
+            (11, 0, "Kwww"), (11, 20, "wwwK"),
+            (12, 0, "Khww"), (12, 20, "wwhK"),
+            (13, 0, "Khhw"), (13, 20, "whhK"),
+            (14, 0, "Khhh"), (14, 20, "hhhK"),
+            (15, 0, "Khhh"), (15, 20, "hhhK"),
+            (16, 0, "KhhK"), (16, 20, "KhhK"),
+            (17, 0, "KHhK"), (17, 20, "KhHK"),
+            (18, 0, "KHHK"), (18, 20, "KHHK"),
+            (19, 1, "KK"), (19, 21, "KK"),
+            (16, 3, "KEE"), (16, 18, "EEK"),
+            (17, 3, "KEe"), (17, 18, "eEK"),
+        ],
+        "hair": 16,
+        "skirt": SKIRT_NARROW,
+    },
+    # せいきし: せんしの格上げ。翼の付いた額当てと白銀のマント。
+    "paladin": {
+        "head": [
+            (5, 1, "GG"), (5, 21, "GG"),
+            (6, 2, "Gg"), (6, 20, "gG"),
+            (7, 3, "KGGGGGGGEEGGGGGGGK"),
+        ],
+        "body": [
+            (16, 3, "KGWW"), (16, 17, "WWGK"),
+            (17, 3, "KGWW"), (17, 17, "WWGK"),
+            (18, 3, "KGWh"), (18, 17, "hWGK"),
+            (19, 3, "KGWh"), (19, 17, "hWGK"),
+            (20, 3, "KGWh"), (20, 17, "hWGK"),
+            (21, 3, "KGWh"), (21, 17, "hWGK"),
+            (22, 3, "KKgh"), (22, 17, "hgKK"),
+            (16, 6, "GGGGGGGGGGGG"),
+            (17, 7, "KgGGGGGGgK"),
+        ],
+        "hair": 20,
+        "skirt": SKIRT_WIDE,
+    },
+    # にんじゃ: 口元の面と、右へ流した束ね髪。細身。
+    "ninja": {
+        "head": [(8, 3, "KeeeeeeeeeeeeeeeeK")],
+        "body": [
+            # 右へ流した束ね髪。頭と地続きにして、耳当てに見えないようにする。
+            (5, 21, "KK"),
+            (6, 20, "wWwK"),
+            (7, 20, "wwwK"),
+            (8, 20, "wwwK"),
+            (9, 20, "whwK"),
+            (10, 20, "whhK"),
+            (11, 21, "hhK"),
+            (12, 21, "hhK"),
+            (13, 21, "HhK"),
+            (14, 21, "HhK"),
+            (15, 21, "HHK"),
+            (16, 21, "KKK"),
+            (19, 7, "KEEEEEEEEK"),
+            (20, 7, "KeeeeeeeeK"),
+        ],
+        "face_down": [
+            (13, 7, "BBBBBBBBBB"),
+            (14, 8, "BBBBBBBB"),
+            (15, 9, "BBBBBB"),
+        ],
+        "face_side": [
+            (13, 4, "BBBBBBB"),
+            (14, 4, "BBBBBBB"),
+            (15, 5, "BBBBB"),
+        ],
+        "hair": 17,
+        "skirt": SKIRT_NARROW,
+    },
+}
+
+
+def _overlay(rows: list[str], patches) -> list[str]:
+    """差分を重ねる。空白 1 文字は「元のまま」。"""
+    out = list(rows)
+    for y, x, chars in patches:
+        row = out[y]
+        if x + len(chars) > len(row):
+            raise ValueError(f"差分が右にはみ出している（行 {y}, 列 {x}, {len(chars)} 文字）")
+        merged = "".join(row[x + i] if c == " " else c for i, c in enumerate(chars))
+        out[y] = row[:x] + merged + row[x + len(chars) :]
+    return out
+
+
+## 髪の列。ここを固定しているから「髪を短くする」が差分で書ける。
+HAIR_COLUMNS = list(range(3, 7)) + list(range(17, 21))
+HAIR_ROWS = range(8, 23)
+
+
+def _cut_hair(rows: list[str], last_row: int) -> list[str]:
+    """横の髪を last_row より下で消す。職業ごとの髪の長さを作る。"""
+    out = []
+    for y, row in enumerate(rows):
+        if y not in HAIR_ROWS or y <= last_row:
+            out.append(row)
+            continue
+        chars = list(row)
+        for x in HAIR_COLUMNS:
+            chars[x] = "."
+        out.append("".join(chars))
+    return out
+
+
+def _hero_frames(job: str) -> tuple[list[str], list[str], list[str]]:
+    look = HERO_LOOKS[job]
+    head = look.get("head", [])
+    body = look.get("body", [])
+    skirt = look.get("skirt", SKIRT_WIDE)
+    common = head + body + skirt
+
+    # 髪を切ってから差分を重ねる。順番が逆だと、髪の列に置いたマントや
+    # ツインテールまで一緒に消える。
+    down = _overlay(_cut_hair(HERO_DOWN, look["hair"]), common + look.get("face_down", []))
+    up = _overlay(_cut_hair(HERO_UP, look["hair"]), common)
+    side = _overlay(_cut_hair(HERO_SIDE, look["hair"]), common + look.get("face_side", []))
+    return down, up, side
 
 
 def build_heroes() -> None:
@@ -469,11 +749,21 @@ def build_heroes() -> None:
     脚だけを 1px 持ち上げて歩きを作る。描き足さずに動きが出る、
     SFC 期の 3 フレーム歩行の定石。
     """
+    # 幅が 1 文字ずれると from_ascii が右を透明で埋めて黙って左右にずれる。
+    # 対称形が崩れる原因がこれだと気づきにくいので、ここで弾く。
+    for name, rows in (("DOWN", HERO_DOWN), ("UP", HERO_UP), ("SIDE", HERO_SIDE)):
+        if len(rows) != CHAR_H:
+            raise ValueError(f"HERO_{name}: {CHAR_H} 行必要（{len(rows)} 行ある）")
+        for i, row in enumerate(rows):
+            if len(row) != CHAR_W:
+                raise ValueError(f"HERO_{name} の行 {i} が {len(row)} 文字（{CHAR_W} 文字にする）")
+
     for job in HERO_ACCENTS:
         palette = hero_palette(job)
-        down = from_ascii(HERO_DOWN, palette, CHAR_W)
-        up = from_ascii(HERO_UP, palette, CHAR_W)
-        left = from_ascii(HERO_SIDE, palette, CHAR_W)
+        down_rows, up_rows, side_rows = _hero_frames(job)
+        down = from_ascii(down_rows, palette, CHAR_W)
+        up = from_ascii(up_rows, palette, CHAR_W)
+        left = from_ascii(side_rows, palette, CHAR_W)
         right = mirrored(left)
 
         sheet = Canvas(CHAR_W * 3, CHAR_H * 4)

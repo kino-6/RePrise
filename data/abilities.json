@@ -1,5 +1,5 @@
 {
-  "_comment": "cost は CTB の行動コスト（100 が標準）。MP と並ぶ第 2 のリソース軸で、数値を膨らませずに強弱を付けられる。kind: physical / magical / heal / buff / debuff / special。",
+  "_comment": "cost は CTB の行動コスト（100 が標準）。次の手番までの待ち時間そのものなので、MP と並ぶ第 2 のリソース軸になる。kind: physical / magical / heal / buff / debuff / special。target: one_enemy / group_enemy / all_enemies / one_ally / all_allies / one_ally_dead / self。element: fire / ice / bolt / dark（敵の耐性で倍率が変わる）。hits: 多段攻撃の回数。menu: spell=じゅもん / skill=とくぎ（無指定はコマンド直置き）。呪文名は他社の固有名詞を使わず独自に作る（docs/battle_design.md）。",
 
   "attack": {
     "name": "こうげき",
@@ -15,116 +15,146 @@
   },
 
   "power_slash": {
-    "name": "みだれぎり",
-    "desc": "強く斬る。次の手番が大きく遅れる。",
-    "kind": "physical", "target": "one_enemy",
+    "name": "おおぶり",
+    "desc": "渾身の一撃。次の手番が大きく遅れる。",
+    "kind": "physical", "target": "one_enemy", "menu": "skill",
     "cost": 175, "mp": 0, "power": 185
   },
   "guard_stance": {
-    "name": "おうぎょ",
-    "desc": "味方ひとりをかばう構え。",
-    "kind": "buff", "target": "one_ally",
+    "name": "かばう",
+    "desc": "味方ひとりへの攻撃を 肩代わりする。",
+    "kind": "buff", "target": "one_ally", "menu": "skill",
     "cost": 80, "mp": 2, "power": 0, "effect": "defend_up"
   },
   "whirlwind": {
-    "name": "かまいたち",
-    "desc": "敵全体を薙ぐ。非常に重い。",
-    "kind": "physical", "target": "all_enemies",
-    "cost": 210, "mp": 4, "power": 120
+    "name": "つむじぎり",
+    "desc": "敵 1 グループを薙ぐ。数が少ないほど よく効く。",
+    "kind": "physical", "target": "group_enemy", "menu": "skill",
+    "cost": 165, "mp": 3, "power": 115
+  },
+  "double_slash": {
+    "name": "れんげき",
+    "desc": "3 回続けて斬る。1 発は軽い。",
+    "kind": "physical", "target": "one_enemy", "menu": "skill",
+    "cost": 150, "mp": 3, "power": 62, "hits": 3
   },
 
   "heal": {
-    "name": "ホイミ",
+    "name": "リアン",
     "desc": "味方ひとりの傷を癒す。",
-    "kind": "heal", "target": "one_ally",
+    "kind": "heal", "target": "one_ally", "menu": "spell",
     "cost": 85, "mp": 3, "power": 34
   },
   "haste": {
-    "name": "ピオラ",
-    "desc": "味方ひとりの素早さを上げる。行動順が繰り上がる。",
-    "kind": "buff", "target": "one_ally",
+    "name": "ハステ",
+    "desc": "味方ひとりの行動を速める。行動順が繰り上がる。",
+    "kind": "buff", "target": "one_ally", "menu": "spell",
     "cost": 75, "mp": 4, "power": 0, "effect": "haste"
   },
   "revive": {
-    "name": "ザオラル",
+    "name": "リザン",
     "desc": "倒れた味方を起こす。",
-    "kind": "heal", "target": "one_ally_dead",
+    "kind": "heal", "target": "one_ally_dead", "menu": "spell",
     "cost": 190, "mp": 8, "power": 20
+  },
+  "cure_all": {
+    "name": "セイネ",
+    "desc": "味方ひとりの 状態異常を解く。",
+    "kind": "heal", "target": "one_ally", "menu": "spell",
+    "cost": 70, "mp": 3, "power": 0, "effect": "cleanse"
   },
 
   "fire": {
-    "name": "メラ",
-    "desc": "火の玉を放つ。",
-    "kind": "magical", "target": "one_enemy",
+    "name": "ヴァル",
+    "desc": "炎の弾を放つ。",
+    "kind": "magical", "target": "one_enemy", "element": "fire", "menu": "spell",
     "cost": 130, "mp": 3, "power": 145
   },
   "slow": {
-    "name": "ボミオス",
-    "desc": "敵ひとりの素早さを下げ、行動順を押し下げる。",
-    "kind": "debuff", "target": "one_enemy",
+    "name": "スロウ",
+    "desc": "敵ひとりの行動を鈍らせ、行動順を押し下げる。",
+    "kind": "debuff", "target": "one_enemy", "menu": "spell",
     "cost": 110, "mp": 4, "power": 0, "effect": "slow"
   },
   "blast": {
-    "name": "イオ",
-    "desc": "敵全体を爆風で焼く。",
-    "kind": "magical", "target": "all_enemies",
+    "name": "ヴァルギオ",
+    "desc": "敵全体を炎で焼く。数が少ないほど よく効く。",
+    "kind": "magical", "target": "all_enemies", "element": "fire", "menu": "spell",
     "cost": 200, "mp": 8, "power": 130
+  },
+  "frost": {
+    "name": "シラガ",
+    "desc": "敵 1 グループを凍てつかせる。",
+    "kind": "magical", "target": "group_enemy", "element": "ice", "menu": "spell",
+    "cost": 155, "mp": 5, "power": 120
   },
 
   "quick_stab": {
     "name": "はやわざ",
     "desc": "浅いが、ほとんど手番を消費しない。",
-    "kind": "physical", "target": "one_enemy",
+    "kind": "physical", "target": "one_enemy", "menu": "skill",
     "cost": 55, "mp": 0, "power": 62
   },
   "steal": {
     "name": "ぬすむ",
-    "desc": "敵から素材を掠め取る。",
-    "kind": "special", "target": "one_enemy",
+    "desc": "敵から 持ち物を掠め取る。",
+    "kind": "special", "target": "one_enemy", "menu": "skill",
     "cost": 90, "mp": 0, "power": 0, "effect": "steal"
   },
   "shadow_step": {
     "name": "しゅくち",
     "desc": "自分の手番を強引に引き寄せる。",
-    "kind": "buff", "target": "self",
+    "kind": "buff", "target": "self", "menu": "skill",
     "cost": 30, "mp": 5, "power": 0, "effect": "haste"
+  },
+  "poison_blade": {
+    "name": "どくば",
+    "desc": "毒を塗った刃。手番ごとに削れる。",
+    "kind": "physical", "target": "one_enemy", "menu": "skill",
+    "cost": 110, "mp": 3, "power": 88, "effect": "poison"
   },
 
   "bulwark": {
     "name": "まもりのかまえ",
     "desc": "味方全員を かばう構えに入る。",
-    "kind": "buff", "target": "all_allies",
+    "kind": "buff", "target": "all_allies", "menu": "skill",
     "cost": 120, "mp": 6, "power": 0, "effect": "defend_up"
   },
   "smite": {
     "name": "せいだん",
-    "desc": "光をまとって斬る。",
-    "kind": "physical", "target": "one_enemy",
+    "desc": "光をまとって斬る。闇のものに よく効く。",
+    "kind": "physical", "target": "one_enemy", "element": "bolt", "menu": "skill",
     "cost": 150, "mp": 3, "power": 165
   },
   "mass_heal": {
-    "name": "ベホイミ",
+    "name": "リアンガ",
     "desc": "味方全員の傷を癒す。",
-    "kind": "heal", "target": "all_allies",
+    "kind": "heal", "target": "all_allies", "menu": "spell",
     "cost": 140, "mp": 10, "power": 40
   },
 
   "shuriken": {
     "name": "しゅりけん",
-    "desc": "敵全体へ刃を投げる。軽い。",
-    "kind": "physical", "target": "all_enemies",
-    "cost": 120, "mp": 2, "power": 85
+    "desc": "敵 1 グループへ刃を投げる。軽い。",
+    "kind": "physical", "target": "group_enemy", "menu": "skill",
+    "cost": 110, "mp": 2, "power": 88
   },
   "smoke": {
     "name": "けむりだま",
     "desc": "敵全体の動きを鈍らせる。",
-    "kind": "debuff", "target": "all_enemies",
+    "kind": "debuff", "target": "all_enemies", "menu": "skill",
     "cost": 90, "mp": 5, "power": 0, "effect": "slow"
   },
   "assassinate": {
     "name": "ひっさつ",
     "desc": "一点を突く。非常に重い。",
-    "kind": "physical", "target": "one_enemy",
+    "kind": "physical", "target": "one_enemy", "menu": "skill",
     "cost": 165, "mp": 8, "power": 240
+  },
+  "lull": {
+    "name": "ネブラ",
+    "desc": "敵 1 グループを眠らせる。起きるまで動けない。",
+    "kind": "debuff", "target": "group_enemy", "menu": "spell",
+    "cost": 120, "mp": 5, "power": 0, "effect": "sleep"
   }
 }

@@ -24,6 +24,11 @@ var mp: int = 0
 var job_exp: Dictionary = {}  # job_id -> 熟練度ポイント
 var learned: Array[String] = []  # 習得済みアビリティ（転職しても消えない）
 
+## 装備（slot -> equipment.json の ID）。ゴールドと同じくラン内資源で、
+## 全滅すると失う。恒久強化が能力値に触れないという不変条件を守るため、
+## ここを持ち帰らせてはいけない。
+var equipment: Dictionary = {}
+
 
 static func create(member_name: String, starting_job: String) -> PartyMember:
 	var m := PartyMember.new()
@@ -43,34 +48,74 @@ func _growth(stat: String) -> int:
 	return int(g.get(stat, 0))
 
 
+## 装備の合計補正。装備していないスロットは 0。
+func gear_bonus(stat: String) -> int:
+	var total := 0
+	for slot in equipment.keys():
+		total += int(Database.gear(String(equipment[slot])).get(stat, 0))
+	return total
+
+
+## 装備由来の特殊効果（ぬすむ の成功率など）。
+func gear_effects() -> Array[String]:
+	var result: Array[String] = []
+	for slot in equipment.keys():
+		var e := String(Database.gear(String(equipment[slot])).get("effect", ""))
+		if e != "" and e not in result:
+			result.append(e)
+	return result
+
+
+## 通常攻撃に乗る属性。武器が持っていれば、それがそのまま乗る。
+func attack_element() -> String:
+	return String(Database.gear(String(equipment.get("weapon", ""))).get("element", ""))
+
+
+## 装備する。同じスロットの先客は外れて戻り値で返る（空なら ""）。
+func equip(gear_id: String) -> String:
+	var slot := String(Database.gear(gear_id).get("slot", ""))
+	if slot == "":
+		return ""
+	var previous := String(equipment.get(slot, ""))
+	equipment[slot] = gear_id
+	return previous
+
+
+func unequip(slot: String) -> String:
+	var previous := String(equipment.get(slot, ""))
+	equipment.erase(slot)
+	return previous
+
+
 func max_hp() -> int:
-	return 18 + _growth("hp") * level
+	return maxi(18 + _growth("hp") * level + gear_bonus("hp"), 1)
 
 
 func max_mp() -> int:
-	return 4 + _growth("mp") * level
+	return maxi(4 + _growth("mp") * level + gear_bonus("mp"), 0)
 
 
 func attack_power() -> int:
-	return 5 + _growth("atk") * level
+	return maxi(5 + _growth("atk") * level + gear_bonus("atk"), 1)
 
 
 ## 魔力は MP 成長率に連動させる。魔法職ほど魔法が伸びる、という素直な設計。
 func magic_power() -> int:
-	return 4 + _growth("mp") * level
+	return maxi(4 + _growth("mp") * level + gear_bonus("mag"), 1)
 
 
 func defense_power() -> int:
-	return 4 + _growth("def") * level
+	return maxi(4 + _growth("def") * level + gear_bonus("def"), 0)
 
 
 func agility() -> int:
-	return 8 + _growth("agi") * level
+	return maxi(8 + _growth("agi") * level + gear_bonus("agi"), 1)
 
 
 ## 職業ごとの行動コスト倍率。とうぞくは安く、まほうつかいは重い。
+## 行動コスト倍率。重い武器を持つほど次の手番が遅れる。
 func cost_scale() -> int:
-	return int(Database.job(job_id).get("cost_scale", 100))
+	return maxi(int(Database.job(job_id).get("cost_scale", 100)) + gear_bonus("cost_scale"), 30)
 
 
 func available_abilities() -> Array[String]:
@@ -206,6 +251,8 @@ func change_job(new_job: String) -> bool:
 func reset_for_run() -> void:
 	level = 1
 	exp_points = 0
+	# 装備はラン内資源。全滅すれば裸から出直す。
+	equipment.clear()
 	hp = max_hp()
 	mp = max_mp()
 
@@ -227,6 +274,8 @@ func to_battler(battler_id: int) -> Battler:
 	b.agi = agility()
 	b.cost_scale = cost_scale()
 	b.abilities = available_abilities()
+	b.attack_element = attack_element()
+	b.effects = gear_effects()
 	return b
 
 

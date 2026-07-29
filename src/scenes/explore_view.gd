@@ -8,6 +8,7 @@ signal descended
 signal boss_reached
 signal shop_entered
 signal chest_opened(amount: int)
+signal menu_requested
 
 const TILE := 16
 const MOVE_DELAY := 0.10
@@ -58,6 +59,12 @@ func _process(delta: float) -> void:
 		return
 	_move_cd -= delta
 	if _move_cd > 0.0:
+		return
+
+	# 決定キーでメニュー。DQ と同じ作法で、道具・つよさ・そうびはここから触る。
+	if Input.is_action_just_pressed("confirm"):
+		Sound.play("confirm")
+		menu_requested.emit()
 		return
 
 	var dir := Vector2i.ZERO

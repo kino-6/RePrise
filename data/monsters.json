@@ -1,74 +1,202 @@
 {
-  "_comment": "floor_min / floor_max で出現階層を絞る。cost_scale で敵にもテンポの個性を持たせる。boss:true は通常の出現表から外れ、主の間でしか出ない（階層補正もかからず、ここの数値がそのまま最終試験の難度になる）。",
-
+  "_comment": "floor_min / floor_max で出現階層を絞る。cost_scale で敵にもテンポの個性を持たせる。boss:true は通常の出現表から外れ、主の間でしか出ない（階層補正もかからず、ここの数値がそのまま最終試験の難度になる）。weak / resist は属性（fire / ice / bolt / dark）で、weak は 2 倍、resist は半減、null は無効。steal は ぬすむ の戦利品で、common が高確率・rare が低確率。docs/battle_design.md を参照。",
   "gel": {
     "name": "ゲル",
     "sprite": "gel",
-    "hp": 26, "mp": 0, "atk": 7, "def": 5, "agi": 9,
+    "hp": 26,
+    "mp": 0,
+    "atk": 7,
+    "def": 5,
+    "agi": 9,
     "cost_scale": 100,
-    "exp": 9, "gold": 4,
-    "abilities": ["attack"],
-    "floor_min": 1, "floor_max": 4
+    "exp": 9,
+    "gold": 4,
+    "abilities": [
+      "attack"
+    ],
+    "floor_min": 1,
+    "floor_max": 4,
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "ice"
+    ],
+    "steal": {
+      "common": "herb"
+    }
   },
-
   "bat": {
     "name": "ヨナキコウモリ",
     "sprite": "bat",
-    "hp": 18, "mp": 4, "atk": 6, "def": 3, "agi": 20,
+    "hp": 18,
+    "mp": 4,
+    "atk": 6,
+    "def": 3,
+    "agi": 20,
     "cost_scale": 65,
-    "exp": 10, "gold": 5,
-    "abilities": ["attack", "quick_stab"],
-    "floor_min": 1, "floor_max": 6
+    "exp": 10,
+    "gold": 5,
+    "abilities": [
+      "attack",
+      "quick_stab"
+    ],
+    "floor_min": 1,
+    "floor_max": 6,
+    "weak": [
+      "fire"
+    ],
+    "resist": [],
+    "steal": {
+      "common": "herb",
+      "rare": "water"
+    }
   },
-
   "elder_gel": {
     "name": "ゲルのぬし",
     "sprite": "gel",
-    "hp": 58, "mp": 12, "atk": 12, "def": 9, "agi": 11,
+    "hp": 58,
+    "mp": 12,
+    "atk": 12,
+    "def": 9,
+    "agi": 11,
     "cost_scale": 115,
-    "exp": 52, "gold": 30,
-    "abilities": ["attack", "power_slash"],
-    "floor_min": 4, "floor_max": 8
+    "exp": 52,
+    "gold": 30,
+    "abilities": [
+      "attack",
+      "power_slash"
+    ],
+    "floor_min": 4,
+    "floor_max": 8,
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "ice"
+    ],
+    "steal": {
+      "common": "herb",
+      "rare": "elixir"
+    }
   },
-
   "skull": {
     "name": "されこうべ",
     "sprite": "skull",
-    "hp": 44, "mp": 6, "atk": 14, "def": 8, "agi": 14,
+    "hp": 44,
+    "mp": 6,
+    "atk": 14,
+    "def": 8,
+    "agi": 14,
     "cost_scale": 95,
-    "exp": 26, "gold": 12,
-    "abilities": ["attack", "quick_stab"],
-    "floor_min": 4, "floor_max": 9
+    "exp": 26,
+    "gold": 12,
+    "abilities": [
+      "attack",
+      "quick_stab",
+      "poison_blade"
+    ],
+    "floor_min": 4,
+    "floor_max": 9,
+    "weak": [
+      "fire"
+    ],
+    "resist": [
+      "dark"
+    ],
+    "steal": {
+      "common": "water"
+    }
   },
-
   "shade": {
     "name": "かげのもの",
     "sprite": "shade",
-    "hp": 52, "mp": 24, "atk": 12, "def": 6, "agi": 16,
+    "hp": 52,
+    "mp": 24,
+    "atk": 12,
+    "def": 6,
+    "agi": 16,
     "cost_scale": 110,
-    "exp": 36, "gold": 18,
-    "abilities": ["attack", "fire", "slow"],
-    "floor_min": 6, "floor_max": 10
+    "exp": 36,
+    "gold": 18,
+    "abilities": [
+      "attack",
+      "fire",
+      "slow",
+      "lull"
+    ],
+    "floor_min": 6,
+    "floor_max": 10,
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "dark",
+      "ice"
+    ],
+    "steal": {
+      "common": "water",
+      "rare": "feather"
+    }
   },
-
   "golem": {
     "name": "いしのしもべ",
     "sprite": "golem",
-    "hp": 130, "mp": 0, "atk": 20, "def": 18, "agi": 7,
+    "hp": 130,
+    "mp": 0,
+    "atk": 20,
+    "def": 18,
+    "agi": 7,
     "cost_scale": 150,
-    "exp": 74, "gold": 40,
-    "abilities": ["attack", "power_slash"],
-    "floor_min": 7, "floor_max": 10
+    "exp": 74,
+    "gold": 40,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "whirlwind"
+    ],
+    "floor_min": 7,
+    "floor_max": 10,
+    "weak": [
+      "ice"
+    ],
+    "resist": [
+      "fire",
+      "bolt"
+    ],
+    "steal": {
+      "common": "herb",
+      "rare": "elixir"
+    }
   },
-
   "warden": {
     "name": "奈落の番人",
     "sprite": "warden",
     "boss": true,
-    "hp": 600, "mp": 60, "atk": 52, "def": 20, "agi": 16,
+    "hp": 600,
+    "mp": 60,
+    "atk": 52,
+    "def": 20,
+    "agi": 16,
     "cost_scale": 120,
-    "exp": 400, "gold": 300,
-    "abilities": ["attack", "power_slash", "whirlwind", "blast"],
-    "floor_min": 10, "floor_max": 10
+    "exp": 400,
+    "gold": 300,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "whirlwind",
+      "blast",
+      "frost"
+    ],
+    "floor_min": 10,
+    "floor_max": 10,
+    "weak": [],
+    "resist": [
+      "dark",
+      "fire"
+    ],
+    "steal": {
+      "rare": "elixir"
+    }
   }
 }

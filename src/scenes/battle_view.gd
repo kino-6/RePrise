@@ -3,11 +3,15 @@ extends Node2D
 
 ## 戦闘画面。BattleSystem（ロジック）に対する表示と入力だけを担当する。
 ##
-## 画面配置（384x240）
-##   y   2..17   行動順バー
-##   y  24..124  敵
-##   y 128..176  メッセージ窓 / コマンド窓
-##   y 180..234  パーティ状態（4 人を横 1 列）
+## コマンドは 2 階層。第 1 階層（たたかう / じゅもん / とくぎ / どうぐ / ぼうぎょ /
+## にげる / オート）を常に同じ並びで出し、じゅもんと とくぎ と どうぐ だけ
+## サブウィンドウを開く。技を全部 1 枚に並べると、覚えるほど選べなくなる。
+##
+## 画面配置（512x320）
+##   y   2.. 22  行動順バー（＋敵の予告）
+##   y  28..170  敵
+##   y 176..242  メッセージ窓 / コマンド窓
+##   y 248..312  パーティ状態（4 人を横 1 列）
 
 signal battle_finished(victory: bool)
 
@@ -22,22 +26,39 @@ const SPRITES := {
 	"warden": preload("res://assets/sprites/warden.png"),
 }
 
-const MESSAGE_RECT := Rect2(6, 128, 372, 48)
+const MESSAGE_RECT := Rect2(8, 176, 496, 66)
+const STATUS_RECT := Rect2(8, 248, 496, 64)
+## サブウィンドウ（じゅもん・とくぎ・どうぐ）。敵の上に浮かせる。
+const LIST_RECT := Rect2(8, 40, 288, 132)
+const ENEMY_BASELINE := 168
 
-## コマンド窓は 2 列 x 3 行。転職を重ねると技は基本 2 + 習得 12 まで増えるので、
-## 収まらないぶんはページに分ける。描ける数で技の上限を決めるのは本末転倒。
-const COMMAND_ROWS := 3
-const COMMAND_COLS := 2
-const COMMANDS_PER_PAGE := COMMAND_ROWS * COMMAND_COLS
-const STATUS_RECT := Rect2(6, 180, 372, 54)
-const ENEMY_BASELINE := 120
-const LINE_DELAY := 0.65
+## 第 1 階層は 4 列 x 2 行。
+const ROOT_COL := 122
+const ROOT_LINE := 22
+const ROOT_COLS := 4
 
-enum State { TURN_START, COMMAND, TARGET, ITEM, MESSAGE, DONE }
+## サブウィンドウは 1 列。行数はこれを超えたらページ送り。
+const LIST_ROWS := 4
+const LIST_LINE := 20
 
-## コマンド一覧に混ぜる「どうぐ」の擬似 ID。技と道具は別系統だが、
-## 選ぶ場所は 1 つにしたいのでコマンド列に同居させる。
-const ITEM_COMMAND := "__item__"
+const LINE_DELAY := 0.55
+## オート戦闘のときのメッセージ送り。手で押さないので短くする。
+const AUTO_LINE_DELAY := 0.28
+
+enum State { TURN_START, COMMAND, LIST, TARGET, MESSAGE, DONE }
+
+## 第 1 階層の項目。順番は固定する（毎回同じ位置にあることが速さになる）。
+enum Root { FIGHT, SPELL, SKILL, ITEM, GUARD, ESCAPE, AUTO }
+
+const ROOT_LABELS := {
+	Root.FIGHT: "たたかう",
+	Root.SPELL: "じゅもん",
+	Root.SKILL: "とくぎ",
+	Root.ITEM: "どうぐ",
+	Root.GUARD: "ぼうぎょ",
+	Root.ESCAPE: "にげる",
+	Root.AUTO: "オート",
+}
 
 var system: BattleSystem = null
 var members: Array[PartyMember] = []
@@ -48,19 +69,28 @@ var _queue: Array[String] = []
 var _shown: Array[String] = []
 var _timer := 0.0
 
-var _commands: Array[String] = []
-var _command_index := 0
+## 第 1 階層
+var _roots: Array[int] = []
+var _root_index := 0
+
+## サブウィンドウ（"spell" / "skill" / "item"）
+var _list_kind := ""
+var _list_ids: Array[String] = []
+var _list_index := 0
+
 var _targets: Array[Battler] = []
 var _target_index := 0
 var _pending_ability := ""
-
-var _items: Array = []
-var _item_index := 0
 var _pending_item := ""
 
 var _order_bar: TurnOrderBar = null
 var _victory := false
 var _outcome_shown := false
+var _escaped := false
+
+## オート戦闘。SFC 期の「さくせん」に当たるもので、雑魚戦のテンポのために置く。
+## 中身は「傷が深い者がいれば回復、いなければ一番効く攻撃」の 1 本だけ。
+var _auto := false
 
 
 func _ready() -> void:
@@ -77,6 +107,8 @@ func start(battle: BattleSystem, party_members: Array[PartyMember]) -> void:
 	_shown.clear()
 	_outcome_shown = false
 	_victory = false
+	_escaped = false
+	_auto = false
 	set_process(true)
 	set_process_unhandled_input(true)
 	_refresh()
@@ -102,16 +134,30 @@ func _process(delta: float) -> void:
 
 
 func _begin_turn() -> void:
-	if system.is_over:
+	if system.is_over or _escaped:
 		_finish()
 		return
 	_actor = system.begin_turn()
 	if _actor == null:
 		_finish()
 		return
+
+	# 毒の進行と眠りの判定。眠っていれば手番を飛ばす。
+	var head: Dictionary = system.begin_turn_effects(_actor)
+	if not (head["lines"] as Array).is_empty():
+		var head_lines: Array[String] = []
+		head_lines.assign(head["lines"])
+		_show(head_lines)
+		return
+	if bool(head["skipped"]):
+		return
+
 	_refresh()
 	if _actor.is_ally:
-		_open_command_menu()
+		if _auto:
+			_auto_act()
+		else:
+			_open_root_menu()
 	else:
 		var lines := system.perform_enemy(_actor)
 		_play_ability_sfx(system.last_ability_id)
@@ -137,25 +183,315 @@ func is_awaiting_command() -> bool:
 	return _state == State.COMMAND
 
 
-## 開発用。2 ページ目以降の見え方を撮るために使う。
-func debug_turn_page(delta: int) -> void:
-	_turn_page(delta)
-
-
-## 開発用。どうぐの一覧を撮るために使う。
+## 開発用。サブウィンドウの見え方を撮るのに使う。
 func debug_open_item_menu() -> void:
-	_open_item_menu()
+	if _state != State.COMMAND:
+		return
+	_open_list("item")
 
 
-func _open_command_menu() -> void:
-	_commands = system.usable_abilities(_actor)
-	# 持ち物があるときだけ「どうぐ」を出す。空の欄を選ばせても意味がない。
+func debug_open_spell_menu() -> void:
+	if _state != State.COMMAND:
+		return
+	_open_list("skill")
+
+
+# --------------------------------------------------------------------------
+# 第 1 階層
+# --------------------------------------------------------------------------
+
+
+## その者が使える技を、サブメニュー別に分けて返す。
+func _abilities_in(menu: String) -> Array[String]:
+	var result: Array[String] = []
+	for id in system.usable_abilities(_actor):
+		if String(Database.ability(id).get("menu", "")) == menu:
+			result.append(id)
+	return result
+
+
+func _open_root_menu() -> void:
+	_roots.clear()
+	_roots.append(Root.FIGHT)
+	if not _abilities_in("spell").is_empty():
+		_roots.append(Root.SPELL)
+	if not _abilities_in("skill").is_empty():
+		_roots.append(Root.SKILL)
 	if not GameState.inventory.is_empty():
-		_commands.append(ITEM_COMMAND)
-	_command_index = 0
+		_roots.append(Root.ITEM)
+	_roots.append(Root.GUARD)
+	_roots.append(Root.ESCAPE)
+	_roots.append(Root.AUTO)
+	_root_index = 0
 	_pending_item = ""
+	_pending_ability = ""
 	_state = State.COMMAND
 	_refresh()
+
+
+func _input_root(event: InputEvent) -> void:
+	if _roots.is_empty():
+		return
+	if event.is_action_pressed("ui_right"):
+		_move_root(+1)
+	elif event.is_action_pressed("ui_left"):
+		_move_root(-1)
+	elif event.is_action_pressed("ui_down"):
+		_move_root(ROOT_COLS)
+	elif event.is_action_pressed("ui_up"):
+		_move_root(-ROOT_COLS)
+	elif event.is_action_pressed("confirm"):
+		Sound.play("confirm")
+		_choose_root()
+
+
+func _move_root(delta: int) -> void:
+	_root_index = posmod(_root_index + delta, _roots.size())
+	Sound.play("cursor")
+	_refresh()
+
+
+func _choose_root() -> void:
+	match _roots[_root_index]:
+		Root.FIGHT:
+			_begin_ability("attack")
+		Root.GUARD:
+			_begin_ability("guard")
+		Root.SPELL:
+			_open_list("spell")
+		Root.SKILL:
+			_open_list("skill")
+		Root.ITEM:
+			_open_list("item")
+		Root.ESCAPE:
+			_try_escape()
+		Root.AUTO:
+			_auto = true
+			_auto_act()
+
+
+# --------------------------------------------------------------------------
+# サブウィンドウ
+# --------------------------------------------------------------------------
+
+
+func _open_list(kind: String) -> void:
+	_list_kind = kind
+	_list_ids.clear()
+	if kind == "item":
+		for id in GameState.inventory_ids():
+			_list_ids.append(String(id))
+	else:
+		_list_ids = _abilities_in(kind)
+	if _list_ids.is_empty():
+		Sound.play("cancel")
+		return
+	_list_index = 0
+	_state = State.LIST
+	_refresh()
+
+
+func _input_list(event: InputEvent) -> void:
+	if event.is_action_pressed("cancel"):
+		Sound.play("cancel")
+		_state = State.COMMAND
+		_refresh()
+		return
+	if _list_ids.is_empty():
+		return
+	if event.is_action_pressed("ui_down"):
+		_list_index = (_list_index + 1) % _list_ids.size()
+		Sound.play("cursor")
+		_refresh()
+	elif event.is_action_pressed("ui_up"):
+		_list_index = (_list_index - 1 + _list_ids.size()) % _list_ids.size()
+		Sound.play("cursor")
+		_refresh()
+	elif event.is_action_pressed("confirm"):
+		Sound.play("confirm")
+		if _list_kind == "item":
+			_begin_item(_list_ids[_list_index])
+		else:
+			_begin_ability(_list_ids[_list_index])
+
+
+# --------------------------------------------------------------------------
+# 対象選び
+# --------------------------------------------------------------------------
+
+
+func _begin_ability(ability_id: String) -> void:
+	_pending_item = ""
+	_pending_ability = ability_id
+	var scope := String(Database.ability(ability_id).get("target", "one_enemy"))
+	_begin_target(scope)
+
+
+func _begin_item(item_id: String) -> void:
+	_pending_item = item_id
+	_pending_ability = ""
+	_begin_target(String(Database.item(item_id).get("target", "one_ally")))
+
+
+func _begin_target(scope: String) -> void:
+	# 単体指定が要らないものはそのまま実行
+	if scope in ["self", "all_enemies", "all_allies"]:
+		_execute(null)
+		return
+	_targets = _candidates_for(scope)
+	if _targets.is_empty():
+		# 生き返らせる相手がいない等。手番を空費させずに戻す。
+		Sound.play("cancel")
+		_state = State.COMMAND
+		_refresh()
+		return
+	_target_index = 0
+	_state = State.TARGET
+	_refresh()
+
+
+func _candidates_for(scope: String) -> Array[Battler]:
+	match scope:
+		"one_ally":
+			return system.living_allies()
+		"one_ally_dead":
+			var fallen: Array[Battler] = []
+			for b in system.allies:
+				if not b.is_alive():
+					fallen.append(b)
+			return fallen
+		_:
+			return system.living_enemies()
+
+
+func _input_target(event: InputEvent) -> void:
+	if event.is_action_pressed("cancel"):
+		Sound.play("cancel")
+		_state = State.LIST if _list_kind != "" and _pending_ability != "attack" else State.COMMAND
+		if _state == State.LIST and _list_ids.is_empty():
+			_state = State.COMMAND
+		_refresh()
+		return
+	if _targets.is_empty():
+		return
+	if event.is_action_pressed("ui_right") or event.is_action_pressed("ui_down"):
+		_target_index = (_target_index + 1) % _targets.size()
+		Sound.play("cursor")
+		_refresh()
+	elif event.is_action_pressed("ui_left") or event.is_action_pressed("ui_up"):
+		_target_index = (_target_index - 1 + _targets.size()) % _targets.size()
+		Sound.play("cursor")
+		_refresh()
+	elif event.is_action_pressed("confirm"):
+		_execute(_targets[_target_index])
+
+
+func _execute(target: Battler) -> void:
+	_list_kind = ""
+	if _pending_item != "":
+		# 在庫を減らすのは GameState の仕事。BattleSystem には効果だけを解かせる。
+		if not GameState.consume_item(_pending_item):
+			_state = State.COMMAND
+			_refresh()
+			return
+		var item_lines := system.use_item(_actor, _pending_item, target)
+		Sound.play("heal")
+		_pending_item = ""
+		_show(item_lines)
+		return
+	var lines := system.perform(_actor, _pending_ability, target)
+	_play_ability_sfx(_pending_ability)
+	_show(lines)
+
+
+# --------------------------------------------------------------------------
+# にげる / オート
+# --------------------------------------------------------------------------
+
+
+## 逃走。素早さ差で決まる。逃げられれば報酬は無いが、資源を残せる。
+## 「勝つ以外の終わり方」があると、消耗戦の判断が一段増える。
+func _try_escape() -> void:
+	var ours := 0
+	for b in system.living_allies():
+		ours += b.effective_agi()
+	var theirs := 0
+	for b in system.living_enemies():
+		theirs += b.effective_agi()
+	var odds := 45 + (ours - theirs) * 2
+	if system.enemies.any(func(b: Battler) -> bool:
+		return bool(Database.monster(b.source_id).get("boss", false))):
+		# 主からは逃げられない。ここで逃げられると終わりが無くなる。
+		_show(["しかし　まわりこまれてしまった！"] as Array[String])
+		return
+	if system.rng.chance(clampi(odds, 15, 92)):
+		_escaped = true
+		Sound.play("cancel")
+		_show(["パーティは にげだした！"] as Array[String])
+	else:
+		_show(["しかし　まわりこまれてしまった！"] as Array[String])
+
+
+## オート戦闘の 1 手。DQ4 の「いのちだいじに」に近い素朴な指針にしてある。
+## 賢さより読みやすさを優先する（何をするか分からない自動戦闘は使われない）。
+func _auto_act() -> void:
+	var hurt := _most_hurt_ally()
+	if hurt != null:
+		var heal_id := _best_heal()
+		if heal_id != "":
+			_pending_ability = heal_id
+			_pending_item = ""
+			_execute(hurt)
+			return
+
+	var attack_id := _best_attack()
+	_pending_ability = attack_id
+	_pending_item = ""
+	var scope := String(Database.ability(attack_id).get("target", "one_enemy"))
+	if scope in ["self", "all_enemies", "all_allies"]:
+		_execute(null)
+		return
+	var foes := system.living_enemies()
+	_execute(foes[0] if not foes.is_empty() else null)
+
+
+func _most_hurt_ally() -> Battler:
+	var worst: Battler = null
+	for b in system.living_allies():
+		if b.hp * 100 / maxi(b.max_hp, 1) <= 45:
+			if worst == null or b.hp * 100 / b.max_hp < worst.hp * 100 / worst.max_hp:
+				worst = b
+	return worst
+
+
+func _best_heal() -> String:
+	for id in system.usable_abilities(_actor):
+		var ab := Database.ability(id)
+		if String(ab.get("kind", "")) == "heal" and String(ab.get("target", "")) == "one_ally":
+			return id
+	return ""
+
+
+## いちばん期待値の高い攻撃。属性の相性までは見ない（見ると読めなくなる）。
+func _best_attack() -> String:
+	var best := "attack"
+	var best_power := 0
+	for id in system.usable_abilities(_actor):
+		var ab := Database.ability(id)
+		if String(ab.get("kind", "")) not in ["physical", "magical"]:
+			continue
+		var power := int(ab.get("power", 0)) * maxi(int(ab.get("hits", 1)), 1)
+		# 手番の重さで割る。CTB では「1 手あたり」ではなく「時間あたり」が効率。
+		power = power * 100 / maxi(int(ab.get("cost", 100)), 1)
+		if power > best_power:
+			best_power = power
+			best = id
+	return best
+
+
+# --------------------------------------------------------------------------
+# メッセージ
+# --------------------------------------------------------------------------
 
 
 func _show(lines: Array[String]) -> void:
@@ -174,11 +510,14 @@ func _advance_message() -> void:
 	# 窓は 3 行ぶん。溢れたら古い行から捨てる。
 	while _shown.size() > 3:
 		_shown.pop_front()
-	_timer = LINE_DELAY
+	_timer = AUTO_LINE_DELAY if _auto else LINE_DELAY
 	_refresh()
 
 
 func _after_messages() -> void:
+	if _escaped:
+		_finish()
+		return
 	if system.is_over:
 		# 決着後は結果表示を 1 回だけ挟み、それも読み終えてから画面を閉じる
 		if _outcome_shown:
@@ -197,9 +536,13 @@ func _resolve_outcome() -> void:
 	if _victory:
 		var reward := system.rewards()
 		lines.append("たたかいに かった！")
-		lines.append("%d の けいけんちと %d ゴールドを えた" % [reward["exp"], reward["gold"]])
+		lines.append("%d の けいけんちと %d %sを えた" % [reward["exp"], reward["gold"], Terms.GOLD])
 		GameState.earn_gold(int(reward["gold"]))
 		GameState.kills += system.enemies.size()
+
+		# ぬすんだ道具はここで持ち物へ入れる（戦闘ロジックは持ち物に触らない）。
+		for item_id in reward.get("items", []):
+			GameState.add_item(String(item_id))
 
 		# 「手の記憶」を買っているぶんだけ熟練の入りが良くなる。
 		var mastery := int(reward["mastery"])
@@ -230,7 +573,8 @@ func _finish() -> void:
 	for i in members.size():
 		if i < system.allies.size():
 			members[i].sync_from_battler(system.allies[i])
-	battle_finished.emit(_victory)
+	# 逃げた場合は「負けていないが勝ってもいない」。ランは続く。
+	battle_finished.emit(_victory or _escaped)
 
 
 # --------------------------------------------------------------------------
@@ -238,26 +582,29 @@ func _finish() -> void:
 # --------------------------------------------------------------------------
 
 
+## 入力はイベントそのもので判定する。Input.is_action_just_pressed() を
+## _unhandled_input の中で見ると、1 フレームに 2 つ届いた入力を取りこぼす
+## （連打が効かない、の正体がこれだった）。
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo():
 		return
 	match _state:
 		State.COMMAND:
-			_input_command()
+			_input_root(event)
+		State.LIST:
+			_input_list(event)
 		State.TARGET:
-			_input_target()
-		State.ITEM:
-			_input_item()
+			_input_target(event)
 		State.MESSAGE:
-			if Input.is_action_just_pressed("confirm"):
-				_timer = 0.0  # 送りを早める
+			if event.is_action_pressed("confirm") or event.is_action_pressed("cancel"):
+				# 押すたびに 1 行進む。待たされないことが連打の手応えになる。
+				_timer = 0.0
+				_advance_message()
+			# オート中はどのキーでも解除できる
+			elif _auto:
+				_auto = false
 		_:
 			pass
-
-
-@warning_ignore("integer_division")
-func _command_page() -> int:
-	return _command_index / COMMANDS_PER_PAGE
 
 
 func _total_items() -> int:
@@ -265,159 +612,6 @@ func _total_items() -> int:
 	for id in GameState.inventory_ids():
 		total += GameState.item_count(String(id))
 	return total
-
-
-func _page_count() -> int:
-	return maxi(int(ceil(_commands.size() / float(COMMANDS_PER_PAGE))), 1)
-
-
-func _input_command() -> void:
-	if _commands.is_empty():
-		return
-	if Input.is_action_just_pressed("ui_down"):
-		_command_index = (_command_index + 1) % _commands.size()
-		Sound.play("cursor")
-		_refresh()
-	elif Input.is_action_just_pressed("ui_up"):
-		_command_index = (_command_index - 1 + _commands.size()) % _commands.size()
-		Sound.play("cursor")
-		_refresh()
-	elif Input.is_action_just_pressed("ui_right"):
-		_turn_page(+1)
-	elif Input.is_action_just_pressed("ui_left"):
-		_turn_page(-1)
-	elif Input.is_action_just_pressed("confirm"):
-		Sound.play("confirm")
-		_choose_command()
-
-
-## 左右でページごと飛ばす。技が増えるほど上下だけでは遠くなるため。
-func _turn_page(delta: int) -> void:
-	if _page_count() <= 1:
-		return
-	var page := posmod(_command_page() + delta, _page_count())
-	_command_index = mini(page * COMMANDS_PER_PAGE, _commands.size() - 1)
-	Sound.play("cursor")
-	_refresh()
-
-
-func _choose_command() -> void:
-	if _commands[_command_index] == ITEM_COMMAND:
-		_open_item_menu()
-		return
-	_pending_item = ""
-	_pending_ability = _commands[_command_index]
-	var ab := Database.ability(_pending_ability)
-	var scope := String(ab.get("target", "one_enemy"))
-
-	# 単体指定が要らない技はそのまま実行
-	if scope in ["self", "all_enemies", "all_allies"]:
-		_execute(null)
-		return
-
-	_targets = _candidates_for(scope)
-	if _targets.is_empty():
-		_execute(null)
-		return
-	_target_index = 0
-	_state = State.TARGET
-	_refresh()
-
-
-func _candidates_for(scope: String) -> Array[Battler]:
-	match scope:
-		"one_ally":
-			return system.living_allies()
-		"one_ally_dead":
-			var fallen: Array[Battler] = []
-			for b in system.allies:
-				if not b.is_alive():
-					fallen.append(b)
-			return fallen
-		_:
-			return system.living_enemies()
-
-
-func _open_item_menu() -> void:
-	_items = GameState.inventory_ids()
-	if _items.is_empty():
-		return
-	_item_index = 0
-	_state = State.ITEM
-	_refresh()
-
-
-func _input_item() -> void:
-	if Input.is_action_just_pressed("cancel"):
-		Sound.play("cancel")
-		_state = State.COMMAND
-		_refresh()
-		return
-	if _items.is_empty():
-		return
-	if Input.is_action_just_pressed("ui_down"):
-		_item_index = (_item_index + 1) % _items.size()
-		Sound.play("cursor")
-		_refresh()
-	elif Input.is_action_just_pressed("ui_up"):
-		_item_index = (_item_index - 1 + _items.size()) % _items.size()
-		Sound.play("cursor")
-		_refresh()
-	elif Input.is_action_just_pressed("confirm"):
-		Sound.play("confirm")
-		_choose_item()
-
-
-func _choose_item() -> void:
-	_pending_item = String(_items[_item_index])
-	_pending_ability = ""
-	_targets = _candidates_for(String(Database.item(_pending_item).get("target", "one_ally")))
-	if _targets.is_empty():
-		# 生き返らせる相手がいない等。手番を空費させずに戻す。
-		Sound.play("cancel")
-		_state = State.COMMAND
-		_refresh()
-		return
-	_target_index = 0
-	_state = State.TARGET
-	_refresh()
-
-
-func _input_target() -> void:
-	if Input.is_action_just_pressed("cancel"):
-		Sound.play("cancel")
-		_state = State.COMMAND
-		_refresh()
-		return
-	if _targets.is_empty():
-		return
-	if Input.is_action_just_pressed("ui_right") or Input.is_action_just_pressed("ui_down"):
-		_target_index = (_target_index + 1) % _targets.size()
-		Sound.play("cursor")
-		_refresh()
-	elif Input.is_action_just_pressed("ui_left") or Input.is_action_just_pressed("ui_up"):
-		_target_index = (_target_index - 1 + _targets.size()) % _targets.size()
-		Sound.play("cursor")
-		_refresh()
-	elif Input.is_action_just_pressed("confirm"):
-		_execute(_targets[_target_index])
-
-
-func _execute(target: Battler) -> void:
-	if _pending_item != "":
-		# 在庫を減らすのは GameState の仕事。BattleSystem には効果だけを解かせる。
-		if not GameState.consume_item(_pending_item):
-			_state = State.COMMAND
-			_refresh()
-			return
-		var item_lines := system.use_item(_actor, _pending_item, target)
-		Sound.play("heal")
-		_pending_item = ""
-		_show(item_lines)
-		return
-	var lines := system.perform(_actor, _pending_ability, target)
-	_play_ability_sfx(_pending_ability)
-	_show(lines)
 
 
 # --------------------------------------------------------------------------
@@ -428,7 +622,21 @@ func _execute(target: Battler) -> void:
 func _refresh() -> void:
 	if _order_bar != null and system != null:
 		_order_bar.set_order(system.turn_order(TurnOrderBar.MAX_SHOWN))
+		_order_bar.set_telegraph(_telegraph())
 	queue_redraw()
+
+
+## 敵の予告。行動順の先頭にいる敵が次に何をするかを 1 行で出す。
+## 相手の手が見えていないと、こちらが手を変える理由が生まれない。
+func _telegraph() -> String:
+	if system == null:
+		return ""
+	for b in system.turn_order(6):
+		if b.is_ally or b.planned_ability == "":
+			continue
+		var ab := Database.ability(b.planned_ability)
+		return "%s は %s の かまえ" % [b.name, ab.get("name", b.planned_ability)]
+	return ""
 
 
 func _draw() -> void:
@@ -438,13 +646,17 @@ func _draw() -> void:
 	_draw_enemies()
 	_draw_message_or_command()
 	_draw_party_status()
+	if _state == State.LIST:
+		_draw_list()
 
 
 func _draw_enemies() -> void:
 	var foes := system.enemies
 	if foes.is_empty():
 		return
-	var spacing := 256.0 / (foes.size() + 1)
+	# 画面の幅に等間隔で置く。1 体なら中央に来る。
+	var spacing := float(PixelUI.SCREEN.x) / (foes.size() + 1)
+	var highlighted := _highlighted_targets()
 	for i in foes.size():
 		var b := foes[i]
 		if not b.is_alive():
@@ -453,99 +665,159 @@ func _draw_enemies() -> void:
 		var pos := Vector2(spacing * (i + 1) - tex.get_width() * 0.5, ENEMY_BASELINE - tex.get_height())
 		draw_texture(tex, pos.floor())
 
-		# 対象選択中はカーソルを出す
-		if _state == State.TARGET and not _targets.is_empty() and _targets[_target_index] == b:
-			draw_texture(CURSOR_TEX, Vector2(pos.x + tex.get_width() * 0.5 - 4, pos.y - 10).floor())
-			PixelUI.draw_text(self, Vector2(pos.x, pos.y - 12), b.name, PixelUI.C_ACTIVE, 10)
+		# 状態異常は敵にも出す。眠らせた相手が分からないと意味が無い。
+		var tag := b.status_tag()
+		if tag != "":
+			PixelUI.draw_text(
+				self, Vector2(pos.x, pos.y - 16), tag, PixelUI.C_MP, PixelUI.SIZE_SUB
+			)
+
+		if b in highlighted:
+			draw_texture(CURSOR_TEX, Vector2(pos.x + tex.get_width() * 0.5 - 4, pos.y - 12).floor())
+			PixelUI.draw_text(self, Vector2(pos.x, pos.y - 32), b.name, PixelUI.C_ACTIVE)
+
+
+## いま狙っている相手。グループ技なら同じ種族をまとめて光らせる。
+func _highlighted_targets() -> Array[Battler]:
+	var result: Array[Battler] = []
+	if _state != State.TARGET or _targets.is_empty():
+		return result
+	var chosen := _targets[_target_index]
+	if chosen.is_ally:
+		return result
+	var scope := String(Database.ability(_pending_ability).get("target", "one_enemy"))
+	if scope == "group_enemy":
+		return system.group_of(chosen)
+	result.append(chosen)
+	return result
 
 
 func _draw_message_or_command() -> void:
 	PixelUI.draw_window(self, MESSAGE_RECT, WINDOW_TEX)
-	var origin := MESSAGE_RECT.position + Vector2(12, 15)
+	var origin := PixelUI.content(MESSAGE_RECT).position + Vector2(14, 0)
 
-	if _state == State.ITEM:
-		for i in _items.size():
-			var item_id := String(_items[i])
-			var it := Database.item(item_id)
-			@warning_ignore("integer_division")
-			var pos := origin + Vector2((i / COMMAND_ROWS) * 178, (i % COMMAND_ROWS) * 13)
-			if i == _item_index:
-				draw_texture(CURSOR_TEX, (pos + Vector2(-8, -8)).floor())
-			var tint := PixelUI.C_TEXT if i == _item_index else PixelUI.C_TEXT_DIM
-			PixelUI.draw_text(self, pos, String(it.get("name", item_id)), tint, 11)
-			PixelUI.draw_text(
-				self, pos + Vector2(78, 0),
-				"%d こ  待%d" % [
-					GameState.item_count(item_id),
-					_actor.scaled_cost(int(it.get("cost", 100)))
-				],
-				PixelUI.C_TEXT_DIM, 9
-			)
-		return
-
-	if _state == State.COMMAND:
-		# カーソルのいるページだけを描く。ページはカーソルに従って自動でめくれる。
-		var page := _command_page()
-		var first := page * COMMANDS_PER_PAGE
-		var last := mini(first + COMMANDS_PER_PAGE, _commands.size())
-		for i in range(first, last):
-			var ab := Database.ability(_commands[i])
-			var slot := i - first
-			@warning_ignore("integer_division")
-			var col := slot / COMMAND_ROWS
-			var row := slot % COMMAND_ROWS
-			var pos := origin + Vector2(col * 178, row * 13)
-			if i == _command_index:
-				draw_texture(CURSOR_TEX, (pos + Vector2(-8, -8)).floor())
-			var cost := _actor.scaled_cost(int(ab.get("cost", 100)))
-			var mp_cost := int(ab.get("mp", 0))
-			if _commands[i] == ITEM_COMMAND:
-				var item_color := PixelUI.C_TEXT if i == _command_index else PixelUI.C_TEXT_DIM
-				PixelUI.draw_text(self, pos, "どうぐ", item_color, 11)
-				PixelUI.draw_text(
-					self, pos + Vector2(78, 0),
-					"%d こ" % _total_items(), PixelUI.C_TEXT_DIM, 9
-				)
-				continue
-			var label: String = String(ab.get("name", _commands[i]))
-			var color := PixelUI.C_TEXT if i == _command_index else PixelUI.C_TEXT_DIM
-			PixelUI.draw_text(self, pos, label, color, 11)
-			# コストを常に見せる。CTB では「次いつ動けるか」が選択の核心なので隠さない。
-			var suffix := "待%d" % cost
-			if mp_cost > 0:
-				suffix = "MP%d %s" % [mp_cost, suffix]
-			PixelUI.draw_text(self, pos + Vector2(78, 0), suffix, PixelUI.C_TEXT_DIM, 9)
-
-		# 続きがあることを隠さない。見えない技を選べる状態が一番たちが悪い。
-		if _page_count() > 1:
-			var mark := "◀%d/%d▶" % [page + 1, _page_count()]
-			PixelUI.draw_text(
-				self, Vector2(MESSAGE_RECT.end.x - PixelUI.text_width(mark, 9) - 10,
-				MESSAGE_RECT.end.y - 8), mark, PixelUI.C_TEXT_DIM, 9
-			)
+	if _state in [State.COMMAND, State.LIST, State.TARGET]:
+		_draw_root_menu(origin)
 		return
 
 	for i in _shown.size():
-		PixelUI.draw_text(self, origin + Vector2(0, i * 13), _shown[i], PixelUI.C_TEXT, 11)
+		PixelUI.draw_text(self, origin + Vector2(0, i * 19), _shown[i], PixelUI.C_TEXT)
+
+
+func _draw_root_menu(origin: Vector2) -> void:
+	for i in _roots.size():
+		@warning_ignore("integer_division")
+		var col := i % ROOT_COLS
+		var row := i / ROOT_COLS
+		var at := origin + Vector2(col * ROOT_COL, row * ROOT_LINE)
+		var on := i == _root_index and _state == State.COMMAND
+		if on:
+			draw_texture(CURSOR_TEX, (at + Vector2(-14, 2)).floor())
+		var label := String(ROOT_LABELS[_roots[i]])
+		if _roots[i] == Root.AUTO and _auto:
+			label = "オート中"
+		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
+		if _roots[i] == Root.AUTO and _auto:
+			tint = PixelUI.C_ACTIVE
+		PixelUI.draw_text(self, at, label, tint)
+
+
+## じゅもん / とくぎ / どうぐ のサブウィンドウ。
+##
+## 「待70」が何のことか分からない、という指摘への答えがこの窓の見出し。
+## MP と「つぎのてばんまで」を列見出しとして常に出し、数字の意味を画面内で閉じる。
+func _draw_list() -> void:
+	PixelUI.draw_window(self, LIST_RECT, WINDOW_TEX)
+	var inner := PixelUI.content(LIST_RECT)
+	var origin := inner.position + Vector2(16, 0)
+
+	PixelUI.draw_text(self, origin + Vector2(150, 2), "MP", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	PixelUI.draw_text(
+		self, origin + Vector2(184, 2), "つぎのてばんまで", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+	)
+
+	var first := (_list_index / LIST_ROWS) * LIST_ROWS
+	for i in range(first, mini(first + LIST_ROWS, _list_ids.size())):
+		var at := origin + Vector2(0, 20 + (i - first) * LIST_LINE)
+		var on := i == _list_index and _state == State.LIST
+		if on:
+			draw_texture(CURSOR_TEX, (at + Vector2(-14, 2)).floor())
+		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
+
+		if _list_kind == "item":
+			var it := Database.item(_list_ids[i])
+			PixelUI.draw_text(self, at, String(it.get("name", _list_ids[i])), tint)
+			PixelUI.draw_text(
+				self, at + Vector2(150, 2), "%d こ" % GameState.item_count(_list_ids[i]),
+				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+			)
+			PixelUI.draw_text(
+				self, at + Vector2(192, 2),
+				"%d" % _actor.scaled_cost(int(it.get("cost", 100))),
+				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+			)
+			continue
+
+		var ab := Database.ability(_list_ids[i])
+		PixelUI.draw_text(self, at, String(ab.get("name", _list_ids[i])), tint)
+		var mp := int(ab.get("mp", 0))
+		PixelUI.draw_text(
+			self, at + Vector2(150, 2), "%d" % mp if mp > 0 else "-",
+			PixelUI.C_MP if mp > 0 else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
+		PixelUI.draw_text(
+			self, at + Vector2(192, 2), "%d" % _actor.scaled_cost(int(ab.get("cost", 100))),
+			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
+
+	# 説明文。選んでいるものが何をするかは、常に見えていてよい。
+	var desc := ""
+	if _list_index < _list_ids.size():
+		var data := (
+			Database.item(_list_ids[_list_index]) if _list_kind == "item"
+			else Database.ability(_list_ids[_list_index])
+		)
+		desc = String(data.get("desc", ""))
+	PixelUI.draw_text(
+		self, Vector2(inner.position.x + 4, inner.end.y - 18), desc,
+		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+	)
 
 
 func _draw_party_status() -> void:
 	PixelUI.draw_window(self, STATUS_RECT, WINDOW_TEX)
 	var allies := system.allies
+	var inner := PixelUI.content(STATUS_RECT)
+	var aiming: Battler = null
+	if _state == State.TARGET and not _targets.is_empty() and _targets[_target_index].is_ally:
+		aiming = _targets[_target_index]
+
 	for i in allies.size():
 		var b := allies[i]
-		# 1 人ぶん 92px を横に 4 つ。名前 / 数値 / ゲージを縦に積む。
-		var base := STATUS_RECT.position + Vector2(10 + i * 92, 16)
+		# 1 人ぶん 122px を横に 4 つ。名前 / 数値 / ゲージを縦に積む。
+		var base := inner.position + Vector2(6 + i * 122, 2)
 
 		var name_color := PixelUI.C_TEXT
 		if not b.is_alive():
 			name_color = PixelUI.C_HP_LOW
-		elif _actor == b and _state in [State.COMMAND, State.TARGET]:
+		elif _actor == b and _state in [State.COMMAND, State.LIST, State.TARGET]:
 			name_color = PixelUI.C_ACTIVE
-		PixelUI.draw_text(self, base, b.name, name_color, 12)
-		PixelUI.draw_text(self, base + Vector2(0, 14), "%d/%d" % [b.hp, b.max_hp], PixelUI.C_TEXT_DIM, 10)
+		# 味方を狙っているときは、その者にカーソルを出す。
+		# これが無いと「回復が自分にしか使えない」ように見える。
+		if aiming == b:
+			draw_texture(CURSOR_TEX, (base + Vector2(-12, 3)).floor())
+			name_color = PixelUI.C_ACTIVE
+
+		PixelUI.draw_text(self, base, b.name, name_color)
+		var tag := b.status_tag()
+		if tag != "":
+			PixelUI.draw_text(self, base + Vector2(62, 2), tag, PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
+		PixelUI.draw_text(
+			self, base + Vector2(0, 20), "%d/%d" % [b.hp, b.max_hp],
+			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
 		if b.max_mp > 0:
-			PixelUI.draw_text(self, base + Vector2(50, 14), "M%d" % b.mp, PixelUI.C_MP, 10)
+			PixelUI.draw_text(self, base + Vector2(66, 20), "M%d" % b.mp, PixelUI.C_MP, PixelUI.SIZE_SUB)
 
 		var hp_ratio := float(b.hp) / maxf(float(b.max_hp), 1.0)
-		PixelUI.draw_gauge(self, Rect2(base.x, base.y + 18, 84, 5), hp_ratio, PixelUI.hp_color(hp_ratio))
+		PixelUI.draw_gauge(self, Rect2(base.x, base.y + 38, 112, 5), hp_ratio, PixelUI.hp_color(hp_ratio))

@@ -10,22 +10,25 @@ extends Node2D
 ## 転職はダーマ神殿と同じ扱い。熟練度は職業ごとに別勘定で残り、覚えた技は
 ## 職業に紐付かないので、転職しても失われるのはレベルだけになる。
 ##
-## 画面配置（384x240）
-##   y   6.. 30  砦の名と戦績
-##   y  34..156  左: 名簿と「出撃する」 / 右: 選択中の詳細
-##   y 160..234  覚えた技 / 職業えらび
+## 画面配置（512x320）
+##   y   8.. 44  砦の名と戦績
+##   y  50..218  左: 名簿と「出撃する」 / 右: 選択中の詳細
+##   y 224..312  覚えた技 / 職業えらび
 
 signal departed
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
 
-const HEADER_RECT := Rect2(6, 6, 372, 24)
-const ROSTER_RECT := Rect2(6, 34, 130, 122)
-const DETAIL_RECT := Rect2(140, 34, 238, 122)
-const MENU_RECT := Rect2(6, 160, 372, 74)
+const HEADER_RECT := Rect2(8, 8, 496, 36)
+const ROSTER_RECT := Rect2(8, 50, 176, 164)
+const DETAIL_RECT := Rect2(192, 50, 312, 164)
+const MENU_RECT := Rect2(8, 220, 496, 92)
 
-const ROW_HEIGHT := 18
+const ROW_HEIGHT := 23
+
+## カーソルを行の左に置くときのずれ。文字の左上からの相対で持つ。
+const CURSOR_OFFSET := Vector2(-15, 2)
 const NOTICE_TIME := 2.0
 
 ## 前の画面を閉じた決定キーが、そのままこの画面の決定として流れ込むのを防ぐ。
@@ -242,7 +245,7 @@ func _buy_upgrade() -> void:
 		return
 	if not GameState.buy_upgrade(id):
 		Sound.play("cancel")
-		_notify("残響が たりない")
+		_notify("%sが たりない" % Terms.ECHO)
 		return
 	Sound.play("confirm")
 	_notify("%s が %d 段に なった" % [label, GameState.upgrade_level(id)])
@@ -313,35 +316,44 @@ func _draw() -> void:
 
 func _draw_header() -> void:
 	PixelUI.draw_window(self, HEADER_RECT, WINDOW_TEX)
-	PixelUI.draw_text(self, HEADER_RECT.position + Vector2(12, 17), "銀の砦", PixelUI.C_ACTIVE, 13)
-	var record := "残響 %d　最深 地下%d階　%d回目" % [
-		GameState.echo, maxi(GameState.deepest_floor, 1), GameState.runs_attempted + 1
+	var inner := PixelUI.content(HEADER_RECT)
+	PixelUI.draw_text(self, inner.position + Vector2(6, 0), Terms.STRONGHOLD, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	var record := "%s %d　%s %s　%s" % [
+		Terms.ECHO, GameState.echo,
+		Terms.DEEPEST, Terms.FLOOR % maxi(GameState.deepest_floor, 1),
+		Terms.RUNS % (GameState.runs_attempted + 1),
 	]
-	var x := HEADER_RECT.end.x - 12 - PixelUI.text_width(record, 10)
-	PixelUI.draw_text(self, Vector2(x, HEADER_RECT.position.y + 17), record, PixelUI.C_TEXT_DIM, 10)
+	PixelUI.draw_text_right(
+		self, Vector2(inner.end.x - 4, inner.position.y + 3), record,
+		PixelUI.C_TEXT_DIM, PixelUI.SIZE_TEXT
+	)
 
 
 func _draw_roster() -> void:
 	PixelUI.draw_window(self, ROSTER_RECT, WINDOW_TEX)
+	var inner := PixelUI.content(ROSTER_RECT)
 	for i in members.size():
 		var m := members[i]
-		var base := ROSTER_RECT.position + Vector2(20, 20 + i * ROW_HEIGHT)
+		var base := inner.position + Vector2(16, 6 + i * ROW_HEIGHT)
 		var on := _index == i and _state == State.MEMBER
 		if _index == i:
-			draw_texture(CURSOR_TEX, (base + Vector2(-13, -8)).floor())
-		PixelUI.draw_text(self, base, m.name, PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM, 12)
-		PixelUI.draw_text(self, base + Vector2(44, 0), _job_name(m.job_id), PixelUI.C_TEXT_DIM, 9)
+			draw_texture(CURSOR_TEX, (base + CURSOR_OFFSET).floor())
+		PixelUI.draw_text(self, base, m.name, PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
+		PixelUI.draw_text(
+			self, base + Vector2(58, 2), _job_name(m.job_id), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
 
-	_draw_roster_row(_upgrade_row(), "アップグレード")
-	_draw_roster_row(_depart_row(), "出撃する")
+	_draw_roster_row(_upgrade_row(), Terms.UPGRADE)
+	_draw_roster_row(_depart_row(), Terms.DEPART)
 
 
 func _draw_roster_row(row: int, label: String) -> void:
-	var at := ROSTER_RECT.position + Vector2(20, 20 + row * ROW_HEIGHT)
+	var inner := PixelUI.content(ROSTER_RECT)
+	var at := inner.position + Vector2(16, 6 + row * ROW_HEIGHT)
 	if _index == row:
-		draw_texture(CURSOR_TEX, (at + Vector2(-13, -8)).floor())
+		draw_texture(CURSOR_TEX, (at + CURSOR_OFFSET).floor())
 	var color := PixelUI.C_ACTIVE if _index == row else PixelUI.C_TEXT_DIM
-	PixelUI.draw_text(self, at, label, color, 12)
+	PixelUI.draw_text(self, at, label, color)
 
 
 func _draw_detail() -> void:
@@ -356,91 +368,99 @@ func _draw_detail() -> void:
 	var member := _selected()
 	# 転職を選んでいるあいだは行き先の職業で見せる。姿と能力の変化を確定前に確認できる。
 	var shown_job := String(_job_ids[_job_index]) if _state == State.JOB else member.job_id
-	var origin := DETAIL_RECT.position
+	var origin := PixelUI.content(DETAIL_RECT).position
 
+	# 立ち絵は 2 倍に引き伸ばす。等倍だと 24x32 が余白に埋もれて誰の話か分からない。
+	# 整数倍なのでドットは崩れない。
 	var portrait := _portrait_of(shown_job)
 	if portrait != null:
 		draw_texture_rect_region(
 			portrait,
-			Rect2(origin + Vector2(196, 12), PORTRAIT_SIZE),
+			Rect2(origin + Vector2(232, 4), PORTRAIT_SIZE * 2.0),
 			Rect2(Vector2.ZERO, PORTRAIT_SIZE)
 		)
 
-	PixelUI.draw_text(self, origin + Vector2(14, 24), member.name, PixelUI.C_TEXT, 13)
+	PixelUI.draw_text(self, origin + Vector2(6, 2), member.name, PixelUI.C_TEXT, PixelUI.SIZE_HEAD)
 	# ラン開始時の姿を出す。拠点ではレベルは常に 1 で、そこが「失ったもの」の証拠になる。
-	var head := "%s　Lv1　待×%d" % [
-		_job_name(shown_job), int(Database.job(shown_job).get("cost_scale", 100))
+	var head := "%s　Lv1　%s %d" % [
+		_job_name(shown_job), Terms.SPEED,
+		Terms.speed(int(Database.job(shown_job).get("cost_scale", 100))),
 	]
-	PixelUI.draw_text(self, origin + Vector2(14, 40), head, PixelUI.C_TEXT_DIM, 10)
+	PixelUI.draw_text(self, origin + Vector2(6, 24), head, PixelUI.C_TEXT_DIM)
+	# 見出しは名前の右へ逃がす。1 行ぶん空けると 6 職が枠に収まらない。
+	PixelUI.draw_text(self, origin + Vector2(148, 6), Terms.MASTERY, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
-	PixelUI.draw_text(self, origin + Vector2(14, 52), "じゅくれんど", PixelUI.C_TEXT_DIM, 9)
 	# 上級職ぶん行が増えたので行間を詰める。6 職で枠に収まる高さにしてある。
 	for i in _job_ids.size():
 		var job_id := String(_job_ids[i])
-		var row := origin + Vector2(14, 62 + i * 12)
+		var row := origin + Vector2(6, 46 + i * 16)
 		var current := job_id == shown_job
 		var tint := PixelUI.C_ACTIVE if current else PixelUI.C_TEXT_DIM
 		if not member.can_take_job(job_id):
 			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
-		PixelUI.draw_text(self, row, _job_name(job_id), tint, 9)
+		PixelUI.draw_text(self, row, _job_name(job_id), tint)
 		PixelUI.draw_text(
-			self, row + Vector2(64, 0),
-			_stars(member.mastery_rank(job_id), _max_rank(job_id)), tint, 9
+			self, row + Vector2(96, 2),
+			_stars(member.mastery_rank(job_id), _max_rank(job_id)), tint, PixelUI.SIZE_SUB
 		)
 		PixelUI.draw_text(
-			self, row + Vector2(112, 0), _mastery_text(member, job_id), PixelUI.C_TEXT_DIM, 9
+			self, row + Vector2(148, 2), _mastery_text(member, job_id),
+			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 		)
 
 
 func _draw_departure_note() -> void:
-	var origin := DETAIL_RECT.position
-	PixelUI.draw_text(self, origin + Vector2(14, 24), "地下へ もぐる", PixelUI.C_ACTIVE, 13)
+	var origin := PixelUI.content(DETAIL_RECT).position
+	PixelUI.draw_text(self, origin + Vector2(6, 2), "地下へ もぐる", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines := [
 		"レベルは もちかえれない。",
 		"じゅくれんと わざだけが のこる。",
 	]
 	for i in lines.size():
-		PixelUI.draw_text(self, origin + Vector2(14, 44 + i * 14), lines[i], PixelUI.C_TEXT_DIM, 10)
+		PixelUI.draw_text(self, origin + Vector2(6, 28 + i * 19), lines[i], PixelUI.C_TEXT_DIM)
 
 	for i in members.size():
 		var m := members[i]
-		var row := origin + Vector2(14, 80 + i * 14)
-		PixelUI.draw_text(self, row, m.name, PixelUI.C_TEXT, 10)
-		PixelUI.draw_text(self, row + Vector2(44, 0), _job_name(m.job_id), PixelUI.C_TEXT_DIM, 10)
+		var row := origin + Vector2(6, 76 + i * 20)
+		PixelUI.draw_text(self, row, m.name, PixelUI.C_TEXT)
+		PixelUI.draw_text(self, row + Vector2(58, 0), _job_name(m.job_id), PixelUI.C_TEXT_DIM)
 		PixelUI.draw_text(
-			self, row + Vector2(126, 0),
-			_stars(m.mastery_rank(), _max_rank(m.job_id)), PixelUI.C_ACTIVE, 10
+			self, row + Vector2(170, 2),
+			_stars(m.mastery_rank(), _max_rank(m.job_id)), PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
 		)
 
 
-## 残響の使い道の一覧。何段まで伸ばしたかと、次の 1 段の値段を並べる。
+## 資源の使い道の一覧。何段まで伸ばしたかと、次の 1 段の値段を並べる。
 func _draw_upgrade_note() -> void:
-	var origin := DETAIL_RECT.position
-	PixelUI.draw_text(self, origin + Vector2(14, 24), "残響 %d" % GameState.echo, PixelUI.C_ACTIVE, 13)
+	var origin := PixelUI.content(DETAIL_RECT).position
 	PixelUI.draw_text(
-		self, origin + Vector2(14, 42), "潜れば潜るほど 毎回もらえる。", PixelUI.C_TEXT_DIM, 10
+		self, origin + Vector2(6, 2), "%s %d" % [Terms.ECHO, GameState.echo],
+		PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
 	)
-	PixelUI.draw_text(self, origin + Vector2(104, 58), "段", PixelUI.C_TEXT_DIM, 9)
-	PixelUI.draw_text(self, origin + Vector2(140, 58), "ひつよう", PixelUI.C_TEXT_DIM, 9)
+	PixelUI.draw_text(
+		self, origin + Vector2(6, 26), "もぐるほど 毎回もらえる。", PixelUI.C_TEXT_DIM
+	)
+	PixelUI.draw_text(self, origin + Vector2(150, 50), Terms.RANK, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	PixelUI.draw_text(self, origin + Vector2(200, 50), Terms.PRICE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	for i in _upgrade_ids.size():
 		var id := String(_upgrade_ids[i])
 		var u := Database.upgrade(id)
-		var row := origin + Vector2(14, 72 + i * 14)
+		var row := origin + Vector2(6, 68 + i * 20)
 		var level := GameState.upgrade_level(id)
 		var maxed := GameState.upgrade_maxed(id)
 		var on := _state == State.UPGRADE and i == _upgrade_index
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		if on:
-			draw_texture(CURSOR_TEX, (row + Vector2(-11, -8)).floor())
-		PixelUI.draw_text(self, row, String(u.get("name", id)), tint, 10)
+			draw_texture(CURSOR_TEX, (row + CURSOR_OFFSET).floor())
+		PixelUI.draw_text(self, row, String(u.get("name", id)), tint)
 		PixelUI.draw_text(
-			self, row + Vector2(90, 0),
+			self, row + Vector2(144, 0),
 			"%d/%d" % [level, int(u.get("levels", 0))],
-			PixelUI.C_ACTIVE if level > 0 else PixelUI.C_TEXT_DIM, 10
+			PixelUI.C_ACTIVE if level > 0 else PixelUI.C_TEXT_DIM
 		)
-		var price := "極" if maxed else "%d" % GameState.upgrade_price(id)
-		PixelUI.draw_text(self, row + Vector2(140, 0), price, PixelUI.C_TEXT_DIM, 10)
+		var price := Terms.MAXED if maxed else "%d" % GameState.upgrade_price(id)
+		PixelUI.draw_text(self, row + Vector2(200, 0), price, PixelUI.C_TEXT_DIM)
 
 
 func _draw_menu() -> void:
@@ -456,35 +476,31 @@ func _draw_menu() -> void:
 
 
 func _draw_upgrade_desc() -> void:
-	var origin := MENU_RECT.position
+	var origin := PixelUI.content(MENU_RECT).position
 	if _upgrade_ids.is_empty():
 		return
 	var id := String(_upgrade_ids[_upgrade_index])
 	var u := Database.upgrade(id)
-	PixelUI.draw_text(
-		self, origin + Vector2(16, 18), String(u.get("name", id)), PixelUI.C_ACTIVE, 11
-	)
-	PixelUI.draw_text(
-		self, origin + Vector2(16, 36), String(u.get("desc", "")), PixelUI.C_TEXT, 11
-	)
+	PixelUI.draw_text(self, origin + Vector2(8, 2), String(u.get("name", id)), PixelUI.C_ACTIVE)
+	PixelUI.draw_text(self, origin + Vector2(8, 26), String(u.get("desc", "")), PixelUI.C_TEXT)
 	var tail := "Ｚで のばす　Ｘで もどる"
 	if _state != State.UPGRADE:
 		tail = "Ｚで えらぶ"
-	PixelUI.draw_text(self, origin + Vector2(16, 56), tail, PixelUI.C_TEXT_DIM, 10)
+	PixelUI.draw_text(self, origin + Vector2(8, 52), tail, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 
 func _draw_learned() -> void:
 	var member := _selected()
-	var origin := MENU_RECT.position
-	PixelUI.draw_text(self, origin + Vector2(16, 16), "おぼえた わざ", PixelUI.C_TEXT_DIM, 9)
+	var origin := PixelUI.content(MENU_RECT).position
+	PixelUI.draw_text(self, origin + Vector2(8, 0), "おぼえた わざ", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	if member.learned.is_empty():
 		PixelUI.draw_text(
-			self, origin + Vector2(16, 36), "まだ なにも おぼえていない。", PixelUI.C_TEXT_DIM, 10
+			self, origin + Vector2(8, 22), "まだ なにも おぼえていない。", PixelUI.C_TEXT_DIM
 		)
 		PixelUI.draw_text(
-			self, origin + Vector2(16, 52), "たたかって じゅくれんを あげると おぼえる。",
-			PixelUI.C_TEXT_DIM, 10
+			self, origin + Vector2(8, 46), "たたかって じゅくれんを あげると おぼえる。",
+			PixelUI.C_TEXT_DIM
 		)
 		return
 
@@ -492,42 +508,40 @@ func _draw_learned() -> void:
 		var ability_id := String(member.learned[i])
 		var col := i % ABILITY_COLUMNS
 		var row := i / ABILITY_COLUMNS
-		var at := origin + Vector2(16 + col * 88, 32 + row * 14)
+		var at := origin + Vector2(8 + col * 118, 22 + row * 20)
 		PixelUI.draw_text(
-			self, at, String(Database.ability(ability_id).get("name", ability_id)),
-			PixelUI.C_TEXT, 10
+			self, at, String(Database.ability(ability_id).get("name", ability_id)), PixelUI.C_TEXT
 		)
 
 
 func _draw_hint() -> void:
-	var origin := MENU_RECT.position
-	PixelUI.draw_text(self, origin + Vector2(16, 20), "↑↓ えらぶ　Ｚ けってい　Ｘ もどる", PixelUI.C_TEXT_DIM, 10)
+	var origin := PixelUI.content(MENU_RECT).position
+	PixelUI.draw_text(self, origin + Vector2(8, 2), "↑↓ えらぶ　Ｚ けってい　Ｘ もどる", PixelUI.C_TEXT_DIM)
 	PixelUI.draw_text(
-		self, origin + Vector2(16, 40), "なかまを えらぶと てんしょくできる。", PixelUI.C_TEXT_DIM, 10
+		self, origin + Vector2(8, 28), "なかまを えらぶと てんしょくできる。", PixelUI.C_TEXT_DIM
 	)
 	PixelUI.draw_text(
-		self, origin + Vector2(16, 56), "じゅくれんは しょくぎょうごとに のこる。",
-		PixelUI.C_TEXT_DIM, 10
+		self, origin + Vector2(8, 52), "じゅくれんは しょくぎょうごとに のこる。", PixelUI.C_TEXT_DIM
 	)
 
 
 func _draw_job_menu() -> void:
 	var member := _selected()
-	var origin := MENU_RECT.position
+	var origin := PixelUI.content(MENU_RECT).position
 	var highlighted := String(_job_ids[_job_index])
 
 	# まだ就けない職業は、説明の代わりに「あと何が要るか」を出す。
 	# 選べない理由が見えないと、上級職はただ灰色の行になってしまう。
 	if member.can_take_job(highlighted):
 		PixelUI.draw_text(
-			self, origin + Vector2(16, 18),
-			String(Database.job(highlighted).get("desc", "")), PixelUI.C_TEXT, 11
+			self, origin + Vector2(8, 0),
+			String(Database.job(highlighted).get("desc", "")), PixelUI.C_TEXT
 		)
 	else:
 		PixelUI.draw_text(
-			self, origin + Vector2(16, 18),
+			self, origin + Vector2(8, 0),
 			"つくには %s が いる" % "　".join(member.unmet_requirements(highlighted)),
-			PixelUI.C_HP_LOW, 11
+			PixelUI.C_HP_LOW
 		)
 
 	var rows := _job_rows()
@@ -536,32 +550,36 @@ func _draw_job_menu() -> void:
 		@warning_ignore("integer_division")
 		var col := i / rows
 		var row := i % rows
-		var at := origin + Vector2(24 + col * 178, 36 + row * 14)
+		var at := origin + Vector2(18 + col * 240, 22 + row * 18)
 		var on := i == _job_index
 		var locked := not member.can_take_job(job_id)
 		if on:
-			draw_texture(CURSOR_TEX, (at + Vector2(-9, -8)).floor())
+			draw_texture(CURSOR_TEX, (at + CURSOR_OFFSET).floor())
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		if job_id == member.job_id:
 			tint = PixelUI.C_ACTIVE
 		elif locked:
 			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
-		PixelUI.draw_text(self, at, _job_name(job_id), tint, 11)
+		PixelUI.draw_text(self, at, _job_name(job_id), tint)
 		PixelUI.draw_text(
-			self, at + Vector2(70, 0),
-			_stars(member.mastery_rank(job_id), _max_rank(job_id)), PixelUI.C_TEXT_DIM, 9
+			self, at + Vector2(96, 2),
+			_stars(member.mastery_rank(job_id), _max_rank(job_id)), PixelUI.C_TEXT_DIM,
+			PixelUI.SIZE_SUB
 		)
 		PixelUI.draw_text(
-			self, at + Vector2(120, 0),
-			"—" if locked else "待×%d" % int(Database.job(job_id).get("cost_scale", 100)),
-			PixelUI.C_TEXT_DIM, 9
+			self, at + Vector2(148, 2),
+			"—" if locked else "%s %d" % [
+				Terms.SPEED, Terms.speed(int(Database.job(job_id).get("cost_scale", 100)))
+			],
+			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 		)
 
 
 func _draw_notice() -> void:
 	if _notice == "":
 		return
-	var width := PixelUI.text_width(_notice, 12) + 28.0
-	var box := Rect2((PixelUI.SCREEN.x - width) * 0.5, 96, width, 28)
+	var width := PixelUI.text_width(_notice) + 36.0
+	var box := Rect2((PixelUI.SCREEN.x - width) * 0.5, 130, width, 36)
 	PixelUI.draw_window(self, box, WINDOW_TEX)
-	PixelUI.draw_text(self, box.position + Vector2(14, 18), _notice, PixelUI.C_TEXT, 12)
+	var inner := PixelUI.content(box)
+	PixelUI.draw_text(self, inner.position + Vector2(8, 1), _notice, PixelUI.C_TEXT)

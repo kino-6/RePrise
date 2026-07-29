@@ -10,22 +10,23 @@ extends Node2D
 ## 在庫はフロア（DungeonMap）が持つ。階を降りれば品は戻るが、
 ## 同じ階で買い占めることはできない。
 ##
-## 画面配置（384x240）
-##   y   6.. 30  店の名と所持金
-##   y  34..156  左: 品書き / 右: 選択中の品とパーティの状態
-##   y 160..234  説明と持ち物
+## 画面配置（512x320）
+##   y   8.. 44  店の名と所持金
+##   y  50..226  左: 品書き / 右: 選択中の品とパーティの状態
+##   y 232..312  説明と持ち物
 
 signal closed
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
 
-const HEADER_RECT := Rect2(6, 6, 372, 24)
-const LIST_RECT := Rect2(6, 34, 170, 122)
-const DETAIL_RECT := Rect2(180, 34, 198, 122)
-const MENU_RECT := Rect2(6, 160, 372, 74)
+const HEADER_RECT := Rect2(8, 8, 496, 36)
+const LIST_RECT := Rect2(8, 50, 228, 176)
+const DETAIL_RECT := Rect2(244, 50, 260, 176)
+const MENU_RECT := Rect2(8, 232, 496, 80)
 
-const ROW_HEIGHT := 20
+const ROW_HEIGHT := 24
+const CURSOR_OFFSET := Vector2(-15, 2)
 const NOTICE_TIME := 1.6
 const INPUT_LOCK := 0.15
 
@@ -44,13 +45,17 @@ var _input_lock := 0.0
 func open(map: DungeonMap, floor_number: int) -> void:
 	_map = map
 	_floor = floor_number
+	# 消耗品と装備を同じ品書きに並べる。店を 2 つに分けるほどの品数ではない。
 	_ids = Database.item_ids_for_floor(floor_number)
+	_ids.append_array(Database.gear_ids_for_floor(floor_number))
 	# 在庫はこのフロアで一度だけ用意する。出入りしても戻らない。
 	if _map.shop_stock.is_empty():
 		# 「商いの伝手」を買っているぶんだけ品が多く並ぶ。
 		var extra := GameState.upgrade_value("shop_stock")
 		for id in _ids:
-			_map.shop_stock[id] = int(Database.item(String(id)).get("stock", 1)) + extra
+			var base := int(_entry(String(id)).get("stock", 1))
+			# 装備は 1 点もの。伝手を買っても在庫は増やさない。
+			_map.shop_stock[id] = base if _is_gear(String(id)) else base + extra
 	_index = 0
 	_notice = ""
 	_notice_timer = 0.0
@@ -98,6 +103,15 @@ func _stock_of(item_id: String) -> int:
 	return int(_map.shop_stock.get(item_id, 0))
 
 
+## 装備か消耗品か。品書きは 1 本だが、買った先の置き場所が違う。
+func _is_gear(id: String) -> bool:
+	return not Database.gear(id).is_empty()
+
+
+func _entry(id: String) -> Dictionary:
+	return Database.gear(id) if _is_gear(id) else Database.item(id)
+
+
 # --------------------------------------------------------------------------
 # 入力
 # --------------------------------------------------------------------------
@@ -138,19 +152,22 @@ func _leave() -> void:
 
 
 func _buy(item_id: String) -> void:
-	var price := int(Database.item(item_id).get("price", 0))
+	var price := int(_entry(item_id).get("price", 0))
 	if _stock_of(item_id) <= 0:
 		Sound.play("cancel")
 		_notify("それは 売り切れだ")
 		return
 	if not GameState.spend_gold(price):
 		Sound.play("cancel")
-		_notify("ゴールドが たりない")
+		_notify("%sが たりない" % Terms.GOLD)
 		return
 	_map.shop_stock[item_id] = _stock_of(item_id) - 1
-	GameState.add_item(item_id)
+	if _is_gear(item_id):
+		GameState.add_gear(item_id)
+	else:
+		GameState.add_item(item_id)
 	Sound.play("chest")
-	_notify("%s を 買った" % Database.item(item_id).get("name", item_id))
+	_notify("%s を 買った" % _entry(item_id).get("name", item_id))
 
 
 ## 全回復。道具と違って手番を消費しないぶん高い。
@@ -167,7 +184,7 @@ func _rest() -> void:
 		return
 	if not GameState.spend_gold(price):
 		Sound.play("cancel")
-		_notify("ゴールドが たりない")
+		_notify("%sが たりない" % Terms.GOLD)
 		return
 	for m in party:
 		m.hp = m.max_hp()
@@ -192,105 +209,147 @@ func _draw() -> void:
 
 func _draw_header() -> void:
 	PixelUI.draw_window(self, HEADER_RECT, WINDOW_TEX)
-	PixelUI.draw_text(self, HEADER_RECT.position + Vector2(12, 17), "みせ", PixelUI.C_ACTIVE, 13)
-	var purse := "%d ゴールド" % GameState.gold
-	var x := HEADER_RECT.end.x - 12 - PixelUI.text_width(purse, 11)
-	PixelUI.draw_text(self, Vector2(x, HEADER_RECT.position.y + 17), purse, PixelUI.C_TEXT, 11)
+	var inner := PixelUI.content(HEADER_RECT)
+	PixelUI.draw_text(self, inner.position + Vector2(6, 0), Terms.SHOP, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	PixelUI.draw_text_right(
+		self, Vector2(inner.end.x - 4, inner.position.y + 3),
+		"%d %s" % [GameState.gold, Terms.GOLD], PixelUI.C_TEXT
+	)
+
+
+## 品書きに入る行数。装備を並べたぶん品数が増えたので、ここを超えたら送る。
+const VISIBLE_ROWS := 6
+
+
+## カーソルを中央付近に保ったまま送る窓の先頭行。
+func _list_top() -> int:
+	var total := _leave_row() + 1
+	return clampi(_index - VISIBLE_ROWS / 2, 0, maxi(total - VISIBLE_ROWS, 0))
 
 
 func _draw_list() -> void:
 	PixelUI.draw_window(self, LIST_RECT, WINDOW_TEX)
-	for i in _ids.size():
-		var item_id := String(_ids[i])
-		var it := Database.item(item_id)
-		var base := LIST_RECT.position + Vector2(20, 20 + i * ROW_HEIGHT)
+	var inner := PixelUI.content(LIST_RECT)
+	var top := _list_top()
+	var total := _leave_row() + 1
+
+	for row in range(top, mini(top + VISIBLE_ROWS, total)):
+		var base := inner.position + Vector2(16, 6 + (row - top) * ROW_HEIGHT)
+		if _index == row:
+			draw_texture(CURSOR_TEX, (base + CURSOR_OFFSET).floor())
+
+		if row == _rest_row():
+			_draw_row(base, inner, row, "やすむ", "%dG" % rest_price(), false)
+			continue
+		if row == _leave_row():
+			_draw_row(base, inner, row, "たちさる", "", false)
+			continue
+
+		var item_id := String(_ids[row])
+		var it := _entry(item_id)
 		var sold_out := _stock_of(item_id) <= 0
-		if _index == i:
-			draw_texture(CURSOR_TEX, (base + Vector2(-13, -8)).floor())
-		var tint := PixelUI.C_TEXT if _index == i else PixelUI.C_TEXT_DIM
-		if sold_out:
-			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.5)
-		PixelUI.draw_text(self, base, String(it.get("name", item_id)), tint, 11)
-		var right := "売切" if sold_out else "%dG x%d" % [
+		var right := "うりきれ" if sold_out else "%dG x%d" % [
 			int(it.get("price", 0)), _stock_of(item_id)
 		]
-		PixelUI.draw_text(
-			self, base + Vector2(LIST_RECT.size.x - 34 - PixelUI.text_width(right, 9), 0),
-			right, PixelUI.C_TEXT_DIM, 9
+		_draw_row(base, inner, row, String(it.get("name", item_id)), right, sold_out)
+
+	# 続きがあることを隠さない。見えない品を買えない状態が一番たちが悪い。
+	if total > VISIBLE_ROWS:
+		PixelUI.draw_text_right(
+			self, Vector2(inner.end.x - 2, inner.end.y - 14),
+			"%d/%d" % [_index + 1, total], PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 		)
 
-	_draw_list_row(_rest_row(), "やすむ", "%dG" % rest_price())
-	_draw_list_row(_leave_row(), "たちさる", "")
 
-
-func _draw_list_row(row: int, label: String, right: String) -> void:
-	var base := LIST_RECT.position + Vector2(20, 20 + row * ROW_HEIGHT)
-	if _index == row:
-		draw_texture(CURSOR_TEX, (base + Vector2(-13, -8)).floor())
-	var tint := PixelUI.C_ACTIVE if _index == row else PixelUI.C_TEXT_DIM
-	PixelUI.draw_text(self, base, label, tint, 11)
+func _draw_row(base: Vector2, inner: Rect2, row: int, label: String, right: String, sold_out: bool) -> void:
+	var tint := PixelUI.C_TEXT if _index == row else PixelUI.C_TEXT_DIM
+	if row >= _rest_row():
+		tint = PixelUI.C_ACTIVE if _index == row else PixelUI.C_TEXT_DIM
+	if sold_out:
+		tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.5)
+	PixelUI.draw_text(self, base, label, tint)
 	if right != "":
-		PixelUI.draw_text(
-			self, base + Vector2(LIST_RECT.size.x - 34 - PixelUI.text_width(right, 9), 0),
-			right, PixelUI.C_TEXT_DIM, 9
+		PixelUI.draw_text_right(
+			self, Vector2(inner.end.x - 2, base.y + 2), right, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 		)
 
 
 func _draw_detail() -> void:
 	PixelUI.draw_window(self, DETAIL_RECT, WINDOW_TEX)
-	var origin := DETAIL_RECT.position
+	var origin := PixelUI.content(DETAIL_RECT).position
 
 	# パーティの体力。何を買うべきかは、この数字を見て決まる。
-	PixelUI.draw_text(self, origin + Vector2(14, 20), "みんなの ようす", PixelUI.C_TEXT_DIM, 9)
+	PixelUI.draw_text(self, origin + Vector2(6, 0), "みんなの ようす", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	var party := GameState.active_party()
 	for i in party.size():
 		var m := party[i]
-		var row := origin + Vector2(14, 36 + i * 20)
+		var row := origin + Vector2(6, 22 + i * 34)
 		var ratio := float(m.hp) / maxf(float(m.max_hp()), 1.0)
 		var name_color := PixelUI.C_TEXT if m.hp > 0 else PixelUI.C_HP_LOW
-		PixelUI.draw_text(self, row, m.name, name_color, 11)
+		PixelUI.draw_text(self, row, m.name, name_color)
 		PixelUI.draw_text(
-			self, row + Vector2(48, 0), "%d/%d" % [m.hp, m.max_hp()], PixelUI.C_TEXT_DIM, 9
+			self, row + Vector2(66, 2), "%d/%d" % [m.hp, m.max_hp()],
+			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 		)
 		if m.max_mp() > 0:
 			PixelUI.draw_text(
-				self, row + Vector2(110, 0), "M%d/%d" % [m.mp, m.max_mp()], PixelUI.C_MP, 9
+				self, row + Vector2(140, 2), "M%d/%d" % [m.mp, m.max_mp()],
+				PixelUI.C_MP, PixelUI.SIZE_SUB
 			)
-		PixelUI.draw_gauge(self, Rect2(row.x, row.y + 4, 160, 4), ratio, PixelUI.hp_color(ratio))
+		PixelUI.draw_gauge(self, Rect2(row.x, row.y + 19, 224, 5), ratio, PixelUI.hp_color(ratio))
 
 
 func _draw_menu() -> void:
 	PixelUI.draw_window(self, MENU_RECT, WINDOW_TEX)
-	var origin := MENU_RECT.position
+	var origin := PixelUI.content(MENU_RECT).position
 
 	var desc := ""
 	if _index < _ids.size():
-		desc = String(Database.item(String(_ids[_index])).get("desc", ""))
+		var id := String(_ids[_index])
+		desc = String(_entry(id).get("desc", ""))
+		if _is_gear(id):
+			# 装備は説明が無いものも多いので、効き目の数字を出す
+			var stats := _gear_summary(Database.gear(id))
+			desc = stats if desc == "" else "%s　%s" % [desc, stats]
 	elif _index == _rest_row():
-		desc = "%d ゴールドで 傷も魔力も すっかり戻す。" % rest_price()
+		desc = "%d %sで 傷も魔力も すっかり戻す。" % [rest_price(), Terms.GOLD]
 	else:
 		desc = "ダンジョンへ もどる。"
-	PixelUI.draw_text(self, origin + Vector2(16, 20), desc, PixelUI.C_TEXT, 11)
+	PixelUI.draw_text(self, origin + Vector2(8, 0), desc, PixelUI.C_TEXT)
 
-	PixelUI.draw_text(self, origin + Vector2(16, 40), "もちもの", PixelUI.C_TEXT_DIM, 9)
+	PixelUI.draw_text(self, origin + Vector2(8, 26), "もちもの", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	var owned := GameState.inventory_ids()
 	if owned.is_empty():
-		PixelUI.draw_text(self, origin + Vector2(16, 58), "なし", PixelUI.C_TEXT_DIM, 10)
+		PixelUI.draw_text(self, origin + Vector2(8, 46), "なし", PixelUI.C_TEXT_DIM)
 		return
 	for i in owned.size():
 		var item_id := String(owned[i])
-		var at := origin + Vector2(16 + i * 88, 58)
+		var at := origin + Vector2(8 + i * 118, 46)
 		PixelUI.draw_text(
 			self, at,
 			"%s%d" % [Database.item(item_id).get("name", item_id), GameState.item_count(item_id)],
-			PixelUI.C_TEXT, 10
+			PixelUI.C_TEXT
 		)
+
+
+## 装備の効き目を 1 行にまとめる。数字が見えないと選べない。
+func _gear_summary(gear: Dictionary) -> String:
+	var parts: Array[String] = []
+	for key in ["atk", "mag", "def", "agi", "hp", "mp"]:
+		var value := int(gear.get(key, 0))
+		if value != 0:
+			parts.append("%s%+d" % [key.to_upper(), value])
+	var tempo := int(gear.get("cost_scale", 0))
+	if tempo != 0:
+		parts.append("%s%+d" % [Terms.SPEED, -tempo])
+	return "　".join(parts)
 
 
 func _draw_notice() -> void:
 	if _notice == "":
 		return
-	var width := PixelUI.text_width(_notice, 12) + 28.0
-	var box := Rect2((PixelUI.SCREEN.x - width) * 0.5, 96, width, 28)
+	var width := PixelUI.text_width(_notice) + 36.0
+	var box := Rect2((PixelUI.SCREEN.x - width) * 0.5, 130, width, 36)
 	PixelUI.draw_window(self, box, WINDOW_TEX)
-	PixelUI.draw_text(self, box.position + Vector2(14, 18), _notice, PixelUI.C_TEXT, 12)
+	var inner := PixelUI.content(box)
+	PixelUI.draw_text(self, inner.position + Vector2(8, 1), _notice, PixelUI.C_TEXT)

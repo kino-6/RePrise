@@ -6,11 +6,30 @@ extends RefCounted
 ## 描画も入力も持たない。UI は「今だれの手番か」を訊き、「この技をこの相手に」と
 ## 伝えるだけ。こうしておくと戦闘だけをヘッドレスで何千回も回してバランスを
 ## 測れる（CTB を選んだ最大の実利がこれ）。
+##
+## 設計の根拠は docs/battle_design.md。特に次の 3 つはそこから来ている。
+##   * 属性の倍率 — 敵ごとに効く手が変わらないと、最強の 1 手を覚えて考えなくなる
+##   * 範囲攻撃の減衰 — 減衰が無いと範囲が常に最適になり、単体を選ぶ理由が消える
+##   * 敵の予告 — 相手の手が見えないと、こちらが手を変える理由が生まれない
 
 signal finished(victory: bool)
 
 const VARIANCE_LOW := 88
 const VARIANCE_HIGH := 112
+
+## 属性倍率（100 分率）。弱点で 2 倍、耐性で半減。
+const ELEMENT_WEAK := 200
+const ELEMENT_RESIST := 50
+
+## 範囲攻撃の減衰。対象が少ないほど 1 体あたりが増える DQ 式。
+## group は 2 体以下、all は 3 体以下で増える。
+const SPREAD_BONUS := {1: 150, 2: 120, 3: 100}
+
+## 状態異常の持続手番。
+const SLEEP_TURNS := 3
+const POISON_TURNS := 5
+## 毒の 1 手番あたりの割合（最大 HP 比・%）。
+const POISON_RATE := 7
 
 var scheduler := CtbScheduler.new()
 var rng: DetRng = null
@@ -21,6 +40,8 @@ var enemies: Array[Battler] = []
 
 var is_over: bool = false
 var stolen_gold: int = 0
+## ぬすんだ道具の ID。戦闘後に GameState が持ち物へ入れる。
+var stolen_items: Array[String] = []
 
 ## 直近に実行された技。演出側が効果音を選ぶのに使う。
 var last_ability_id: String = ""
@@ -33,16 +54,21 @@ func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_n
 	floor_number = floor_no
 	is_over = false
 	stolen_gold = 0
-	# 前の戦闘の残りかす（かばい・素早さ変化）を持ち越さない。
-	# Battler は使い捨てだが、味方は同じ個体を作り直しているとは限らない。
+	stolen_items.clear()
+	# 前の戦闘の残りかす（かばい・素早さ変化・状態異常）を持ち越さない。
 	for b in party + foes:
 		b.protected_by = null
 		b.agi_scale = 100
 		b.agi_scale_turns = 0
 		b.guarding = false
+		b.clear_status()
+		b.planned_ability = ""
 	scheduler = CtbScheduler.new()
 	scheduler.add_all(allies)
 	scheduler.add_all(enemies)
+	# 敵の初手を先に決めておく。行動順バーに予告として出すため。
+	for b in enemies:
+		b.planned_ability = _choose_enemy_ability(b)
 
 
 # --------------------------------------------------------------------------
@@ -77,6 +103,32 @@ func begin_turn() -> Battler:
 	return actor
 
 
+## 手番の頭で起きること（毒の進行・眠りの判定）を解決する。
+## 眠っていて動けないときは true を返す。UI はそのまま次の手番へ送る。
+func begin_turn_effects(actor: Battler) -> Dictionary:
+	var lines: Array[String] = []
+	var skipped := false
+
+	if actor.poison_turns > 0:
+		actor.poison_turns -= 1
+		var dmg := maxi(actor.max_hp * POISON_RATE / 100, 1)
+		actor.apply_damage(dmg)
+		lines.append("%sは　どくで %d の ダメージ！" % [actor.name, dmg])
+		if not actor.is_alive():
+			lines.append("%sは　たおれた…" % actor.name)
+			_check_finished()
+			return {"lines": lines, "skipped": true}
+
+	if actor.sleep_turns > 0:
+		actor.sleep_turns -= 1
+		lines.append("%sは　ねむっている…" % actor.name)
+		skipped = true
+		# 眠っているぶん、次の手番も後ろへ回る。
+		scheduler.consume(actor, CtbScheduler.STANDARD_COST)
+
+	return {"lines": lines, "skipped": skipped}
+
+
 func turn_order(count: int = 8) -> Array[Battler]:
 	return scheduler.preview(count)
 
@@ -96,6 +148,19 @@ func living_allies() -> Array[Battler]:
 
 func living_enemies() -> Array[Battler]:
 	return scheduler.living_enemies()
+
+
+## chosen と同じ種族で生きている敵（＝1 グループ）。
+## DQ と同じく、並んでいる同名の一団をひとまとめに扱う。
+func group_of(chosen: Battler) -> Array[Battler]:
+	var result: Array[Battler] = []
+	if chosen == null:
+		return result
+	var pool := living_enemies() if not chosen.is_ally else living_allies()
+	for b in pool:
+		if b.source_id == chosen.source_id:
+			result.append(b)
+	return result
 
 
 # --------------------------------------------------------------------------
@@ -121,17 +186,7 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 
 	match kind:
 		"physical", "magical":
-			for t in targets:
-				# かばわれていれば、守り手が代わりに受ける。
-				var receiver := t
-				if t.protected_by != null and t.protected_by.is_alive() and t.protected_by != actor:
-					receiver = t.protected_by
-					lines.append("%sが　%sを かばった！" % [receiver.name, t.name])
-				var dmg := _damage(actor, receiver, power, kind == "magical")
-				receiver.apply_damage(dmg)
-				lines.append("%sに　%d の ダメージ！" % [receiver.name, dmg])
-				if not receiver.is_alive():
-					lines.append("%sを　たおした！" % receiver.name)
+			lines.append_array(_strike(actor, ab, targets, power, kind == "magical"))
 		"heal":
 			for t in targets:
 				if String(ab.get("target", "")) == "one_ally_dead":
@@ -140,6 +195,12 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 						continue
 					t.hp = maxi(t.max_hp * power / 100, 1)
 					lines.append("%sは　いきを ふきかえした！" % t.name)
+				elif String(ab.get("effect", "")) == "cleanse":
+					if t.has_status():
+						t.clear_status()
+						lines.append("%sの　ぐあいが よくなった" % t.name)
+					else:
+						lines.append("しかし　なにも おこらなかった")
 				else:
 					var healed := t.heal(power + actor.mag / 2)
 					lines.append("%sの　きずが %d かいふくした" % [t.name, healed])
@@ -153,6 +214,76 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 	return lines
 
 
+## 打撃・魔法の解決。多段攻撃と範囲の減衰をここで面倒みる。
+func _strike(
+	actor: Battler, ab: Dictionary, targets: Array[Battler], power: int, magical: bool
+) -> Array[String]:
+	var lines: Array[String] = []
+	var hits := maxi(int(ab.get("hits", 1)), 1)
+	var element := String(ab.get("element", ""))
+	# 武器の属性は通常攻撃にだけ乗せる（技は自前の属性を持つ）。
+	if element == "" and not magical:
+		element = actor.attack_element
+	var spread := _spread_scale(String(ab.get("target", "one_enemy")), targets.size())
+
+	for t in targets:
+		if not t.is_alive():
+			continue
+		# かばわれていれば、守り手が代わりに受ける。
+		var receiver := t
+		if t.protected_by != null and t.protected_by.is_alive() and t.protected_by != actor:
+			receiver = t.protected_by
+			lines.append("%sが　%sを かばった！" % [receiver.name, t.name])
+
+		var total := 0
+		var tag := ""
+		for _i in hits:
+			if not receiver.is_alive():
+				break
+			var dmg := _damage(actor, receiver, power * spread / 100, magical, element)
+			receiver.apply_damage(dmg)
+			total += dmg
+		tag = _element_tag(receiver, element)
+		if hits > 1:
+			lines.append("%sに　%d の ダメージ！（%d 回）%s" % [receiver.name, total, hits, tag])
+		else:
+			lines.append("%sに　%d の ダメージ！%s" % [receiver.name, total, tag])
+
+		# 眠りは物理で起きる（FF の作法。眠らせて殴るだけの解にしない）。
+		if receiver.sleep_turns > 0 and not magical:
+			receiver.sleep_turns = 0
+			lines.append("%sは　目をさました！" % receiver.name)
+
+		if String(ab.get("effect", "")) == "poison" and receiver.is_alive():
+			if receiver.poison_turns <= 0 and rng.chance(60):
+				receiver.poison_turns = POISON_TURNS
+				lines.append("%sは　どくに おかされた！" % receiver.name)
+
+		if not receiver.is_alive():
+			lines.append("%sを　たおした！" % receiver.name)
+	return lines
+
+
+func _element_tag(target: Battler, element: String) -> String:
+	if element == "":
+		return ""
+	if element in target.weak:
+		return "　弱点！"
+	if element in target.resist:
+		return "　効きが わるい"
+	return ""
+
+
+## 範囲攻撃の減衰。対象が少ないほど 1 体あたりが増える。
+## これが無いと範囲攻撃が常に最適になり、単体攻撃を選ぶ理由が消える。
+func _spread_scale(scope: String, count: int) -> int:
+	if scope == "group_enemy":
+		return int(SPREAD_BONUS.get(mini(count, 3), 100)) if count <= 2 else 100
+	if scope == "all_enemies":
+		return int(SPREAD_BONUS.get(mini(count, 3), 100))
+	return 100
+
+
 func _resolve_targets(actor: Battler, ab: Dictionary, chosen: Battler) -> Array[Battler]:
 	match String(ab.get("target", "one_enemy")):
 		"self":
@@ -161,8 +292,13 @@ func _resolve_targets(actor: Battler, ab: Dictionary, chosen: Battler) -> Array[
 			return living_enemies() if actor.is_ally else living_allies()
 		"all_allies":
 			return living_allies() if actor.is_ally else living_enemies()
-		_:
+		"group_enemy":
 			if chosen != null:
+				return group_of(chosen)
+			var pool := living_enemies() if actor.is_ally else living_allies()
+			return group_of(pool[0]) if not pool.is_empty() else ([] as Array[Battler])
+		_:
+			if chosen != null and chosen.is_alive():
 				return [chosen] as Array[Battler]
 			# 対象が死んでいた等で未指定なら、生存者から選び直す
 			var pool := living_enemies() if actor.is_ally else living_allies()
@@ -170,11 +306,16 @@ func _resolve_targets(actor: Battler, ab: Dictionary, chosen: Battler) -> Array[
 
 
 @warning_ignore("integer_division")
-func _damage(actor: Battler, target: Battler, power: int, magical: bool) -> int:
+func _damage(actor: Battler, target: Battler, power: int, magical: bool, element: String) -> int:
 	# 物理は防御力をまともに受け、魔法は半分しか受けない。
 	var base := (actor.mag if magical else actor.atk) * power / 100
 	var reduction := target.defense / 4 if magical else target.defense / 2
 	var dmg := base - reduction
+	if element != "":
+		if element in target.weak:
+			dmg = dmg * ELEMENT_WEAK / 100
+		elif element in target.resist:
+			dmg = dmg * ELEMENT_RESIST / 100
 	dmg = dmg * rng.range_i(VARIANCE_LOW, VARIANCE_HIGH) / 100
 	if target.guarding:
 		dmg = dmg / 2
@@ -203,6 +344,14 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				# 素早さが落ちた効果を行動順にも即座に反映させる
 				t.next_at += CtbScheduler.wait_for(t.effective_agi(), 40)
 				lines.append("%sの　すばやさが さがった！" % t.name)
+			"sleep":
+				# ボスには効きにくい。ここが効きすぎると戦闘が「眠らせて殴る」だけになる。
+				var odds := 35 if _is_boss(t) else 70
+				if rng.chance(odds):
+					t.sleep_turns = SLEEP_TURNS
+					lines.append("%sは　ねむってしまった！" % t.name)
+				else:
+					lines.append("%sには きかなかった" % t.name)
 			"defend_up":
 				# 自分は自分をかばえない。全体版（まもりのかまえ）で自分が
 				# 対象に入ったときは、素直に身構えるだけにする。
@@ -213,11 +362,48 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 					t.protected_by = actor
 					lines.append("%sが　%sを かばう たいせいに はいった" % [actor.name, t.name])
 			"steal":
-				var loot := rng.range_i(2, 6 + floor_number * 2)
-				stolen_gold += loot
-				lines.append("%sから　%d ゴールドを ぬすんだ！" % [t.name, loot])
+				lines.append_array(_steal_from(actor, t))
 			_:
 				lines.append("しかし　なにも おこらなかった")
+	return lines
+
+
+func _is_boss(b: Battler) -> bool:
+	return bool(Database.monster(b.source_id).get("boss", false))
+
+
+## ぬすむ。金だけを少額落とす設計だと「選ばない方が得」になるので、必ず道具を狙う。
+## コモン枠とレア枠を持たせ、成功率は相手との素早さ差で決める（docs/battle_design.md）。
+func _steal_from(actor: Battler, target: Battler) -> Array[String]:
+	var lines: Array[String] = []
+	var table: Dictionary = Database.monster(target.source_id).get("steal", {})
+	var bonus := 20 if actor.has_effect("steal_up") else 0
+
+	var rare_id := String(table.get("rare", ""))
+	if rare_id != "" and rng.chance(12 + bonus / 2):
+		stolen_items.append(rare_id)
+		lines.append("%sから　%s を ぬすんだ！" % [
+			target.name, Database.item(rare_id).get("name", rare_id)
+		])
+		return lines
+
+	var common_id := String(table.get("common", ""))
+	var odds := 45 + bonus + maxi(actor.effective_agi() - target.effective_agi(), 0)
+	if common_id != "" and rng.chance(mini(odds, 90)):
+		stolen_items.append(common_id)
+		lines.append("%sから　%s を ぬすんだ！" % [
+			target.name, Database.item(common_id).get("name", common_id)
+		])
+		return lines
+
+	# 何も持っていない相手からは金を掠める。空振りだけにすると技が死ぬ。
+	if table.is_empty() and rng.chance(70):
+		var loot := rng.range_i(4, 10 + floor_number * 3)
+		stolen_gold += loot
+		lines.append("%sから　%d %sを ぬすんだ！" % [target.name, loot, Terms.GOLD])
+		return lines
+
+	lines.append("しかし　なにも とれなかった")
 	return lines
 
 
@@ -259,6 +445,12 @@ func use_item(actor: Battler, item_id: String, target: Battler) -> Array[String]
 			else:
 				who.hp = maxi(who.max_hp * power / 100, 1)
 				lines.append("%sは いきを ふきかえした！" % who.name)
+		"cleanse":
+			if who.has_status():
+				who.clear_status()
+				lines.append("%sの ぐあいが よくなった" % who.name)
+			else:
+				lines.append("しかし　なにも おこらなかった")
 		_:
 			lines.append("しかし　なにも おこらなかった")
 
@@ -272,26 +464,44 @@ func use_item(actor: Battler, item_id: String, target: Battler) -> Array[String]
 # --------------------------------------------------------------------------
 
 
-## 敵の行動を決めて実行する。LLM は一切関与させない。
-## 行動決定は決定的でなければリプレイもバランス測定も成立しないため。
-func perform_enemy(actor: Battler) -> Array[String]:
+## 敵が次に使う技を決める。**技だけ**を先に決めて予告に出し、対象は実行時に選ぶ。
+## 対象まで先に決めると、その相手が先に倒れていた場合に空振りになる。
+func _choose_enemy_ability(actor: Battler) -> String:
 	var usable := usable_abilities(actor)
 	if usable.is_empty():
-		usable = ["attack"]
+		return "attack"
+	return String(rng.pick(usable))
 
-	# 手負いの相手を狙いやすくする程度の、素朴だが読める AI。
-	var ability_id: String = rng.pick(usable)
+
+## 敵の行動を実行する。LLM は一切関与させない。
+## 行動決定は決定的でなければリプレイもバランス測定も成立しないため。
+func perform_enemy(actor: Battler) -> Array[String]:
+	var ability_id := actor.planned_ability
+	if ability_id == "" or not actor.abilities.has(ability_id):
+		ability_id = _choose_enemy_ability(actor)
+	if not actor.can_pay(Database.ability(ability_id)):
+		ability_id = "attack"
+
 	var ab := Database.ability(ability_id)
 	var target: Battler = null
-	if String(ab.get("target", "one_enemy")).begins_with("one_enemy"):
+	var scope := String(ab.get("target", "one_enemy"))
+	if scope in ["one_enemy", "group_enemy"]:
 		var pool := living_allies()
 		if pool.is_empty():
 			return []
+		# 手負いの相手を狙いやすくする程度の、素朴だが読める AI。
 		target = pool[0]
 		for candidate in pool:
 			if candidate.hp < target.hp and rng.chance(60):
 				target = candidate
-	return perform(actor, ability_id, target)
+	elif scope == "one_ally":
+		var friends := living_enemies()
+		target = friends[0] if not friends.is_empty() else actor
+
+	var lines := perform(actor, ability_id, target)
+	# 次の手を決めて予告に載せる。
+	actor.planned_ability = _choose_enemy_ability(actor)
+	return lines
 
 
 # --------------------------------------------------------------------------
@@ -316,4 +526,5 @@ func rewards() -> Dictionary:
 		"exp": Encounter.total_exp(enemies),
 		"gold": Encounter.total_gold(enemies) + stolen_gold,
 		"mastery": 4 + floor_number,
+		"items": stolen_items,
 	}

@@ -134,6 +134,10 @@ func _fight(
 		var actor := system.begin_turn()
 		if actor == null:
 			break
+		# 毒と眠りの解決。眠っていればこの手番は飛ぶ。
+		var head: Dictionary = system.begin_turn_effects(actor)
+		if bool(head["skipped"]):
+			continue
 		if actor.is_ally:
 			var plan := _plan(system, actor)
 			system.perform(actor, String(plan["ability"]), plan["target"])
@@ -185,10 +189,13 @@ func _plan(system: BattleSystem, actor: Battler) -> Dictionary:
 		var kind := String(ab.get("kind", ""))
 		if kind != "physical" and kind != "magical":
 			continue
-		# 全体技は敵が複数いるときだけ価値がある、と素朴に見積もる
-		var power := int(ab.get("power", 0))
-		if String(ab.get("target", "")) == "all_enemies":
+		# 範囲技は敵が複数いるときだけ価値がある、と素朴に見積もる
+		var power := int(ab.get("power", 0)) * maxi(int(ab.get("hits", 1)), 1)
+		var scope := String(ab.get("target", ""))
+		if scope == "all_enemies":
 			power = power * enemies.size()
+		elif scope == "group_enemy" and not enemies.is_empty():
+			power = power * maxi(system.group_of(enemies[0]).size(), 1)
 		if power > best_power:
 			best_power = power
 			best = id
