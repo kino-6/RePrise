@@ -182,6 +182,75 @@ godot --path . -- --shot=battle                       # 画面を 1 枚撮って
 
 ---
 
+## 書き出す（ビルド）
+
+配布用の実行ファイルを作る。Godot 本体とは別に**エクスポートテンプレート**が要る。
+
+### 1. テンプレートを入れる（初回だけ）
+
+テンプレートは**エンジンと同じバージョンでなければならない**（4.7.1 のエンジンは
+`4.7.1.stable` のテンプレートしか使わない）。エディタの
+`エディター > エクスポートテンプレートの管理 > ダウンロードしてインストール` が最短。
+
+CLI だけで済ませるなら、公式リリースの `.tpz`（実体は zip）を展開して置く。
+
+```powershell
+$ver = "4.7.1-stable"
+curl.exe -L -o templates.zip `
+  "https://github.com/godotengine/godot/releases/download/$ver/Godot_v${ver}_export_templates.tpz"
+# .tpz の中身はただの zip。ただし Expand-Archive は拡張子で弾くので .zip で受ける
+Expand-Archive templates.zip -DestinationPath tpz
+# 中身は templates/ 直下。これを <バージョン>.stable/ という名前で置く
+Move-Item tpz\templates "$env:APPDATA\Godot\export_templates\4.7.1.stable"
+```
+
+ダウンロードは 1.3GB ある（全プラットフォーム分がまとまっているため）。
+入ったかは `%APPDATA%\Godot\export_templates\4.7.1.stable\windows_release_x86_64.exe`
+の有無で分かる（Linux / macOS は `~/.local/share/godot/export_templates/`）。
+
+### 2. 書き出す
+
+```bash
+python tools/gen_assets.py    # 先に生成しておく。特に音は追跡していないので
+python tools/gen_audio.py     # これを飛ばすと「音の無いビルド」ができあがる
+godot --headless --import     # class_name と .import を最新にする
+
+mkdir -p build/windows        # 出力先が無いと Godot は作らずに失敗する
+godot --headless --export-release "Windows Desktop" build/windows/RePrise.exe
+```
+
+PowerShell の `mkdir` に `-p` は無い。`New-Item -ItemType Directory -Force build\windows`。
+
+出力は `build/windows/` に `RePrise.exe`（約 104MB）と `RePrise.pck`（約 2.5MB）の 2 つ。
+`build/` は追跡しない。配布するときは両方を同じ階層に置く。1 ファイルにまとめたい場合は
+`export_presets.cfg` の `binary_format/embed_pck` を `true` にする。
+
+`docs/`・`tools/`・`tests/` はプリセットの `exclude_filter` で除いてある。
+ドット絵の原本（Python）や撮影物まで配布物に入れる必要は無い。
+
+`--export-release` を `--export-debug` に替えるとデバッグビルドになる。
+アサートとエラー表示が残るので、配る前の確認はこちらで踏む。標準出力を目で見たいなら
+プリセットの `debug/export_console_wrapper` を `1` にすると
+コンソール付きの `RePrise.console.exe` が一緒に出る。
+
+プリセット（`export_presets.cfg`）は**リポジトリに入れてある**。Godot が普段は
+無視するファイルだが、追跡しないと上のコマンドがそのままでは動かないため。
+鍵や署名のパスワードは書かないこと。
+
+### バージョン番号
+
+原本は `project.godot` の `application/config/version` の 1 か所だけ。
+
+- ウィンドウのタイトルバーに `RePrise  v0.1.0` と出る（`src/game/version.gd`）
+- 書き出した `.exe` のファイルプロパティも `0.1.0.0` になる
+  （プリセットのバージョン欄を空にしてあるので、Godot が上記を拾う）
+
+ソースから起動したビルドだけ `v0.1.0-dev` と出る（デバッグ実行ではさらに
+エンジンが ` (DEBUG)` を足す）。手元で動かしているものと配った実行ファイルを、
+報告を受けた時に取り違えないため。上げるときは `config/version` を書き換えるだけでよい。
+
+---
+
 ## 現状と次の一手
 
 動くもの: 拠点 → 出撃 → 探索 → 遭遇 → CTB 戦闘 → 出店 → 地下 10 階の主 →

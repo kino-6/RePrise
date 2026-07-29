@@ -9,6 +9,9 @@ config_version=5
 [application]
 
 config/name="RePrise"
+; バージョンの原本はここ。タイトルバー（src/game/version.gd）も
+; エクスポートした .exe のファイル情報も、この 1 か所を読む。
+config/version="0.1.0"
 run/main_scene="res://src/scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 

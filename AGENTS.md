@@ -45,7 +45,11 @@ godot --headless --script res://tests/test_core.gd    # 決定性テスト（常
 godot --headless --script res://tests/balance.gd      # 到達率と勝率を実測する
 godot --path . -- --shot=title                        # 画面を 1 枚撮って終了
 godot --path .                                        # 起動
+
+godot --headless --export-release "Windows Desktop" build/windows/RePrise.exe   # 配布物を書き出す
 ```
+
+書き出しの前提（テンプレートの入れ方を含む）は README の「書き出す（ビルド）」にある。
 
 `--shot=` に渡せる画面（`src/scenes/main.gd` の `_capture`）:
 
@@ -82,6 +86,14 @@ godot --path .                                        # 起動
   ネイティブ exe への `2>&1` も避ける（成功しても失敗扱いになる）。
 - 撮影が `accesskit_windows` のパニックで落ちることがある（メモリ資源の一時不足）。
   `godot --path . --accessibility disabled -- --shot=...` で回避できる。
+- ウィンドウタイトルは `DisplayServer.window_set_title()` で入れても戻る。ルート
+  Window があとから自分の `title` を流し込むため。`get_window().title` へ入れること。
+  デバッグ実行では末尾に ` (DEBUG)` がエンジン側で足される（これは消せない）。
+- エクスポートテンプレートは**エンジンと完全に同じバージョン**でないと使われない。
+  Godot を上げたら入れ直す。入っていないと `--export-release` は
+  「テンプレートが見つかりません」で落ちる（プリセットの問題ではない）。
+- 書き出す前に `gen_audio.py` を回す。WAV は追跡していないので、忘れると
+  **音の無いビルド**ができあがる（エラーは出ない）。
 - **`config/name` を変えると `user://` の保存先も変わる。** `%APPDATA%\Godot\
   app_userdata\<config/name>` なので、改名時は既存の `save.json` を手で移す。
 - 撮影のうち `result` / `win` / `boss` は `end_run()` を通るのでセーブを書き換える。

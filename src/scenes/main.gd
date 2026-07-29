@@ -31,6 +31,14 @@ var _boss_battle := false
 
 
 func _ready() -> void:
+	# 「RePrise  v0.1.0」。どのビルドを触っているかがウィンドウ枠だけで分かる。
+	# 数字の原本は project.godot（src/game/version.gd 参照）。
+	#
+	# DisplayServer.window_set_title() ではなく Window.title へ入れる。
+	# 前者はルート Window があとから自分の title を流し込むときに上書きされ、
+	# 既定の「RePrise (DEBUG)」に戻ってしまう。
+	get_window().title = GameVersion.window_title()
+
 	title = TitleView.new()
 	title.visible = false
 	add_child(title)

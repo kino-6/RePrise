@@ -5,8 +5,13 @@ __pycache__/
 # Godot
 .godot/
 /android/
-export_presets.cfg
 *.translation
+
+# 書き出したバイナリ。原本はソースなので追跡しない。
+build/
+
+# export_presets.cfg は逆に追跡する。無いと README のビルド手順が
+# そのままでは動かないため（鍵やパスワードは書かないこと）。
 
 # 生成物: 音声だけはサイズが大きいので追跡しない。
 # 生成器（tools/gen_audio.py）が唯一の原本で、セットアップ時に作り直す。
