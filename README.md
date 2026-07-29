@@ -1,6 +1,4 @@
-# Argent Descent（銀の潜行）
-
-**熟練は、死んでも残る。**
+# RePrise
 
 スーパーファミコン期の JRPG の手触りで作る、CTB ローグライク。
 レベルも装備もランごとに失うが、職業の熟練度と覚えた技だけは拠点に持ち帰る。
@@ -8,6 +6,7 @@
 ![戦闘画面](docs/preview/screen_battle.png)
 ![探索画面](docs/preview/screen_explore.png)
 ![拠点画面](docs/preview/screen_stronghold.png)
+![出店](docs/preview/screen_shop.png)
 
 ---
 
