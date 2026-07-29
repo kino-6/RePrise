@@ -71,8 +71,4 @@ func _draw() -> void:
 		)
 		PixelUI.draw_gauge(self, Rect2(base.x, base.y + 19, 112, 5), ratio, PixelUI.hp_color(ratio))
 
-	if _toast != "":
-		var width := PixelUI.text_width(_toast) + 36.0
-		var box := Rect2((PixelUI.SCREEN.x - width) * 0.5, 212, width, 36)
-		PixelUI.draw_window(self, box, WINDOW_TEX)
-		PixelUI.draw_text(self, PixelUI.content(box).position + Vector2(8, 1), _toast, PixelUI.C_TEXT)
+	PixelUI.draw_notice(self, WINDOW_TEX, _toast, 212.0)

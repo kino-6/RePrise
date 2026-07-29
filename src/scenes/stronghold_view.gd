@@ -122,24 +122,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match _state:
 		State.MEMBER:
-			_input_member()
+			_input_member(event)
 		State.JOB:
-			_input_job()
+			_input_job(event)
 		State.UPGRADE:
-			_input_upgrade()
+			_input_upgrade(event)
 
 
-func _input_member() -> void:
+func _input_member(event: InputEvent) -> void:
 	var rows := _depart_row() + 1
-	if Input.is_action_just_pressed("ui_down"):
+	if event.is_action_pressed("ui_down"):
 		_index = (_index + 1) % rows
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("ui_up"):
+	elif event.is_action_pressed("ui_up"):
 		_index = (_index - 1 + rows) % rows
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("confirm"):
+	elif event.is_action_pressed("confirm"):
 		Sound.play("confirm")
 		if _index == _depart_row():
 			close()
@@ -150,7 +150,7 @@ func _input_member() -> void:
 			queue_redraw()
 		else:
 			_open_job_menu()
-	elif Input.is_action_just_pressed("cancel"):
+	elif event.is_action_pressed("cancel"):
 		# 一覧のどこにいても一手で出撃へ戻れるようにする
 		if _index != _depart_row():
 			_index = _depart_row()
@@ -183,31 +183,31 @@ func _open_job_menu() -> void:
 
 
 ## 職業は 2 列 x 2 段に並べる。上下で列内を、左右で列をまたぐ。
-func _input_job() -> void:
+func _input_job(event: InputEvent) -> void:
 	if _job_ids.is_empty():
 		return
 	var rows := _job_rows()
-	if Input.is_action_just_pressed("ui_down"):
+	if event.is_action_pressed("ui_down"):
 		_job_index = (_job_index + 1) % _job_ids.size()
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("ui_up"):
+	elif event.is_action_pressed("ui_up"):
 		_job_index = (_job_index - 1 + _job_ids.size()) % _job_ids.size()
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("ui_right"):
+	elif event.is_action_pressed("ui_right"):
 		_job_index = (_job_index + rows) % _job_ids.size()
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("ui_left"):
+	elif event.is_action_pressed("ui_left"):
 		_job_index = (_job_index - rows + _job_ids.size()) % _job_ids.size()
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("cancel"):
+	elif event.is_action_pressed("cancel"):
 		Sound.play("cancel")
 		_state = State.MEMBER
 		queue_redraw()
-	elif Input.is_action_just_pressed("confirm"):
+	elif event.is_action_pressed("confirm"):
 		_apply_job()
 
 
@@ -215,24 +215,24 @@ func _job_rows() -> int:
 	return int(ceil(_job_ids.size() / 2.0))
 
 
-func _input_upgrade() -> void:
+func _input_upgrade(event: InputEvent) -> void:
 	if _upgrade_ids.is_empty():
 		_state = State.MEMBER
 		queue_redraw()
 		return
-	if Input.is_action_just_pressed("cancel"):
+	if event.is_action_pressed("cancel"):
 		Sound.play("cancel")
 		_state = State.MEMBER
 		queue_redraw()
-	elif Input.is_action_just_pressed("ui_down"):
+	elif event.is_action_pressed("ui_down"):
 		_upgrade_index = (_upgrade_index + 1) % _upgrade_ids.size()
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("ui_up"):
+	elif event.is_action_pressed("ui_up"):
 		_upgrade_index = (_upgrade_index - 1 + _upgrade_ids.size()) % _upgrade_ids.size()
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("confirm"):
+	elif event.is_action_pressed("confirm"):
 		_buy_upgrade()
 
 
@@ -576,10 +576,4 @@ func _draw_job_menu() -> void:
 
 
 func _draw_notice() -> void:
-	if _notice == "":
-		return
-	var width := PixelUI.text_width(_notice) + 36.0
-	var box := Rect2((PixelUI.SCREEN.x - width) * 0.5, 130, width, 36)
-	PixelUI.draw_window(self, box, WINDOW_TEX)
-	var inner := PixelUI.content(box)
-	PixelUI.draw_text(self, inner.position + Vector2(8, 1), _notice, PixelUI.C_TEXT)
+	PixelUI.draw_notice(self, WINDOW_TEX, _notice, 130.0)

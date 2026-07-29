@@ -95,6 +95,44 @@ func _handle_debug_args() -> void:
 		if arg.begins_with("--shot="):
 			_capture(arg.trim_prefix("--shot="))
 			return
+		if arg.begins_with("--play="):
+			_start_autoplay(float(arg.trim_prefix("--play=")))
+			return
+
+
+## 開発用。人と同じ入力だけを流し込んで通しを確認する（src/dev/autoplay.gd）。
+func _start_autoplay(seconds: float) -> void:
+	var driver := AutoPlay.new()
+	add_child(driver)
+	driver.start(self, maxf(seconds, 5.0))
+
+
+## 自動プレイが「いまどの画面か」を知るための窓口。開発用。
+func dev_mode_name() -> String:
+	return Mode.keys()[_mode]
+
+
+## 開発用。画面と階層をまとめた 1 行。自動プレイの記録に使う。
+## 画面名だけだと「階を降りた」が記録に出てこない。
+func dev_status() -> String:
+	if _mode == Mode.EXPLORE or _mode == Mode.BATTLE or _mode == Mode.SHOP:
+		return "%s 地下%d階" % [dev_mode_name(), GameState.floor_number]
+	return dev_mode_name()
+
+
+## 開発用。この階の出口（階段、最終階なら主の間の扉）へ向かう次の一歩。
+## 自動プレイがこれで階を降りる。届かなければ空文字。
+func dev_step_to_exit() -> String:
+	if _mode != Mode.EXPLORE or _map == null:
+		return ""
+	return explore.dev_step_toward(_map.stairs_pos)
+
+
+## 開発用。この階に出店があればそこへ向かう一歩。無ければ空文字。
+func dev_step_to_shop() -> String:
+	if _mode != Mode.EXPLORE or _map == null or _map.shop_pos.x < 0:
+		return ""
+	return explore.dev_step_toward(_map.shop_pos)
 
 
 func _capture(which: String) -> void:
@@ -233,6 +271,10 @@ func _enter_stronghold() -> void:
 
 func _start_run() -> void:
 	GameState.start_new_run()
+	# 開発用の状態指定（--dev-level=8 など）。指定が無ければ何もしない。
+	var applied := DevCheats.apply_to_run(GameState)
+	if not applied.is_empty():
+		print("開発指定: %s" % "　".join(applied))
 	_enter_floor()
 
 

@@ -8,6 +8,9 @@ signal dismissed
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 
+## 戦記の行送り。折り返したぶんも同じ間隔で積む。
+const LINE_STEP := 21
+
 var lines: PackedStringArray = []
 var title := ""
 var _ready_to_dismiss := false
@@ -23,8 +26,8 @@ func show_summary(summary: Dictionary) -> void:
 	queue_redraw()
 
 
-func _unhandled_input(_event: InputEvent) -> void:
-	if _ready_to_dismiss and Input.is_action_just_pressed("confirm"):
+func _unhandled_input(event: InputEvent) -> void:
+	if _ready_to_dismiss and event.is_action_pressed("confirm"):
 		set_process_unhandled_input(false)
 		dismissed.emit()
 
@@ -39,15 +42,21 @@ func _draw() -> void:
 		"―― %s ――" % title, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
 	)
 
-	var body := Rect2(16, 62, 480, 200)
+	var body := Rect2(16, 62, 480, 218)
 	PixelUI.draw_window(self, body, WINDOW_TEX)
 	var inner := PixelUI.content(body)
-	for i in lines.size():
-		PixelUI.draw_text(self, inner.position + Vector2(8, 4 + i * 21), lines[i], PixelUI.C_TEXT)
+
+	# 戦記は覚えた技を全部並べるので、1 行が窓を越える。必ず折り返す。
+	var drawn: PackedStringArray = []
+	for line in lines:
+		drawn.append_array(PixelUI.wrap(line, inner.size.x - 16.0))
+	var room := int((inner.size.y - 8.0) / LINE_STEP)
+	for i in mini(drawn.size(), room):
+		PixelUI.draw_text(self, inner.position + Vector2(8, 4 + i * LINE_STEP), drawn[i], PixelUI.C_TEXT)
 
 	if _ready_to_dismiss:
 		var tail := "Ｚキーで つぎの たびへ"
 		PixelUI.draw_text(
-			self, Vector2((PixelUI.SCREEN.x - PixelUI.text_width(tail)) * 0.5, 282),
+			self, Vector2((PixelUI.SCREEN.x - PixelUI.text_width(tail)) * 0.5, 288),
 			tail, PixelUI.C_TEXT_DIM
 		)

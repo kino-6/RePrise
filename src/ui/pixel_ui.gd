@@ -91,6 +91,37 @@ static func text_height(size: int = SIZE_TEXT) -> float:
 	return font().get_ascent(size) + font().get_descent(size)
 
 
+## 幅に収まるよう折り返す。
+##
+## 日本語は分かち書きしないので、単語境界ではなく 1 文字ずつ測って折る。
+## 戦記（chronicle）は覚えた技を全部並べるので長さが読めず、実際に溢れていた。
+## 将来ここに LLM の文章が流れてくる予定なので、長さを前提にしない。
+##
+## 行頭に置きたくない字（句読点や閉じ括弧）だけは前の行に残す。
+const NO_LINE_HEAD := "、。，．）」』】ぁぃぅぇぉっゃゅょ・！？"
+
+
+static func wrap(text: String, max_width: float, size: int = SIZE_TEXT) -> PackedStringArray:
+	var lines: PackedStringArray = []
+	var line := ""
+	for i in text.length():
+		var ch := text[i]
+		if text_width(line + ch, size) <= max_width or line == "":
+			line += ch
+			continue
+		# 行頭に来てはいけない字なら、1 字だけ前の行へ食い込ませる
+		if NO_LINE_HEAD.contains(ch):
+			line += ch
+			lines.append(line)
+			line = ""
+			continue
+		lines.append(line)
+		line = ch
+	if line != "":
+		lines.append(line)
+	return lines
+
+
 ## 窓の内側。文字はここを基準に置けば、どのサイズでも枠に触れない。
 static func content(rect: Rect2, pad := 3.0) -> Rect2:
 	return rect.grow(-(FRAME + pad))
@@ -118,6 +149,22 @@ static func draw_window(canvas: CanvasItem, rect: Rect2, texture: Texture2D) -> 
 			var dst := Rect2(dst_x[i], dst_y[j], dst_x[i + 1] - dst_x[i], dst_y[j + 1] - dst_y[j])
 			if dst.size.x > 0.0 and dst.size.y > 0.0:
 				canvas.draw_texture_rect_region(texture, dst, src)
+
+
+## 画面の中央に出す一言（買った / たりない / おぼえた など）。
+##
+## 拠点・出店・探索メニュー・探索 HUD で同じ形の窓を 4 回書いていたので集約した。
+## 幅は文字に合わせて伸ばす。中央寄せの箱は、幅を固定すると必ずどこかで溢れる。
+static func draw_notice(
+	canvas: CanvasItem, texture: Texture2D, text: String, y: float,
+	color: Color = C_TEXT
+) -> void:
+	if text == "":
+		return
+	var width := text_width(text) + 36.0
+	var box := Rect2((SCREEN.x - width) * 0.5, y, width, 36)
+	draw_window(canvas, box, texture)
+	draw_text(canvas, content(box).position + Vector2(8, 1), text, color)
 
 
 ## HP / MP のゲージ。数値だけより残量が一目で分かる。

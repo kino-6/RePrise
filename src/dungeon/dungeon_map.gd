@@ -78,6 +78,47 @@ func render_tile(x: int, y: int) -> int:
 	return T_WALL if below_open else T_WALL_TOP
 
 
+## 隣接の走査順。**固定する**こと。順番が揺れると同じ地形から違う経路が出て、
+## 決定性が壊れる（オート移動のリプレイが再現しなくなる）。
+const NEIGHBORS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
+
+
+## from から to までの最短経路（幅優先）。届かなければ空を返す。
+##
+## 自動プレイの「階段へ向かう」と、将来のオート移動の土台。
+## 宝箱は通れないので経路には含めない（押し当てて開ける扱いなので）。
+func route(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var empty: Array[Vector2i] = []
+	if from == to or not in_bounds(to.x, to.y):
+		return empty
+
+	var came := {}
+	var queue: Array[Vector2i] = [from]
+	came[from] = from
+	while not queue.is_empty():
+		var at: Vector2i = queue.pop_front()
+		if at == to:
+			break
+		for step in NEIGHBORS:
+			var next: Vector2i = at + step
+			if came.has(next):
+				continue
+			# 目的地そのものは通行可否を問わない（扉や階段を目標にできるように）
+			if next != to and not is_walkable(next.x, next.y):
+				continue
+			came[next] = at
+			queue.append(next)
+
+	if not came.has(to):
+		return empty
+	var path: Array[Vector2i] = []
+	var cursor := to
+	while cursor != from:
+		path.push_front(cursor)
+		cursor = came[cursor]
+	return path
+
+
 ## デバッグ用のアスキー出力。決定性テストの比較にも使う。
 func to_ascii() -> String:
 	const GLYPH := { T_FLOOR: ".", T_FLOOR_CRACKED: ",", T_WALL: "#", T_WALL_TOP: "#",

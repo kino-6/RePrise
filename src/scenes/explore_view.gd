@@ -12,7 +12,10 @@ signal menu_requested
 
 const TILE := 16
 const MOVE_DELAY := 0.10
-const MIN_SAFE_STEPS := 5  ## この歩数までは絶対に敵が出ない（階段直後の事故防止）
+## この歩数までは絶対に敵が出ない（階段直後の事故防止）。
+## 自動プレイで 150 秒回したら遊んだ時間の 54% が戦闘だったので広げた。
+## 1 階を歩き切るのに 80 歩ほどかかるので、18 歩に 1 回で 4〜5 戦になる。
+const MIN_SAFE_STEPS := 9
 
 const TILES_TEX: Texture2D = preload("res://assets/tiles/dungeon.png")
 
@@ -84,6 +87,24 @@ func _process(delta: float) -> void:
 	_try_move(player_pos + dir)
 
 
+## 開発用。目的地へ向かう次の一歩を入力アクション名で返す。
+## 自動プレイが階段まで歩くのに使う（src/dev/autoplay.gd）。
+func dev_step_toward(target: Vector2i) -> String:
+	if map == null:
+		return ""
+	var path := map.route(player_pos, target)
+	if path.is_empty():
+		return ""
+	var step: Vector2i = path[0] - player_pos
+	if step == Vector2i.UP:
+		return "ui_up"
+	if step == Vector2i.DOWN:
+		return "ui_down"
+	if step == Vector2i.LEFT:
+		return "ui_left"
+	return "ui_right"
+
+
 func _facing_for(dir: Vector2i) -> int:
 	if dir == Vector2i.LEFT:
 		return FACE_LEFT
@@ -135,10 +156,15 @@ func _try_move(target: Vector2i) -> void:
 
 
 ## 歩くほど出やすくなる。連戦が続いて詰まないよう下限歩数を設ける。
+##
+## 確率は歩数の半分ずつ上がる。線形に上げると 10 歩そこそこで必ず出るようになり、
+## 探索が戦闘の待ち時間になってしまう（実際そうなっていた）。
 func _should_encounter() -> bool:
 	if _steps_since_encounter < MIN_SAFE_STEPS:
 		return false
-	return rng.chance(4 + _steps_since_encounter)
+	@warning_ignore("integer_division")
+	var odds := 3 + _steps_since_encounter / 2
+	return rng.chance(odds)
 
 
 func _update_camera() -> void:

@@ -496,22 +496,9 @@ func _draw_equip() -> void:
 		if i > 0:
 			var gear := Database.gear(list[i - 1])
 			PixelUI.draw_text_right(
-				self, Vector2(origin.x + 280, at.y + 2), _gear_summary(gear),
+				self, Vector2(origin.x + 280, at.y + 2), GearText.summary(gear),
 				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 			)
-
-
-## 装備の効き目を 1 行にまとめる。数字が見えないと選べない。
-func _gear_summary(gear: Dictionary) -> String:
-	var parts: Array[String] = []
-	for key in ["atk", "mag", "def", "agi", "hp", "mp"]:
-		var value := int(gear.get(key, 0))
-		if value != 0:
-			parts.append("%s%+d" % [key.to_upper(), value])
-	var tempo := int(gear.get("cost_scale", 0))
-	if tempo != 0:
-		parts.append("%s%+d" % [Terms.SPEED, -tempo])
-	return "　".join(parts)
 
 
 func _draw_hint() -> void:

@@ -50,7 +50,7 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo() or _input_lock > 0.0:
 		return
-	if Input.is_action_just_pressed("confirm"):
+	if event.is_action_pressed("confirm"):
 		Sound.play("confirm")
 		close()
 		started.emit()

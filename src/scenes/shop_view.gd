@@ -121,18 +121,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo() or _input_lock > 0.0:
 		return
 	var rows := _leave_row() + 1
-	if Input.is_action_just_pressed("ui_down"):
+	if event.is_action_pressed("ui_down"):
 		_index = (_index + 1) % rows
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("ui_up"):
+	elif event.is_action_pressed("ui_up"):
 		_index = (_index - 1 + rows) % rows
 		Sound.play("cursor")
 		queue_redraw()
-	elif Input.is_action_just_pressed("cancel"):
+	elif event.is_action_pressed("cancel"):
 		Sound.play("cancel")
 		_leave()
-	elif Input.is_action_just_pressed("confirm"):
+	elif event.is_action_pressed("confirm"):
 		_decide()
 
 
@@ -309,7 +309,7 @@ func _draw_menu() -> void:
 		desc = String(_entry(id).get("desc", ""))
 		if _is_gear(id):
 			# 装備は説明が無いものも多いので、効き目の数字を出す
-			var stats := _gear_summary(Database.gear(id))
+			var stats := GearText.summary(Database.gear(id))
 			desc = stats if desc == "" else "%s　%s" % [desc, stats]
 	elif _index == _rest_row():
 		desc = "%d %sで 傷も魔力も すっかり戻す。" % [rest_price(), Terms.GOLD]
@@ -332,24 +332,5 @@ func _draw_menu() -> void:
 		)
 
 
-## 装備の効き目を 1 行にまとめる。数字が見えないと選べない。
-func _gear_summary(gear: Dictionary) -> String:
-	var parts: Array[String] = []
-	for key in ["atk", "mag", "def", "agi", "hp", "mp"]:
-		var value := int(gear.get(key, 0))
-		if value != 0:
-			parts.append("%s%+d" % [key.to_upper(), value])
-	var tempo := int(gear.get("cost_scale", 0))
-	if tempo != 0:
-		parts.append("%s%+d" % [Terms.SPEED, -tempo])
-	return "　".join(parts)
-
-
 func _draw_notice() -> void:
-	if _notice == "":
-		return
-	var width := PixelUI.text_width(_notice) + 36.0
-	var box := Rect2((PixelUI.SCREEN.x - width) * 0.5, 130, width, 36)
-	PixelUI.draw_window(self, box, WINDOW_TEX)
-	var inner := PixelUI.content(box)
-	PixelUI.draw_text(self, inner.position + Vector2(8, 1), _notice, PixelUI.C_TEXT)
+	PixelUI.draw_notice(self, WINDOW_TEX, _notice, 130.0)

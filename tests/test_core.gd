@@ -23,6 +23,8 @@ func _initialize() -> void:
 	_test_cover_and_buff_expiry()
 	_test_dungeon_determinism()
 	_test_dungeon_reachable()
+	_test_dungeon_route()
+	_test_text_wrap()
 	_test_database_loaded()
 	_test_final_floor()
 	_test_boss_encounter()
@@ -255,6 +257,43 @@ func _test_dungeon_reachable() -> void:
 			all_ok = false
 			print("    シード %d で階段に到達できない" % seed_value)
 	_check("%d 個のシードすべてで階段に到達できる" % checked, all_ok)
+
+
+## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。
+func _test_dungeon_route() -> void:
+	var map := DungeonGenerator.generate(DetRng.new(4242), 3)
+	var a := map.route(map.start_pos, map.stairs_pos)
+	var b := map.route(map.start_pos, map.stairs_pos)
+	_check("階段までの経路が見つかる", not a.is_empty())
+	_check("同じ地形からは同じ経路が出る", a == b)
+	_check("経路の終点が階段", a.is_empty() or a[a.size() - 1] == map.stairs_pos)
+
+	var contiguous := true
+	var cursor := map.start_pos
+	for step in a:
+		if (step - cursor).length() != 1.0:
+			contiguous = false
+		cursor = step
+	_check("経路が 1 マスずつ繋がっている", contiguous)
+	_check("届かない場所には空の経路", map.route(map.start_pos, Vector2i(-5, -5)).is_empty())
+
+
+## 折り返しは戦記（将来 LLM の文章が流れる場所）が溢れないための保証。
+func _test_text_wrap() -> void:
+	var long_line := "だが おおぶり, かばう, つむじぎり, リアン, ハステ, リザン の技は 残った。"
+	var wrapped := PixelUI.wrap(long_line, 200.0)
+	_check("長い行は折り返される", wrapped.size() > 1)
+	var fits := true
+	for line in wrapped:
+		if PixelUI.text_width(line) > 200.0 + 1.0:
+			fits = false
+	_check("折り返した各行が幅に収まる", fits)
+	_check("文字が落ちていない", "".join(wrapped) == long_line)
+	var head_ok := true
+	for i in range(1, wrapped.size()):
+		if PixelUI.NO_LINE_HEAD.contains(wrapped[i][0]):
+			head_ok = false
+	_check("句読点が行頭に来ない", head_ok)
 
 
 func _reachable(map: DungeonMap, from: Vector2i, to: Vector2i) -> bool:
