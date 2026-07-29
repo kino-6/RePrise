@@ -95,6 +95,93 @@ class Canvas:
         write_png(path, self.w, self.h, self.px)
 
 
+PNG_SIGNATURE = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+
+
+def load_png(path: str | Path) -> Canvas:
+    """PNG を読む（標準ライブラリだけで完結させる）。
+
+    生成器の外で描いた絵を取り込むために必要。対応するのは 8bit の
+    RGBA / RGB / パレット / グレースケールで、インターレースは扱わない
+    （このプロジェクトが自分で書き出す PNG と、画像生成器の出力がこの範囲）。
+    """
+    data = Path(path).read_bytes()
+    if data[:8] != PNG_SIGNATURE:
+        raise ValueError(f"{path}: PNG ではない")
+
+    pos = 8
+    w = h = depth = color_type = 0
+    idat = bytearray()
+    palette_rgb: list[tuple[int, int, int]] = []
+    palette_alpha: list[int] = []
+    while pos < len(data):
+        (length,) = struct.unpack(">I", data[pos : pos + 4])
+        kind = data[pos + 4 : pos + 8]
+        body = data[pos + 8 : pos + 8 + length]
+        pos += 12 + length  # 長さ + 種類 + 本体 + CRC
+        if kind == b"IHDR":
+            w, h, depth, color_type, _comp, _filt, interlace = struct.unpack(">IIBBBBB", body)
+            if depth != 8:
+                raise ValueError(f"{path}: 8bit 以外は扱わない（{depth}bit）")
+            if interlace:
+                raise ValueError(f"{path}: インターレースは扱わない")
+        elif kind == b"PLTE":
+            palette_rgb = [tuple(body[i : i + 3]) for i in range(0, len(body), 3)]
+        elif kind == b"tRNS":
+            palette_alpha = list(body)
+        elif kind == b"IDAT":
+            idat += body
+        elif kind == b"IEND":
+            break
+
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[color_type]
+    raw = zlib.decompress(bytes(idat))
+    stride = w * channels
+    out = Canvas(w, h)
+    prev = bytearray(stride)
+    at = 0
+    for y in range(h):
+        filter_type = raw[at]
+        at += 1
+        line = bytearray(raw[at : at + stride])
+        at += stride
+        # PNG のフィルタを解く。行ごとに 5 種類のいずれかがかかっている。
+        for i in range(stride):
+            a = line[i - channels] if i >= channels else 0
+            b = prev[i]
+            c = prev[i - channels] if i >= channels else 0
+            if filter_type == 1:
+                line[i] = (line[i] + a) & 0xFF
+            elif filter_type == 2:
+                line[i] = (line[i] + b) & 0xFF
+            elif filter_type == 3:
+                line[i] = (line[i] + (a + b) // 2) & 0xFF
+            elif filter_type == 4:
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                nearest = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                line[i] = (line[i] + nearest) & 0xFF
+        prev = line
+
+        for x in range(w):
+            base = x * channels
+            if color_type == 6:
+                px = (line[base], line[base + 1], line[base + 2], line[base + 3])
+            elif color_type == 2:
+                px = (line[base], line[base + 1], line[base + 2], 255)
+            elif color_type == 3:
+                index = line[base]
+                rgb = palette_rgb[index]
+                alpha = palette_alpha[index] if index < len(palette_alpha) else 255
+                px = (rgb[0], rgb[1], rgb[2], alpha)
+            elif color_type == 4:
+                px = (line[base], line[base], line[base], line[base + 1])
+            else:
+                px = (line[base], line[base], line[base], 255)
+            out.set(x, y, px)
+    return out
+
+
 def from_ascii(rows: list[str], palette: Palette, width: int | None = None) -> Canvas:
     """ASCII マップからタイル/スプライトを起こす。
 

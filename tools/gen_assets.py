@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from sfc_art import Canvas, Palette, dither, from_ascii, mirrored  # noqa: E402
+from sfc_art import Canvas, Palette, dither, from_ascii, load_png, mirrored, snes  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
@@ -743,6 +743,61 @@ def _hero_frames(job: str) -> tuple[list[str], list[str], list[str]]:
     return down, up, side
 
 
+# 生成器の外で描いた歩行シートの置き場。ここに candidate_hero_<職業>.png が
+# あればそれを採用し、無ければ下の ASCII マップから起こす。
+#
+# ASCII マップは「16 色で人の形を作る」ための土台としては十分だが、
+# 後期 SFC のドット絵にある密度（布の陰影・金具のハイライト・髪の束）までは
+# 手で書ききれない。外で描いたものを持ち込めるようにしておく。
+HERO_SOURCE_DIR = ROOT / "docs" / "chara_image"
+
+## 取り込む絵に課す条件。ここを通らないものは採用しない。
+## 「SFC らしさは技巧ではなく制約の徹底から出る」という前提を、
+## 外から来た絵にも同じように当てはめる。
+HERO_SHEET_SIZE = (CHAR_W * 3, CHAR_H * 4)
+HERO_MAX_COLORS = 15
+
+
+def _verify_hero_sheet(job: str, sheet: Canvas) -> None:
+    """取り込んだシートが SFC の制約を守っているかを検算する。
+
+    黙って通すと、色数もアルファもばらばらな絵が assets/ に混ざり、
+    「なぜか 1 人だけ浮いている」の原因が追えなくなる。
+    """
+    if (sheet.w, sheet.h) != HERO_SHEET_SIZE:
+        raise ValueError(
+            "%s: シートは %dx%d でなければならない（%dx%d だった）"
+            % (job, HERO_SHEET_SIZE[0], HERO_SHEET_SIZE[1], sheet.w, sheet.h)
+        )
+
+    alphas = {p[3] for p in sheet.px}
+    if not alphas <= {0, 255}:
+        raise ValueError("%s: アルファは 0 か 255 だけにする（%s があった）" % (job, sorted(alphas)))
+
+    colors = {p[:3] for p in sheet.px if p[3] == 255}
+    if len(colors) > HERO_MAX_COLORS:
+        raise ValueError(
+            "%s: 透明を除いて %d 色まで（%d 色あった）" % (job, HERO_MAX_COLORS, len(colors))
+        )
+
+    off = [c for c in colors if snes("#%02X%02X%02X" % c) != c]
+    if off:
+        raise ValueError(
+            "%s: BGR555 に乗っていない色が %d 個ある（例 #%02X%02X%02X）"
+            % (job, len(off), off[0][0], off[0][1], off[0][2])
+        )
+
+
+def _load_hero_sheet(job: str) -> Canvas | None:
+    """外で描いた歩行シートを読む。無ければ None。"""
+    path = HERO_SOURCE_DIR / f"candidate_hero_{job}.png"
+    if not path.exists():
+        return None
+    sheet = load_png(path)
+    _verify_hero_sheet(job, sheet)
+    return sheet
+
+
 def build_heroes() -> None:
     """職業ごとに 1 枚。歩行 3 フレーム x 4 方向を 72x128 のシートにまとめる。
 
@@ -759,6 +814,15 @@ def build_heroes() -> None:
                 raise ValueError(f"HERO_{name} の行 {i} が {len(row)} 文字（{CHAR_W} 文字にする）")
 
     for job in HERO_ACCENTS:
+        # 外で描いたシートがあればそれを使う。ASCII マップは土台として残す
+        # （素材が無い環境でも生成が通り、差分もレビューできる状態を保つため）。
+        imported = _load_hero_sheet(job)
+        if imported is not None:
+            imported.to_png(ASSETS / "sprites" / f"hero_{job}.png")
+            imported.scaled(4).to_png(PREVIEW / f"hero_{job}.png")
+            print(f"  取り込み: hero_{job}.png（{HERO_SOURCE_DIR.name}/candidate_hero_{job}.png）")
+            continue
+
         palette = hero_palette(job)
         down_rows, up_rows, side_rows = _hero_frames(job)
         down = from_ascii(down_rows, palette, CHAR_W)
