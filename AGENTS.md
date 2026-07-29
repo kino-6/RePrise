@@ -43,10 +43,26 @@ python tools/verify_audio.py                          # 音の検算（無音・
 godot --headless --import                             # class_name を登録（新クラス追加後は必須）
 godot --headless --script res://tests/test_core.gd    # 決定性テスト（常に緑に保つ）
 godot --headless --script res://tests/balance.gd      # 到達率と勝率を実測する
-godot --path . -- --shot=battle                       # 画面を 1 枚撮って終了
-godot --path . -- --shot=stronghold                   # 拠点（explore / job / result も可）
+godot --path . -- --shot=title                        # 画面を 1 枚撮って終了
 godot --path .                                        # 起動
 ```
+
+`--shot=` に渡せる画面（`src/scenes/main.gd` の `_capture`）:
+
+| 値 | 撮れるもの |
+|---|---|
+| `title` | タイトル |
+| `stronghold` | 拠点 |
+| `job` | 拠点の職業えらび（上級職の解放表示を含む） |
+| `upgrade` | 拠点のアップグレード（残響 42 を仮に入れる） |
+| `explore` | 探索 |
+| `shop` | 道中の出店（出店のある階まで自動で降りる） |
+| `battle` | 通常戦闘 |
+| `commands` | コマンド窓の 2 ページ目（技を全部与えて確認する） |
+| `items` | 戦闘中のどうぐ一覧 |
+| `deep` | 深層の敵 |
+| `boss` | 主の間 |
+| `result` / `win` | 戦記（全滅 / 生還） |
 
 ## 検証のしかた
 
@@ -64,3 +80,13 @@ godot --path .                                        # 起動
 - `class_name` を新規追加したら `--import` を挟まないとテストが「識別子が無い」で落ちる。
 - PowerShell 5.1 では `&&` が使えない。`;` と `if ($?)` を使う。
   ネイティブ exe への `2>&1` も避ける（成功しても失敗扱いになる）。
+- 撮影が `accesskit_windows` のパニックで落ちることがある（メモリ資源の一時不足）。
+  `godot --path . --accessibility disabled -- --shot=...` で回避できる。
+- **`config/name` を変えると `user://` の保存先も変わる。** `%APPDATA%\Godot\
+  app_userdata\<config/name>` なので、改名時は既存の `save.json` を手で移す。
+- 撮影のうち `result` / `win` / `boss` は `end_run()` を通るのでセーブを書き換える。
+  戦績を汚したくないときは事前に `save.json` を退避する。
+- 鏡像で綴じるドット絵（`build_monster`）は、**右端が合わせ目**。体が中心をまたぐ行の
+  右端に輪郭色を置くと、合わせ目で線が二重になって胴が左右に割れる。
+- 48px の枠に骨格を描き込むと必ず潰れる。特徴を 2〜3 個に絞って
+  シルエットで読ませる（骸骨兵を 3 回描き直して、頭蓋 1 個に絞って解決した）。
