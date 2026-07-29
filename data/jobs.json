@@ -1,0 +1,51 @@
+{
+  "_comment": "職業。cost_scale が CTB 上のテンポの個性（100 が標準、低いほど手数型）。mastery は熟練度ランクごとに覚える技で、覚えた技は転職しても失われない。",
+
+  "soldier": {
+    "name": "せんし",
+    "desc": "重い一撃。次の手番は遅れる。",
+    "cost_scale": 130,
+    "growth": { "hp": 9, "mp": 0, "atk": 4, "def": 3, "agi": 1 },
+    "mastery": [
+      { "rank": 1, "need": 24, "ability": "power_slash" },
+      { "rank": 2, "need": 72, "ability": "guard_stance" },
+      { "rank": 3, "need": 160, "ability": "whirlwind" }
+    ]
+  },
+
+  "priest": {
+    "name": "そうりょ",
+    "desc": "軽い補助を高回転で回す。",
+    "cost_scale": 90,
+    "growth": { "hp": 5, "mp": 4, "atk": 2, "def": 2, "agi": 2 },
+    "mastery": [
+      { "rank": 1, "need": 24, "ability": "heal" },
+      { "rank": 2, "need": 72, "ability": "haste" },
+      { "rank": 3, "need": 160, "ability": "revive" }
+    ]
+  },
+
+  "mage": {
+    "name": "まほうつかい",
+    "desc": "強力な魔法。詠唱ぶん手番が重い。",
+    "cost_scale": 145,
+    "growth": { "hp": 4, "mp": 6, "atk": 1, "def": 1, "agi": 2 },
+    "mastery": [
+      { "rank": 1, "need": 24, "ability": "fire" },
+      { "rank": 2, "need": 72, "ability": "slow" },
+      { "rank": 3, "need": 160, "ability": "blast" }
+    ]
+  },
+
+  "thief": {
+    "name": "とうぞく",
+    "desc": "手数で押す。行動コストが安い。",
+    "cost_scale": 70,
+    "growth": { "hp": 6, "mp": 1, "atk": 3, "def": 2, "agi": 5 },
+    "mastery": [
+      { "rank": 1, "need": 24, "ability": "quick_stab" },
+      { "rank": 2, "need": 72, "ability": "steal" },
+      { "rank": 3, "need": 160, "ability": "shadow_step" }
+    ]
+  }
+}

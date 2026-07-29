@@ -1,0 +1,92 @@
+{
+  "_comment": "cost は CTB の行動コスト（100 が標準）。MP と並ぶ第 2 のリソース軸で、数値を膨らませずに強弱を付けられる。kind: physical / magical / heal / buff / debuff / special。",
+
+  "attack": {
+    "name": "こうげき",
+    "desc": "ふつうに攻撃する。",
+    "kind": "physical", "target": "one_enemy",
+    "cost": 100, "mp": 0, "power": 100
+  },
+  "guard": {
+    "name": "ぼうぎょ",
+    "desc": "次の手番まで被害を半減。手番が早く回る。",
+    "kind": "special", "target": "self",
+    "cost": 55, "mp": 0, "power": 0
+  },
+
+  "power_slash": {
+    "name": "みだれぎり",
+    "desc": "強く斬る。次の手番が大きく遅れる。",
+    "kind": "physical", "target": "one_enemy",
+    "cost": 175, "mp": 0, "power": 185
+  },
+  "guard_stance": {
+    "name": "おうぎょ",
+    "desc": "味方ひとりをかばう構え。",
+    "kind": "buff", "target": "one_ally",
+    "cost": 80, "mp": 2, "power": 0, "effect": "defend_up"
+  },
+  "whirlwind": {
+    "name": "かまいたち",
+    "desc": "敵全体を薙ぐ。非常に重い。",
+    "kind": "physical", "target": "all_enemies",
+    "cost": 210, "mp": 4, "power": 120
+  },
+
+  "heal": {
+    "name": "ホイミ",
+    "desc": "味方ひとりの傷を癒す。",
+    "kind": "heal", "target": "one_ally",
+    "cost": 85, "mp": 3, "power": 34
+  },
+  "haste": {
+    "name": "ピオラ",
+    "desc": "味方ひとりの素早さを上げる。行動順が繰り上がる。",
+    "kind": "buff", "target": "one_ally",
+    "cost": 75, "mp": 4, "power": 0, "effect": "haste"
+  },
+  "revive": {
+    "name": "ザオラル",
+    "desc": "倒れた味方を起こす。",
+    "kind": "heal", "target": "one_ally_dead",
+    "cost": 190, "mp": 8, "power": 20
+  },
+
+  "fire": {
+    "name": "メラ",
+    "desc": "火の玉を放つ。",
+    "kind": "magical", "target": "one_enemy",
+    "cost": 130, "mp": 3, "power": 145
+  },
+  "slow": {
+    "name": "ボミオス",
+    "desc": "敵ひとりの素早さを下げ、行動順を押し下げる。",
+    "kind": "debuff", "target": "one_enemy",
+    "cost": 110, "mp": 4, "power": 0, "effect": "slow"
+  },
+  "blast": {
+    "name": "イオ",
+    "desc": "敵全体を爆風で焼く。",
+    "kind": "magical", "target": "all_enemies",
+    "cost": 200, "mp": 8, "power": 130
+  },
+
+  "quick_stab": {
+    "name": "はやわざ",
+    "desc": "浅いが、ほとんど手番を消費しない。",
+    "kind": "physical", "target": "one_enemy",
+    "cost": 55, "mp": 0, "power": 62
+  },
+  "steal": {
+    "name": "ぬすむ",
+    "desc": "敵から素材を掠め取る。",
+    "kind": "special", "target": "one_enemy",
+    "cost": 90, "mp": 0, "power": 0, "effect": "steal"
+  },
+  "shadow_step": {
+    "name": "しゅくち",
+    "desc": "自分の手番を強引に引き寄せる。",
+    "kind": "buff", "target": "self",
+    "cost": 30, "mp": 5, "power": 0, "effect": "haste"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python -c \"import sys; print\\(sys.version\\)\"; foreach\\($m in 'PIL','numpy'\\){ python -c \"import $m,sys; print\\('$m OK', getattr\\($m,'__version__','?'\\)\\)\" 2>$null; if\\(-not $?\\){ \"$m MISSING\" } }; \"--- fonts ---\"; foreach\\($f in 'msgothic.ttc','msmincho.ttc','meiryo.ttc'\\){ if\\(Test-Path \"C:\\\\Windows\\\\Fonts\\\\$f\"\\){ \"OK  $f\" } else { \"--  $f\" } })",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(python C:\\\\LocalWork\\\\Prj\\\\RetroRogueRPG\\\\tools\\\\gen_assets.py)",
+      "PowerShell(git *)"
+    ]
+  }
+}

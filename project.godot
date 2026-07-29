@@ -1,0 +1,47 @@
+; RetroRogueRPG — SFC 風ローグライク RPG
+;
+; 表示は 256x224（SFC の標準解像度）で作り、ウィンドウへは整数倍で引き伸ばす。
+; ここを崩すとドットが不均一に潰れて一気に「SFC 風」でなくなるので、
+; stretch/mode=viewport と texture_filter=nearest はセットで固定する。
+
+config_version=5
+
+[application]
+
+config/name="RetroRogueRPG"
+run/main_scene="res://src/scenes/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[autoload]
+
+; Database は静的クラスなのでオートロード不要（src/data/database.gd 参照）。
+GameState="*res://src/game/game_state.gd"
+Sound="*res://src/audio/audio_manager.gd"
+
+[display]
+
+; 後期 SFC 相当。標準の 256x224 では 16x16 スプライトが画面を占めすぎて
+; ファミコン的な粗さに見えるため、横を 1.5 倍、縦をオーバースキャン込みの
+; 240 まで広げてある。あわせてキャラは 24x32（FF6 / クロノ級）へ拡大した。
+window/size/viewport_width=384
+window/size/viewport_height=240
+window/size/window_width_override=1152
+window/size/window_height_override=720
+window/stretch/mode="viewport"
+window/stretch/aspect="keep"
+
+[input]
+
+confirm={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":90,"pressed":true),Object(InputEventKey,"physical_keycode":4194309,"pressed":true),Object(InputEventKey,"physical_keycode":32,"pressed":true)]
+}
+cancel={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":88,"pressed":true),Object(InputEventKey,"physical_keycode":4194305,"pressed":true)]
+}
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+textures/canvas_textures/default_texture_filter=0

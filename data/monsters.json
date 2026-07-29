@@ -1,0 +1,33 @@
+{
+  "_comment": "floor_min / floor_max で出現階層を絞る。cost_scale で敵にもテンポの個性を持たせる。",
+
+  "gel": {
+    "name": "ゲル",
+    "sprite": "gel",
+    "hp": 26, "mp": 0, "atk": 7, "def": 5, "agi": 9,
+    "cost_scale": 100,
+    "exp": 6, "gold": 4,
+    "abilities": ["attack"],
+    "floor_min": 1, "floor_max": 4
+  },
+
+  "bat": {
+    "name": "ヨナキコウモリ",
+    "sprite": "bat",
+    "hp": 18, "mp": 4, "atk": 6, "def": 3, "agi": 20,
+    "cost_scale": 65,
+    "exp": 7, "gold": 5,
+    "abilities": ["attack", "quick_stab"],
+    "floor_min": 1, "floor_max": 6
+  },
+
+  "elder_gel": {
+    "name": "ゲルのぬし",
+    "sprite": "gel",
+    "hp": 72, "mp": 12, "atk": 13, "def": 10, "agi": 11,
+    "cost_scale": 115,
+    "exp": 40, "gold": 30,
+    "abilities": ["attack", "power_slash"],
+    "floor_min": 3, "floor_max": 8
+  }
+}
