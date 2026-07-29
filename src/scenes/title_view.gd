@@ -70,18 +70,12 @@ func _draw() -> void:
 	_draw_prompt()
 
 
+## 題字だけを置く。説明もキャッチコピーも入れない。
+## 何のゲームかは下に並んだ 4 人と、その下の戦績が伝える。
 func _draw_title() -> void:
 	var title := "RePrise"
 	var width := PixelUI.text_width(title, 40)
-	PixelUI.draw_text(self, Vector2((PixelUI.SCREEN.x - width) * 0.5, 68), title, PixelUI.C_TEXT, 40)
-
-	# ここはジャンル表記だけにしてある。キャッチコピーは作者が決めるもので、
-	# 埋めておくと決まったときに差し替え忘れる。
-	var tag := "CTB ローグライク"
-	var tag_width := PixelUI.text_width(tag, 11)
-	PixelUI.draw_text(
-		self, Vector2((PixelUI.SCREEN.x - tag_width) * 0.5, 92), tag, PixelUI.C_TEXT_DIM, 11
-	)
+	PixelUI.draw_text(self, Vector2((PixelUI.SCREEN.x - width) * 0.5, 82), title, PixelUI.C_TEXT, 40)
 
 
 func _draw_party() -> void:
