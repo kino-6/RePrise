@@ -188,7 +188,7 @@ func _summary(choice: Dictionary) -> String:
 	# 物語の手は数値を持たない。守るものだけを添える。
 	if bool(event.get("story", false)):
 		var keeps := String(choice.get("keeps", ""))
-		return "" if keeps == "" else PixelUI.clip("のこす: %s" % keeps, 292.0, PixelUI.SIZE_SUB)
+		return "" if keeps == "" else PixelUI.clip("のこす: %s" % keeps, 286.0, PixelUI.SIZE_SUB)
 	var pay := _tokens(choice.get("costs", []), "cost")
 	var gains: Array = choice.get("rewards", [])
 	var count := 0
@@ -198,7 +198,7 @@ func _summary(choice: Dictionary) -> String:
 	var got := "なし" if count == 0 else _first_token(gains, "reward")
 	if count > 1:
 		got += " ほか%d" % (count - 1)
-	return PixelUI.clip("%s → %s" % [pay if pay != "" else "なし", got], 292.0, PixelUI.SIZE_SUB)
+	return PixelUI.clip("%s → %s" % [pay if pay != "" else "なし", got], 286.0, PixelUI.SIZE_SUB)
 
 
 func _first_token(list: Array, kind: String) -> String:
@@ -264,8 +264,10 @@ func _draw_detail() -> void:
 		PixelUI.clip("もらう: %s" % [_tokens(c.get("rewards", []), "reward")], 470.0, PixelUI.SIZE_SUB),
 		PixelUI.C_TEXT, PixelUI.SIZE_SUB
 	)
+	# 右半分に置くので、残り幅で切る（切らずに置いたら 20px 出た）。
 	PixelUI.draw_text(
-		self, origin + Vector2(250, 0), "あぶない: %s" % [risks if risks != "" else "なし"],
+		self, origin + Vector2(250, 0),
+		PixelUI.clip("あぶない: %s" % [risks if risks != "" else "なし"], 218.0, PixelUI.SIZE_SUB),
 		PixelUI.C_HP_LOW if risks != "" else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 	)
 	# 払えないときは、その理由を最優先で出す。

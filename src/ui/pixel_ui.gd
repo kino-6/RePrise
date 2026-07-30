@@ -64,6 +64,9 @@ const OVERFLOW_SLACK := 1.5
 
 static var _ui_check := -1
 static var _windows: Array[Rect2] = []
+
+## 開きかけの窓（`opening()` が印を付ける）。ここに在る窓は測らない。
+static var _animating: Dictionary = {}
 static var _violations: Array[String] = []
 
 
@@ -81,6 +84,7 @@ static func ui_violations() -> Array[String]:
 static func ui_check_reset() -> void:
 	_windows.clear()
 	_violations.clear()
+	_animating.clear()
 
 
 ## 文字が窓の内側に収まっているかを見る。
@@ -240,7 +244,12 @@ static func draw_window(
 		var seen := content(rect)
 		# is_equal_approx の許容では 100.9996 を「整数」と見てしまう。
 		# 開きかけの窓を確実に外すため、判定はこちらで厳しく置く。
-		var settled := absf(seen.size.y - roundf(seen.size.y)) < 0.001
+		# 高さだけでなく**位置も**整数であることを見る。開きかけの窓は上下へ
+		# 伸びるので、位置も端数になる（高さ 15.00027 / 位置 98.49986 のように）。
+		var settled := (
+			absf(seen.size.y - roundf(seen.size.y)) < 0.0001
+			and absf(seen.position.y - roundf(seen.position.y)) < 0.0001
+		)
 		if settled and seen not in _windows:
 			_windows.append(seen)
 
@@ -348,10 +357,18 @@ static func draw_gauge(
 static func opening(rect: Rect2, t: float) -> Rect2:
 	var ratio := clampf(t, 0.08, 1.0)
 	var height := rect.size.y * ratio
-	return Rect2(
+	var shrunk := Rect2(
 		rect.position.x, rect.position.y + (rect.size.y - height) * 0.5,
 		rect.size.x, height
 	)
+	# 開きかけの窓は**はみ出し検出の対象から外す**。
+	#
+	# 縮んだ窓に通常の文字を描くのだから、必ず外に出る（誤検出になる）。
+	# 端数で見分けようとしたが、途中でちょうど整数の寸法になる瞬間があって
+	# 取りこぼした。**縮めた本人が印を付けるのが確実。**
+	if ui_check_enabled() and ratio < 1.0:
+		_animating[content(shrunk)] = true
+	return shrunk
 
 
 ## 画面全体の光。強い魔法が当たった瞬間に 1 枚だけ重ねる。
