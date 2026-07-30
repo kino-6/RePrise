@@ -382,9 +382,13 @@ func _capture(which: String) -> void:
 		"jobmenu":
 			# てんしょくの一覧の見え方を確かめる
 			_start_run()
+			# 熟練を積んだ状態で撮る。★ が最大まで並ぶのはこのときだけ。
 			for m in GameState.active_party():
 				while m.level < 7:
 					m.gain_exp(m.exp_to_next())
+				# 全職の熟練を積む（★ が最大まで並ぶ状態を作る）。
+				for job_id in Database.job_ids():
+					m.job_exp[job_id] = 9999
 			_open_menu()
 			menu.debug_open_jobs()
 		"status":

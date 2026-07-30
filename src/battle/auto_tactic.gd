@@ -23,19 +23,23 @@ extends RefCounted
 
 enum Mode { OFF, SAFE, AGGRESSIVE }
 
-const LABELS := {
-	Mode.OFF: "オート",
-	Mode.SAFE: "オート（いのち）",
-	Mode.AGGRESSIVE: "オート（ガンガン）",
+## 画面に出す呼び名。**短く、何をするかがそのまま分かる語にする。**
+## 「いのちだいじに」「ガンガンいこうぜ」は他社の言い方でもあるし、
+## 括弧書きが増えて読みにくかった。
+static var LABELS := {
+	Mode.OFF: Vocabulary.word("auto", "off", "オート"),
+	Mode.SAFE: Vocabulary.word("auto", "safe", "守備重視"),
+	Mode.AGGRESSIVE: Vocabulary.word("auto", "aggressive", "攻撃重視"),
 }
 
 ## 画面に出す基準。選ぶ前に何をするか分かるようにする。
-const DESCRIPTIONS := {
-	Mode.OFF: "自分で えらぶ",
-	# 矢印で優先順位を並べていたが、記号の羅列は読み物にならない
-	# （「この文字列はなに？」と言われた）。文にする。
-	Mode.SAFE: "たおれた仲間を 起こし、けがを 治してから 攻める",
-	Mode.AGGRESSIVE: "弱点を ねらい、敵が多ければ 範囲技で 攻める",
+## 選ぶ前の説明。**画面の隅には出さない。**
+## 戦闘中の隅に長い説明を置くと、読まないのに場所を取るだけになる
+## （「わけのわからない文言」と言われた）。呼び名で足りる。
+static var DESCRIPTIONS := {
+	Mode.OFF: Vocabulary.word("auto", "off_desc", "自分で えらぶ"),
+	Mode.SAFE: Vocabulary.word("auto", "safe_desc", "回復を さきに、MP を のこして 攻める"),
+	Mode.AGGRESSIVE: Vocabulary.word("auto", "aggressive_desc", "弱点と 範囲を ねらって 攻める"),
 }
 
 ## この割合を下回った味方がいれば回復に回る（いのちだいじに）。
@@ -48,6 +52,15 @@ static func label(mode: Mode) -> String:
 
 static func description(mode: Mode) -> String:
 	return String(DESCRIPTIONS[mode])
+
+
+## 最後に選んだ作戦。**戦闘をまたいで覚える。**
+## 毎回 OFF から入れ直すのは、連戦のたびに同じ操作を繰り返させることになる。
+static var last_mode: Mode = Mode.OFF
+
+
+static func remember(mode: Mode) -> void:
+	last_mode = mode
 
 
 static func next_mode(mode: Mode) -> Mode:

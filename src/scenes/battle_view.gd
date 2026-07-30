@@ -53,7 +53,17 @@ const LIST_LINE := 20
 
 const LINE_DELAY := 0.55
 ## オート戦闘のときのメッセージ送り。手で押さないので短くする。
-const AUTO_LINE_DELAY := 0.28
+## オート中のメッセージ待ち。
+##
+## **オートは読ませる場面ではない。** 自分で選んでいるときの間は読む時間として
+## 要るが、オートに任せているあいだは結果だけ見えればよい。
+## 実測で 1 手番あたり約 2 秒かかり、敵 6 体の戦闘が 25 秒になっていた
+## （自動プレイの詰まり検出に引っかかるほど）。
+const AUTO_LINE_DELAY := 0.10
+
+## オート中の被弾の点滅。自分で選ぶときより短くする。
+const AUTO_BLINK := 0.12
+const BLINK := 0.3
 
 enum State { TURN_START, COMMAND, LIST, TARGET, MESSAGE, DONE }
 
@@ -126,7 +136,7 @@ func start(battle: BattleSystem, party_members: Array[PartyMember]) -> void:
 	_outcome_shown = false
 	_victory = false
 	_escaped = false
-	_auto = AutoTactic.Mode.OFF
+	_auto = AutoTactic.last_mode
 	set_process(true)
 	set_process_unhandled_input(true)
 	_refresh()
@@ -321,6 +331,7 @@ func _choose_root() -> void:
 ## 中身を 2 つ書くと、片方だけ直したときにずれる。**
 func _cycle_auto() -> void:
 	_auto = AutoTactic.next_mode(_auto)
+	AutoTactic.remember(_auto)
 	if _auto == AutoTactic.Mode.OFF:
 		_open_root_menu()
 	else:
@@ -531,7 +542,9 @@ func _is_big_hit(ability_id: String) -> bool:
 func _show(lines: Array[String]) -> void:
 	# 誰かに当たった行動なら点滅させる。当たった相手は BattleSystem が持っている
 	# （文字列を見て判断すると、文言を変えた瞬間に演出が消える）。
-	_blink = 0.3 if not system.last_hit_ids.is_empty() else 0.0
+	# 点滅もオート中は短く。ここが 0.3 のままだと、待ちを詰めても 1 手番が縮まない。
+	var blink_time := AUTO_BLINK if _auto != AutoTactic.Mode.OFF else BLINK
+	_blink = blink_time if not system.last_hit_ids.is_empty() else 0.0
 	if not system.last_hit_ids.is_empty() and _is_big_hit(system.last_ability_id):
 		_flash = 0.55
 	_queue = lines.duplicate()
@@ -861,15 +874,14 @@ func _draw_message_or_command() -> void:
 
 	# オート中は止め方を出す。始め方だけ見えていて止め方が見えないのは不親切で、
 	# 「戻れなくなった」と思われる。
+	#
+	# **作戦の説明は隅に出さない。** 戦闘中の隅に長い文を置くと、読まないのに
+	# 場所を取るだけになる。呼び名（守備重視 / 攻撃重視）で足りる。
 	if _auto != AutoTactic.Mode.OFF:
 		PixelUI.draw_text_right(
 			self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.position.y + 6),
-			"%s　Ｑで きりかえ　Ｘで かいじょ" % AutoTactic.label(_auto), PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
-		)
-		# 何を基準に動いているかを出す。基準が見えないと「連打しているだけ」に見える。
-		PixelUI.draw_text_right(
-			self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.end.y - 22),
-			AutoTactic.description(_auto), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+			"%s　Ｑ きりかえ　Ｘ かいじょ" % AutoTactic.label(_auto),
+			PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
 		)
 
 
@@ -890,7 +902,7 @@ func _draw_root_menu(origin: Vector2) -> void:
 				var next_auto := AutoTactic.next_mode(_auto)
 				PixelUI.draw_text_right(
 					self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.end.y - 22),
-					"→ %s：%s" % [AutoTactic.label(next_auto), AutoTactic.description(next_auto)],
+					"→ %s" % AutoTactic.label(next_auto),
 					PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 				)
 		# 逃げられる見込みを添える。0% は主（逃げられない相手）。

@@ -69,6 +69,13 @@ static var _windows: Array[Rect2] = []
 static var _animating: Dictionary = {}
 static var _violations: Array[String] = []
 
+## 描いた文字の位置（窓ごと）。**文字どうしの重なりを見るために持つ。**
+##
+## 枠の中に収まっていても、隣の列の文字に食い込めば読めない。
+## 枠だけ見ていたので、てんしょく の ★ が隣の職業名に届いているのを
+## 通してしまった。**「枠から出ない」と「重ならない」は別の条件。**
+static var _texts: Array = []
+
 
 static func ui_check_enabled() -> bool:
 	if _ui_check < 0:
@@ -85,6 +92,7 @@ static func ui_check_reset() -> void:
 	_windows.clear()
 	_violations.clear()
 	_animating.clear()
+	_texts.clear()
 
 
 ## 文字が窓の内側に収まっているかを見る。
@@ -112,6 +120,29 @@ static func _note_text(top_left: Vector2, text: String, size: int) -> void:
 		]
 		if note not in _violations:
 			_violations.append(note)
+
+	# 同じ窓に描いた他の文字と重なっていないか。
+	# 縦は行送りで詰めることがあるので、**横の重なりだけ**を見る
+	# （縦を見ると、詰めた一覧が全部違反になって使えなくなる）。
+	for other in _texts:
+		if other["host"] != host:
+			continue
+		var b: Rect2 = other["box"]
+		# **同じ文字が同じ場所に来たのは、次のフレームの描き直し。**
+		# 毎フレーム記録しているので、これを弾かないと自分自身と重なる。
+		if String(other["text"]) == text and b.position.distance_to(box.position) < 1.0:
+			return
+		var same_row := absf(b.position.y - box.position.y) < 4.0
+		if not same_row:
+			continue
+		var overlap := minf(b.end.x, box.end.x) - maxf(b.position.x, box.position.x)
+		if overlap > OVERFLOW_SLACK:
+			var clash := "「%s」と「%s」が %.0f 重なる" % [
+				String(other["text"]).substr(0, 12), text.substr(0, 12), overlap
+			]
+			if clash not in _violations:
+				_violations.append(clash)
+	_texts.append({"host": host, "box": box, "text": text})
 
 
 static var _font: Font = null
