@@ -234,8 +234,14 @@ static func draw_window(
 	canvas: CanvasItem, rect: Rect2, texture: Texture2D, alpha: float = WINDOW_ALPHA
 ) -> void:
 	if ui_check_enabled():
+		# **開きかけの窓は測らない。** `opening()` が縦に縮めた矩形を渡してくるので、
+		# その最中の文字は必ず外に出る（誤検出になる）。開き終わった窓は
+		# 高さが整数なので、端数のものを除けば見分けられる。
 		var seen := content(rect)
-		if seen not in _windows:
+		# is_equal_approx の許容では 100.9996 を「整数」と見てしまう。
+		# 開きかけの窓を確実に外すため、判定はこちらで厳しく置く。
+		var settled := absf(seen.size.y - roundf(seen.size.y)) < 0.001
+		if settled and seen not in _windows:
 			_windows.append(seen)
 
 	# 1. 落ち影。背景の上に置かれている、と読めるようにする。

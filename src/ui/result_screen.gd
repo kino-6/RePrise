@@ -80,7 +80,7 @@ func _draw() -> void:
 	# 戦記は覚えた技を全部並べるので、1 行が窓を越える。必ず折り返す。
 	var drawn: PackedStringArray = []
 	for line in lines:
-		drawn.append_array(PixelUI.wrap(line, inner.size.x - 16.0))
+		drawn.append_array(PixelUI.wrap(line, inner.size.x - 26.0))
 	var room := int((inner.size.y - 8.0) / LINE_STEP)
 	for i in mini(drawn.size(), room):
 		PixelUI.draw_text(self, inner.position + Vector2(8, 4 + i * LINE_STEP), drawn[i], PixelUI.C_TEXT)

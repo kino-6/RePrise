@@ -58,6 +58,23 @@ var story_beat := 0
 var story_choice := ""
 
 
+## 拠点地の id（"town:0" / "cave:2" / "castle:0"）。
+## 物語の拍はこの id で土地に結ばれている（座標ではない）。
+func site_id_at(pos: Vector2i) -> String:
+	var site := site_at(pos)
+	if site.is_empty():
+		return ""
+	return "%s:%d" % [String(site.get("kind", "")), int(site.get("index", 0))]
+
+
+## id から位置を引く。見つからなければ (-1,-1)。
+func pos_of_site_id(id: String) -> Vector2i:
+	for pos in sites:
+		if site_id_at(pos) == id:
+			return pos
+	return Vector2i(-1, -1)
+
+
 ## 次に起きる拍（終わっていれば空）。
 func next_beat() -> Dictionary:
 	var beats: Array = story.get("beats", [])

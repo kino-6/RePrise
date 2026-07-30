@@ -30,6 +30,37 @@ var _input_lock := 0.0
 var _blocked: Array[String] = []
 
 
+## 物語の拍を開く。
+##
+## イベントと同じ窓を使う。**語り用にもう 1 枚作らない** ―― 出すものは同じ
+## （何が起きているか / 選べる手 / その手で何が変わるか）で、違うのは
+## 「変わるもの」が数値かどうかだけ。窓を 2 つにすると読み方も 2 つになる。
+func open_story(beat: Dictionary, story: Dictionary, danger_here: int) -> void:
+	var choices: Array = []
+	if String(beat.get("phase", "")) == "choice":
+		for c in story.get("choices", []):
+			choices.append({
+				"id": String(c.get("id", "")),
+				"label": String(c.get("label", "")),
+				# 物語の選択は数値ではなく、何を守り何を手放すかで示す。
+				"keeps": String(c.get("preserves", "")),
+				"loses": String(c.get("sacrifices", "")),
+				"pays": String(c.get("immediate_cost", "")),
+			})
+	if choices.is_empty():
+		choices = [{"id": "", "label": "……", "keeps": "", "loses": "", "pays": ""}]
+	open({
+		"story": true,
+		"skin": {
+			"title": String(story.get("skin", {}).get("title", "")),
+			"actor": String(story.get("skin", {}).get("anchor_name", "")),
+			"cause": String(beat.get("line", "")),
+			"flavor": "",
+		},
+		"choices": choices,
+	}, danger_here)
+
+
 func open(instance: Dictionary, danger_here: int) -> void:
 	event = instance
 	danger = danger_here
@@ -108,7 +139,7 @@ func _draw_head() -> void:
 		)
 	# 何が起きているか。原因と情景を 2 行で。
 	var lines := PixelUI.wrap(_skin("cause") + " " + _skin("flavor"), 470.0, PixelUI.SIZE_TEXT)
-	for i in mini(lines.size(), 2):
+	for i in mini(lines.size(), 3):
 		PixelUI.draw_text(self, origin + Vector2(6, 26 + i * 20), lines[i], PixelUI.C_TEXT)
 
 
@@ -136,6 +167,10 @@ func _draw_list() -> void:
 ## 全部並べると窓から溢れた（実際に溢れた）。行では「払う → 得るものの数」まで、
 ## 中身は下の詳細窓に出す。溢れた文字は読めないので、出さないほうがよい。
 func _summary(choice: Dictionary) -> String:
+	# 物語の手は数値を持たない。守るものだけを添える。
+	if bool(event.get("story", false)):
+		var keeps := String(choice.get("keeps", ""))
+		return "" if keeps == "" else PixelUI.clip("のこす: %s" % keeps, 292.0, PixelUI.SIZE_SUB)
 	var pay := _tokens(choice.get("costs", []), "cost")
 	var gains: Array = choice.get("rewards", [])
 	var count := 0
@@ -170,6 +205,29 @@ func _draw_detail() -> void:
 	if _choices().is_empty():
 		return
 	var c: Dictionary = _choices()[_index]
+
+	# 物語の拍は、払う・失う・のこす を文で出す（トークンではない）。
+	if bool(event.get("story", false)):
+		var rows := [
+			["はらう", String(c.get("pays", ""))],
+			["のこす", String(c.get("keeps", ""))],
+			["手ばなす", String(c.get("loses", ""))],
+		]
+		var shown := 0
+		for row in rows:
+			if String(row[1]) == "":
+				continue
+			PixelUI.draw_text(
+				self, origin + Vector2(8, shown * 18),
+				PixelUI.clip("%s: %s" % [row[0], row[1]], 470.0, PixelUI.SIZE_SUB),
+				PixelUI.C_HP_LOW if row[0] == "手ばなす" else PixelUI.C_TEXT, PixelUI.SIZE_SUB
+			)
+			shown += 1
+		if shown == 0:
+			PixelUI.draw_text(
+				self, origin + Vector2(8, 0), "Ｚで つづける", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+			)
+		return
 
 	var risks := _tokens(c.get("risks", []), "risk")
 	PixelUI.draw_text(

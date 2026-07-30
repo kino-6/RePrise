@@ -630,9 +630,9 @@ func _draw_status() -> void:
 			self, Vector2(at.x + COL_W - 24.0, at.y - 2), String(rows[i][1]), PixelUI.C_TEXT
 		)
 
-	PixelUI.draw_text(self, origin + Vector2(0, 156), "そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	PixelUI.draw_text(self, origin + Vector2(0, 150), "そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	for i in SLOTS.size():
-		var at := origin + Vector2(0, 176 + i * 19)
+		var at := origin + Vector2(0, 168 + i * 18)
 		var gear_id := String(m.equipment.get(SLOTS[i], ""))
 		var label := String(Database.gear(gear_id).get("name", "—")) if gear_id != "" else "—"
 		PixelUI.draw_text(self, at, String(SLOT_LABELS[SLOTS[i]]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)

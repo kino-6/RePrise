@@ -3,14 +3,16 @@
 
     python tools/gen_audio.py
 
-BGM は既存曲の複製ではなく、同じ書法で書いたオリジナル。狙っている質感は
-次の 2 系統で、どちらも「和声は素直、旋律は歌える、伴奏は行進」という
-SFC 期 RPG の作法に沿っている。
+BGM は既存曲の複製ではなく、作品の前提から書いたオリジナル。
 
-  * 拠点曲  … 長調、堂々とした行進。古典的な和声進行（I - V - vi - iii …）を
-              そのまま辿る、王宮的な品のある曲。
-  * 潜行曲  … 短調、i - ♭VI - ♭VII - i の反復。決意と反抗の響き。
-              低音が八分で刻み続けることで「進軍している」感じを出す。
+  * 銀の砦は世界の外にあり、帰還と喪失を両方見届ける。
+  * 一ランは使い捨ての世界を横断する旅で、遠くほど危険になる。
+  * 帝国機械の硬さと、同行者の小さな約束が同じ世界に同居する。
+  * 勝っても負けても記録は砦へ帰る。
+
+曲ごとに別の旋律を乱造せず、A-C-E-B の 4 音を「見届ける動機」として
+題名・旅・物語・主戦・戦記へ形を変えて戻す。後期 SFC の限られた同時発音で
+統一感を作る書法に寄せる。
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from sfc_audio import (  # noqa: E402
-    BASS, BELL, BRASS, FLUTE, LEAD, STRINGS,
+    BASS, BELL, BRASS, CHOIR, FLUTE, HARP, LEAD, LOW_BRASS, OBOE, STRINGS,
     SAMPLE_RATE, Track, finish,
 )
 
@@ -162,6 +164,31 @@ def lay_arpeggio(song: Song, first: int, last: int, progression: list[str],
         order = [triad[0], triad[1], triad[2], triad[1]]
         for k in range(8):
             song.note(start + k * 0.5, 0.45, order[k % 4], inst, amp)
+
+
+# 全曲をつなぐ「見届ける動機」。上がったあと主音へ戻らず、B で一度止まる。
+# 約束はできたが結末はまだ決まっていない、という形。終幕曲だけ最後を A に戻す。
+WITNESS = [("a4", 1.0), ("c5", 1.0), ("e5", 1.0), ("b4", 1.0)]
+WITNESS_HIGH = [("a5", 1.0), ("c6", 1.0), ("e6", 1.0), ("b5", 1.0)]
+WITNESS_HOME = [("a4", 1.0), ("c5", 1.0), ("e5", 1.0), ("a5", 1.0)]
+
+
+def lay_witness(song: Song, bar_index: int, inst=OBOE, amp: float = 0.72,
+                resolved: bool = False, high: bool = False) -> None:
+    phrase = WITNESS_HOME if resolved else (WITNESS_HIGH if high else WITNESS)
+    song.phrase(song.bar(bar_index), phrase, inst, amp)
+
+
+def lay_heartbeat(song: Song, first: int, last: int, amp: float = 0.22) -> None:
+    """主戦・物語で使う二打。行進ではなく、守りたい一人の時間を刻む。"""
+    for i in range(first, last):
+        start = song.bar(i)
+        song.drum(start, "kick")
+        song.drum(start + 0.75, "kick")
+        song.drum(start + 2.5, "hat")
+        # 低い A/E の交代で、ノイズだけの打楽器より輪郭を残す。
+        song.note(start, 0.22, "a2", BASS, amp)
+        song.note(start + 0.75, 0.18, "e3", BASS, amp * 0.72)
 
 
 # --------------------------------------------------------------------------
@@ -374,6 +401,353 @@ def bgm_battle() -> None:
            cutoff=5600.0, echo_ms=108.0, echo_fb=0.26)
 
 
+# --------------------------------------------------------------------------
+# BGM 4: 題名 — まだ属する世界のない場所
+# --------------------------------------------------------------------------
+
+
+def bgm_title() -> None:
+    bars = 24
+    song = Song(bpm=76, bars=bars, tail=3.5)
+    progression = (
+        ["Am", "F", "C", "G", "Am", "Dm", "E", "Am"]
+        + ["F", "C", "G", "Am", "Dm", "F", "E", "E"]
+        + ["Am", "F", "C", "G", "Dm", "E", "Am", "Am"]
+    )
+
+    # 砦にも世界にもまだ入っていない。行進を置かず、遠い合唱と単音だけにする。
+    for i, name in enumerate(progression):
+        triad, root, fifth = CHORDS[name]
+        start = song.bar(i)
+        song.chord(start, 3.9, triad, CHOIR, 0.34)
+        song.note(start, 3.8, root, BASS, 0.42)
+        if i % 2 == 1:
+            song.note(start + 2.0, 1.8, fifth, BASS, 0.26)
+        for beat, pitch in zip([0.0, 1.5, 2.5], [triad[0], triad[2], triad[1]]):
+            song.note(start + beat, 0.75, pitch, HARP, 0.24)
+
+    lay_witness(song, 0, OBOE, 0.66)
+    lay_witness(song, 8, FLUTE, 0.52, high=True)
+    # 最後は完全解決させない。出撃するまで物語は始まっていない。
+    lay_witness(song, 16, OBOE, 0.60)
+    countermelody = [
+        [("e5", 2), ("d5", 1), ("c5", 1)],
+        [("a4", 3), ("r", 1)],
+        [("g4", 1), ("c5", 2), ("b4", 1)],
+        [("e4", 4)],
+    ]
+    for section in [4, 12, 20]:
+        for i, phrase in enumerate(countermelody):
+            song.phrase(song.bar(section + i), phrase, FLUTE, 0.38)
+
+    finish(song.track, AUDIO / "bgm" / "title.wav",
+           cutoff=5000.0, echo_ms=184.0, echo_fb=0.38, peak=0.78)
+
+
+# --------------------------------------------------------------------------
+# BGM 5: 世界 — 使い捨ての世界を最後まで歩く
+# --------------------------------------------------------------------------
+
+
+def bgm_world() -> None:
+    bars = 32
+    song = Song(bpm=116, bars=bars)
+    a_prog = ["Am", "F", "C", "G", "Am", "F", "Dm", "E"]
+    b_prog = ["C", "G", "Am", "Em", "F", "C", "Dm", "E"]
+    c_prog = ["Dm", "Am", "Bf", "F", "C", "G", "E", "Am"]
+    progression = a_prog + b_prog + a_prog + c_prog
+
+    lay_backing(song, progression, march=True, pad_amp=0.74, bass_amp=0.82)
+    # 通常の軍楽より軽い。スネアを半分にし、旅の歩調を前へ出す。
+    for i in range(bars):
+        start = song.bar(i)
+        song.drum(start, "kick")
+        song.drum(start + 2, "kick")
+        if i % 2 == 1:
+            song.drum(start + 3, "snare")
+        for k in [1, 3, 5, 7]:
+            song.drum(start + k * 0.5, "hat")
+
+    a_melody = [
+        WITNESS,
+        [("a4", 2), ("g4", 1), ("f4", 1)],
+        [("g4", 1), ("c5", 1), ("e5", 1), ("g5", 1)],
+        [("d5", 2), ("b4", 2)],
+        [("e5", 1.5), ("d5", 0.5), ("c5", 1), ("a4", 1)],
+        [("c5", 2), ("a4", 2)],
+        [("d5", 1), ("f5", 1), ("e5", 1), ("d5", 1)],
+        [("b4", 1), ("gs4", 1), ("a4", 2)],
+    ]
+    b_melody = [
+        [("g5", 1), ("e5", 1), ("c5", 2)],
+        [("d5", 1), ("g5", 1), ("b5", 2)],
+        [("a5", 1.5), ("g5", 0.5), ("e5", 1), ("c5", 1)],
+        [("b4", 2), ("e5", 2)],
+        [("f5", 1), ("a5", 1), ("c6", 1), ("a5", 1)],
+        [("g5", 2), ("e5", 2)],
+        [("f5", 1), ("e5", 1), ("d5", 1), ("b4", 1)],
+        [("gs4", 1), ("b4", 1), ("e5", 2)],
+    ]
+    c_melody = [
+        [("d5", 1), ("f5", 1), ("a5", 2)],
+        [("e5", 1), ("c5", 1), ("a4", 2)],
+        [("bf4", 1), ("d5", 1), ("f5", 1), ("a5", 1)],
+        [("c6", 2), ("a5", 2)],
+        [("g5", 1), ("e5", 1), ("d5", 1), ("c5", 1)],
+        [("b4", 1), ("d5", 1), ("g5", 2)],
+        [("gs5", 1), ("e5", 1), ("b4", 2)],
+        WITNESS_HOME,
+    ]
+    melody = a_melody + b_melody + a_melody + c_melody
+    for i, phrase in enumerate(melody):
+        song.phrase(song.bar(i), phrase, OBOE if i < 16 else FLUTE, 0.74)
+    lay_arpeggio(song, 8, 16, b_prog, HARP, 0.17)
+    lay_arpeggio(song, 24, 32, c_prog, BELL, 0.16)
+    for i in [7, 15, 23, 31]:
+        lay_fill(song, i)
+
+    finish(song.track, AUDIO / "bgm" / "world.wav",
+           cutoff=5300.0, echo_ms=132.0, echo_fb=0.29)
+
+
+# --------------------------------------------------------------------------
+# BGM 6: 町 — 失われる世界にある一時の家
+# --------------------------------------------------------------------------
+
+
+def bgm_town() -> None:
+    bars = 24
+    song = Song(bpm=88, bars=bars, tail=3.0)
+    a_prog = ["C", "Am", "F", "G", "C", "Em", "Dm", "G"]
+    b_prog = ["Am", "Em", "F", "C", "Dm", "Am", "E", "E"]
+    progression = a_prog + b_prog + a_prog
+
+    lay_backing(song, progression, march=False, pad_amp=0.62, bass_amp=0.58)
+    lay_arpeggio(song, 0, bars, progression, HARP, 0.25)
+
+    melody = [
+        WITNESS,
+        [("a4", 2), ("c5", 2)],
+        [("f5", 1), ("e5", 1), ("c5", 2)],
+        [("d5", 1), ("b4", 1), ("g4", 2)],
+        [("e5", 1), ("g5", 1), ("c6", 2)],
+        [("b5", 2), ("g5", 2)],
+        [("f5", 1), ("d5", 1), ("c5", 1), ("a4", 1)],
+        [("b4", 3), ("r", 1)],
+        [("a4", 1.5), ("c5", 0.5), ("e5", 2)],
+        [("g5", 1), ("e5", 1), ("b4", 2)],
+        [("c5", 1), ("f5", 1), ("a5", 2)],
+        [("g5", 2), ("e5", 2)],
+        [("d5", 1), ("f5", 1), ("a5", 1), ("f5", 1)],
+        [("e5", 2), ("c5", 2)],
+        [("b4", 1), ("gs4", 1), ("b4", 2)],
+        [("e5", 4)],
+    ] + [
+        WITNESS_HOME,
+        [("a4", 2), ("c5", 2)],
+        [("f5", 1), ("e5", 1), ("c5", 2)],
+        [("d5", 1), ("b4", 1), ("g4", 2)],
+        [("e5", 1), ("g5", 1), ("c6", 2)],
+        [("b5", 2), ("g5", 2)],
+        [("f5", 1), ("d5", 1), ("b4", 1), ("d5", 1)],
+        [("c5", 4)],
+    ]
+    for i, phrase in enumerate(melody):
+        song.phrase(song.bar(i), phrase, OBOE, 0.62)
+    for i in range(8, 16):
+        triad, _, _ = CHORDS[progression[i]]
+        song.note(song.bar(i) + 2, 1.7, triad[2], FLUTE, 0.23)
+
+    finish(song.track, AUDIO / "bgm" / "town.wav",
+           cutoff=5200.0, echo_ms=154.0, echo_fb=0.32, peak=0.80)
+
+
+# --------------------------------------------------------------------------
+# BGM 7: 洞 — 世界の傷へ降りる
+# --------------------------------------------------------------------------
+
+
+def bgm_cave() -> None:
+    bars = 24
+    song = Song(bpm=94, bars=bars, tail=3.2)
+    a_prog = ["Dm", "Am", "Bf", "E", "Dm", "F", "E", "Am"]
+    b_prog = ["Am", "Bf", "Dm", "E", "F", "Dm", "E", "E"]
+    progression = a_prog + b_prog + a_prog
+
+    # 洞では拍を埋めない。長い低音と、空間の奥で返る短い音だけ。
+    for i, name in enumerate(progression):
+        triad, root, fifth = CHORDS[name]
+        start = song.bar(i)
+        song.note(start, 3.8, root, BASS, 0.56)
+        song.note(start + 2, 1.7, fifth, BASS, 0.30)
+        song.chord(start, 3.7, triad, STRINGS, 0.24)
+        if i % 2 == 0:
+            song.note(start + 0.5, 0.32, triad[2], BELL, 0.25)
+            song.note(start + 2.75, 0.28, triad[1], BELL, 0.19)
+
+    melody = [
+        [("d4", 2), ("a4", 1), ("c5", 1)],
+        [("e5", 3), ("r", 1)],
+        [("f5", 1), ("d5", 1), ("bf4", 2)],
+        [("b4", 1), ("gs4", 1), ("e4", 2)],
+        WITNESS,
+        [("f4", 2), ("a4", 2)],
+        [("b4", 1), ("e5", 1), ("gs5", 1), ("e5", 1)],
+        [("a4", 3), ("r", 1)],
+    ]
+    for section in [0, 8, 16]:
+        for i, phrase in enumerate(melody):
+            inst = OBOE if section == 8 else FLUTE
+            song.phrase(song.bar(section + i), phrase, inst, 0.46 if section == 8 else 0.40)
+    # 地鳴りは規則的にしない。予告として数小節にだけ置く。
+    for i in [3, 7, 11, 15, 20, 23]:
+        song.drum(song.bar(i) + 3.0, "kick")
+
+    finish(song.track, AUDIO / "bgm" / "cave.wav",
+           cutoff=4200.0, echo_ms=202.0, echo_fb=0.40, peak=0.78)
+
+
+# --------------------------------------------------------------------------
+# BGM 8: 物語 — 守りたい一人と約束を交わす
+# --------------------------------------------------------------------------
+
+
+def bgm_story() -> None:
+    bars = 16
+    song = Song(bpm=72, bars=bars, tail=3.6)
+    progression = (
+        ["Am", "F", "C", "E", "Am", "Dm", "F", "E"]
+        + ["C", "G", "Am", "F", "Dm", "E", "Am", "Am"]
+    )
+    for i, name in enumerate(progression):
+        triad, root, fifth = CHORDS[name]
+        start = song.bar(i)
+        song.chord(start, 3.8, triad, CHOIR, 0.22)
+        song.note(start, 3.7, root, BASS, 0.30)
+        for k, pitch in enumerate([triad[0], triad[2], triad[1], triad[2]]):
+            song.note(start + k, 0.72, pitch, HARP, 0.26)
+
+    lay_witness(song, 0, OBOE, 0.64)
+    song.phrase(song.bar(1), [("a4", 2), ("e5", 1), ("d5", 1)], OBOE, 0.50)
+    song.phrase(song.bar(2), [("e5", 2), ("g5", 2)], FLUTE, 0.34)
+    song.phrase(song.bar(3), [("b4", 1), ("gs4", 1), ("e4", 2)], OBOE, 0.48)
+    for i in range(4, 8):
+        triad, _, _ = CHORDS[progression[i]]
+        song.phrase(song.bar(i), [(triad[1], 2), (triad[2], 2)], FLUTE, 0.32)
+    lay_witness(song, 8, FLUTE, 0.52, high=True)
+    song.phrase(song.bar(12), [("d5", 1), ("f5", 1), ("a5", 2)], OBOE, 0.46)
+    song.phrase(song.bar(13), [("b4", 1), ("e5", 1), ("gs5", 2)], OBOE, 0.46)
+    song.phrase(song.bar(14), [("a5", 2), ("e5", 2)], FLUTE, 0.42)
+    lay_witness(song, 15, OBOE, 0.56, resolved=True)
+    lay_heartbeat(song, 0, bars, 0.10)
+
+    finish(song.track, AUDIO / "bgm" / "story.wav",
+           cutoff=4700.0, echo_ms=176.0, echo_fb=0.36, peak=0.77)
+
+
+# --------------------------------------------------------------------------
+# BGM 9: 主 — 世界を閉じる機械と、約束を守る者
+# --------------------------------------------------------------------------
+
+
+def bgm_boss() -> None:
+    bars = 32
+    song = Song(bpm=152, bars=bars)
+    a_prog = ["Am", "Bf", "Am", "E", "Am", "F", "Bf", "E"]
+    b_prog = ["Dm", "Am", "Bf", "E", "F", "Dm", "E", "E"]
+    c_prog = ["Bf", "F", "Dm", "Am", "Bf", "E", "Am", "E"]
+    progression = a_prog + b_prog + a_prog + c_prog
+
+    # 帝国機械の歯車。ルートと五度を八分で交互にし、全小節で止めない。
+    for i, name in enumerate(progression):
+        triad, root, fifth = CHORDS[name]
+        start = song.bar(i)
+        song.chord(start, 3.8, triad, STRINGS, 0.34)
+        for k in range(8):
+            song.note(start + k * 0.5, 0.44, root if k % 2 == 0 else fifth,
+                      BASS, 0.82)
+        song.drum(start, "kick")
+        song.drum(start + 1, "snare")
+        song.drum(start + 2, "kick")
+        song.drum(start + 2.5, "kick")
+        song.drum(start + 3, "snare")
+        for k in [1, 3, 5, 7]:
+            song.drum(start + k * 0.5, "hat")
+
+    # 見届ける動機を逆から鳴らす。主は約束を諦めさせる側。
+    inverse = [
+        [("e5", 0.5), ("c5", 0.5), ("a4", 1), ("b4", 2)],
+        [("bf4", 1), ("d5", 1), ("f5", 1), ("a5", 1)],
+        [("e5", 0.5), ("c5", 0.5), ("a4", 1), ("e5", 2)],
+        [("gs5", 1), ("e5", 1), ("b4", 2)],
+        [("a5", 1), ("e5", 1), ("c5", 1), ("a4", 1)],
+        [("f5", 1), ("a5", 1), ("c6", 2)],
+        [("bf5", 0.5), ("a5", 0.5), ("f5", 1), ("d5", 2)],
+        [("gs5", 1), ("b5", 1), ("e6", 2)],
+    ]
+    answer = [
+        WITNESS_HIGH,
+        [("d6", 1), ("bf5", 1), ("a5", 2)],
+        [("a5", 0.5), ("c6", 0.5), ("e6", 1), ("d6", 2)],
+        [("b5", 1), ("gs5", 1), ("e5", 2)],
+        [("c6", 1), ("a5", 1), ("f5", 2)],
+        [("a5", 1), ("f5", 1), ("d5", 2)],
+        [("b4", 0.5), ("e5", 0.5), ("gs5", 1), ("b5", 2)],
+        [("a5", 4)],
+    ]
+    melody = inverse + answer + inverse + answer
+    for i, phrase in enumerate(melody):
+        song.phrase(song.bar(i), phrase, LOW_BRASS if i < 8 or 16 <= i < 24 else LEAD,
+                    0.88)
+    for i in range(8, 16):
+        song.phrase(song.bar(i), melody[i], OBOE, 0.24)
+    for i in [7, 15, 23, 31]:
+        lay_fill(song, i)
+
+    finish(song.track, AUDIO / "bgm" / "boss.wav",
+           cutoff=5700.0, echo_ms=96.0, echo_fb=0.24, peak=0.88)
+
+
+# --------------------------------------------------------------------------
+# BGM 10: 戦記 — 勝敗にかかわらず、踏んだ記録は帰る
+# --------------------------------------------------------------------------
+
+
+def bgm_chronicle() -> None:
+    bars = 24
+    song = Song(bpm=80, bars=bars, tail=4.0)
+    a_prog = ["Am", "F", "C", "G", "Am", "Dm", "E", "Am"]
+    b_prog = ["Dm", "Am", "Bf", "F", "Dm", "E", "Am", "E"]
+    c_prog = ["C", "G", "Am", "F", "Dm", "E", "Am", "Am"]
+    progression = a_prog + b_prog + c_prog
+
+    for i, name in enumerate(progression):
+        triad, root, fifth = CHORDS[name]
+        start = song.bar(i)
+        song.chord(start, 3.8, triad, STRINGS, 0.34)
+        song.note(start, 1.8, root, BASS, 0.46)
+        song.note(start + 2, 1.8, fifth, BASS, 0.32)
+        # 戦記へ文字が一行ずつ刻まれるような、四分の撥弦。
+        for k, pitch in enumerate([triad[0], triad[1], triad[2], triad[1]]):
+            song.note(start + k, 0.55, pitch, HARP, 0.20)
+
+    lay_witness(song, 0, OBOE, 0.58)
+    lay_witness(song, 8, FLUTE, 0.48, high=True)
+    # 勝敗どちらにも使うため、勝利の大終止ではなく「記録が帰った」解決。
+    lay_witness(song, 16, OBOE, 0.62, resolved=True)
+    coda = [
+        [("f5", 1), ("e5", 1), ("d5", 2)],
+        [("b4", 1), ("gs4", 1), ("e5", 2)],
+        [("a4", 1), ("c5", 1), ("e5", 1), ("a5", 1)],
+        [("a4", 4)],
+    ]
+    for i, phrase in enumerate(coda):
+        song.phrase(song.bar(20 + i), phrase, FLUTE, 0.42)
+
+    finish(song.track, AUDIO / "bgm" / "chronicle.wav",
+           cutoff=4900.0, echo_ms=168.0, echo_fb=0.35, peak=0.79)
+
+
 
 # --------------------------------------------------------------------------
 # 効果音
@@ -485,6 +859,68 @@ def build_sfx() -> None:
         for i, n in enumerate(["g5", "e5", "c5", "g4"]):
             t.add_note(i * 0.070, 0.20, n, FLUTE, 0.6)
     sfx("stairs", _stairs, 0.70, echo_fb=0.24)
+
+    # 出撃: 砦から新しい世界へ踏み出す。上昇だけで終わらず B に止め、
+    # ワールド曲の「見届ける動機」へそのまま渡す。
+    def _depart(t: Track) -> None:
+        for i, n in enumerate(["a4", "c5", "e5", "b5"]):
+            t.add_note(i * 0.095, 0.22, n, BRASS, 0.68)
+        t.add_note(0.38, 0.46, "e3", LOW_BRASS, 0.58)
+    sfx("depart", _depart, 1.16, cutoff=6100.0, echo_ms=122.0,
+        echo_fb=0.26, peak=0.74)
+
+    # 任意イベント: 宝箱ほど明るくなく、遭遇ほど敵対的でもない。
+    def _event(t: Track) -> None:
+        t.add_note(0.00, 0.34, "a4", BELL, 0.52)
+        t.add_note(0.11, 0.34, "e5", BELL, 0.46)
+        t.add_note(0.22, 0.46, "b4", OBOE, 0.40)
+    sfx("event", _event, 0.96, cutoff=6800.0, echo_ms=146.0,
+        echo_fb=0.30, peak=0.62)
+
+    # 物語の拍: 同じ人物・同じモチーフが戻ってきたことを知らせる四音。
+    def _story_open(t: Track) -> None:
+        for i, n in enumerate(["a4", "c5", "e5", "b4"]):
+            t.add_note(i * 0.12, 0.31, n, HARP, 0.58)
+        t.add_note(0.48, 0.42, "a3", CHOIR, 0.34)
+    sfx("story_open", _story_open, 1.22, cutoff=5700.0, echo_ms=162.0,
+        echo_fb=0.34, peak=0.64)
+
+    # 物語の選択: 明るい決定音ではなく、低い代償と高い意志を同時に鳴らす。
+    def _story_choice(t: Track) -> None:
+        t.add_note(0.00, 0.36, "a2", LOW_BRASS, 0.62)
+        t.add_note(0.04, 0.28, "e3", LOW_BRASS, 0.46)
+        t.add_note(0.14, 0.36, "a5", OBOE, 0.52)
+        t.add_note(0.27, 0.52, "e5", OBOE, 0.46)
+    sfx("story_choice", _story_choice, 1.24, cutoff=5200.0,
+        echo_ms=138.0, echo_fb=0.28, peak=0.70)
+
+    # 封の破壊: 低い亀裂、ノイズ、最後に澄んだ解放音。
+    def _seal_break(t: Track) -> None:
+        t.add_sweep(0.00, 0.34, "e3", "a1", LOW_BRASS, 0.66)
+        t.add_noise(0.08, 0.42, amp=0.58, decay=0.055, pitch=3)
+        for i, n in enumerate(["a4", "e5", "a5"]):
+            t.add_note(0.38 + i * 0.09, 0.38, n, BELL, 0.54)
+    sfx("seal_break", _seal_break, 1.38, cutoff=6100.0,
+        echo_ms=126.0, echo_fb=0.28, peak=0.82)
+
+    # 主の門: 機械の起動と、戻れない一歩。
+    def _boss_gate(t: Track) -> None:
+        t.add_note(0.00, 0.58, "a1", LOW_BRASS, 0.78)
+        t.add_note(0.12, 0.50, "e2", LOW_BRASS, 0.66)
+        t.add_noise(0.00, 0.50, amp=0.36, decay=0.09, pitch=5)
+        t.add_sweep(0.34, 0.36, "e3", "e5", LEAD, 0.46)
+    sfx("boss_gate", _boss_gate, 1.28, cutoff=4700.0,
+        echo_ms=112.0, echo_fb=0.22, peak=0.84)
+
+    # 生還: 勝利の誇示ではなく、約束が最後まで届いた短い終止。
+    def _victory(t: Track) -> None:
+        for i, n in enumerate(["a4", "c5", "e5", "a5"]):
+            t.add_note(i * 0.13, 0.34, n, BRASS, 0.72)
+        t.add_note(0.52, 0.74, "a5", BRASS, 0.82)
+        t.add_note(0.52, 0.74, "c6", BRASS, 0.48)
+        t.add_note(0.52, 0.74, "e6", OBOE, 0.36)
+    sfx("victory", _victory, 1.86, cutoff=6500.0,
+        echo_ms=144.0, echo_fb=0.32, peak=0.78)
 
     # 全滅: 沈んでいく短調の下降。
     def _defeat(t: Track) -> None:

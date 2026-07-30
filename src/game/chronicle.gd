@@ -38,6 +38,11 @@ static func write(summary: Dictionary) -> PackedStringArray:
 		]
 	)
 
+	# 物語の結末。**ここで回収しないと六拍が宙に浮く。**
+	var ending := String(summary.get("story_ending", ""))
+	if ending != "":
+		lines.append(ending)
+
 	var learned_all: Array = []
 	for m in members:
 		for a in m.get("learned", []):

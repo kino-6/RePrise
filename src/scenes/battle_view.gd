@@ -918,7 +918,7 @@ func _draw_list() -> void:
 
 	PixelUI.draw_text(self, origin + Vector2(150, 2), "MP", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	PixelUI.draw_text(
-		self, origin + Vector2(184, 2), "つぎのてばんまで", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		self, origin + Vector2(184, 2), "つぎのてばん", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 	)
 
 	var first := (_list_index / LIST_ROWS) * LIST_ROWS

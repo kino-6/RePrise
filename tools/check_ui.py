@@ -13,6 +13,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+# コンソールが cp932 でも落ちないようにする。報告が読めないと関門の意味が無い
+# （実際に「—」で UnicodeEncodeError になって、違反を出す前に死んだ）。
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parent.parent
 
 # `_capture()` が知っている画面を全部。増えたらここに足す。

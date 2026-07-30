@@ -50,7 +50,8 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	# 階層と所持金
-	var head := Rect2(8, 8, 150, 32)
+	# 封の残りを足したぶん、見出しの窓を広げる（3px 溢れていた）。
+	var head := Rect2(8, 8, 186, 32)
 	PixelUI.draw_window(self, head, WINDOW_TEX)
 	PixelUI.draw_text(
 		self, PixelUI.content(head).position + Vector2(6, 1),

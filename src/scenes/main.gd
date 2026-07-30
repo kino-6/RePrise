@@ -94,8 +94,18 @@ func _ready() -> void:
 	event_view = EventView.new()
 	event_view.visible = false
 	add_child(event_view)
-	event_view.chosen.connect(_on_event_choice)
-	event_view.dismissed.connect(_on_event_dismissed)
+	# 同じ窓を拍とイベントで使い回すので、返り先はここで振り分ける。
+	event_view.chosen.connect(func(c: Dictionary) -> void:
+		if _story_beat.is_empty():
+			_on_event_choice(c)
+		else:
+			_on_story_choice(c))
+	event_view.dismissed.connect(func() -> void:
+		# **物語の拍は見送れない**（見送れると話が飛ぶ）。同じ手で進める。
+		if _story_beat.is_empty():
+			_on_event_dismissed()
+		else:
+			_on_story_choice({}))
 
 	# ローカル AI の窓口は 1 つだけ。戦記もクエスト文もここを通す。
 	_ai = LocalAI.new()
@@ -282,6 +292,24 @@ func _capture(which: String) -> void:
 		"world":
 			# 世界の全景。歩ける地形と拠点地の見分けを確かめる。
 			_start_run()
+		"story":
+			# 物語の 1 拍目。語りが窓に収まっているかを見る。
+			_start_run()
+			var b0: Dictionary = GameState.world.story.get("beats", [])[0]
+			var at0 := GameState.world.pos_of_site_id(String(b0.get("site_id", "")))
+			GameState.world_pos = at0
+			_open_story(b0)
+		"choicebeat":
+			# 「代償の選択」の拍。守るもの・手ばなすものが読めるかを見る。
+			_start_run()
+			var beats: Array = GameState.world.story.get("beats", [])
+			for i in beats.size():
+				if String(beats[i].get("phase", "")) == "choice":
+					GameState.world.story_beat = i
+					GameState.world_pos = GameState.world.pos_of_site_id(
+						String(beats[i].get("site_id", "")))
+					_open_story(beats[i])
+					break
 		"event":
 			# イベントの選択画面。払うものが選ぶ前に見えているかを確かめる。
 			_start_run()
@@ -374,6 +402,11 @@ func _capture(which: String) -> void:
 			GameState.gold_earned = 380
 			GameState.floor_number = GameState.FINAL_FLOOR
 			GameState.deepest_floor = GameState.FINAL_FLOOR
+			# 物語を通した状態で戦記を見る（終幕が回収されているか）。
+			GameState.world.story_beat = 6
+			var cs: Array = GameState.world.story.get("choices", [])
+			if not cs.is_empty():
+				GameState.world.story_choice = String(cs[0].get("id", ""))
 			result.show_summary(GameState.end_run(true))
 			_set_mode(Mode.RESULT)
 		"commands":
@@ -515,6 +548,14 @@ func _enter_floor() -> void:
 ## 世界で拠点地を踏んだ。町・洞・城で行き先が変わる。
 func _on_site_entered(pos: Vector2i) -> void:
 	GameState.world_pos = pos
+	# **物語がいちばん先。** 拍 → イベント → 町や洞の中身、の順に出す。
+	# 逆にすると、町へ入ったあとに拍が始まって場面が入れ替わる。
+	var beat := GameState.story_beat_at(pos)
+	if not beat.is_empty():
+		GameState.stand_on_world(pos)
+		_open_story(beat)
+		return
+
 	# 拠点地にイベントが重なっていれば、中へ入る前にそれを出す。
 	# 済んだら踏み直しで町や洞へ入れる。
 	if GameState.world != null and not GameState.world.event_at(pos).is_empty() 			and not GameState.event_done.has(pos):
@@ -534,6 +575,12 @@ func _on_site_entered(pos: Vector2i) -> void:
 				])
 			_enter_floor()
 		"castle":
+			# 城に結ばれた拍（finale / epilogue）は主戦より先に出す。
+			var castle_beat := GameState.story_beat_at(pos)
+			if not castle_beat.is_empty():
+				GameState.stand_on_world(pos)
+				_open_story(castle_beat)
+				return
 			# 終点。**封が残っていると扉は開かない。**
 			# ここで通してしまうと、洞へ寄る理由が宝箱だけに戻る。
 			var left := GameState.seals_remaining()
@@ -755,6 +802,36 @@ func _apply_mode(mode: Mode) -> void:
 		event_view.close()
 	if mode == Mode.EXPLORE:
 		_refresh_hud()
+
+
+## 物語の拍を開く。
+func _open_story(beat: Dictionary) -> void:
+	_story_beat = beat
+	event_view.open_story(beat, GameState.world.story, GameState.floor_number)
+	event_view.set_blocked([])
+	Sound.play("confirm")
+	_set_mode(Mode.EVENT)
+
+
+var _story_beat: Dictionary = {}
+
+
+## 拍で手を選んだ（選択の無い拍では空の手が来る）。
+func _on_story_choice(choice: Dictionary) -> void:
+	var id := String(choice.get("id", ""))
+	if id != "":
+		# 選んだ手は世界が覚える。終幕でこれを回収する。
+		GameState.world.story_choice = id
+		hud.toast(String(choice.get("label", "")))
+	GameState.advance_story()
+	_story_beat = {}
+	# 拍が済んだら、その場所の続き（イベント／町／洞）へそのまま進む。
+	var at := GameState.world_pos
+	_set_mode(Mode.EXPLORE)
+	if not _event_at(at).is_empty():
+		_open_event(at)
+	elif GameState.world.site_at(at).get("kind", "") != "":
+		_on_site_entered(at)
 
 
 ## 街道のイベントを踏んだ。

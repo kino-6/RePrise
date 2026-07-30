@@ -190,10 +190,19 @@ static func verify(map: WorldMap) -> Array[String]:
 		var beats: Array = map.story.get("beats", [])
 		if beats.size() != 6:
 			problems.append("物語の拍が %d（6 であるべき）" % beats.size())
+		# 拍は座標ではなく id（"cave:2" など）で土地に結ばれている。
+		# 座標で見ていたときは常に -1 で、この検算は**空振りしていた**。
 		for beat in beats:
-			var site: Dictionary = beat.get("site", {})
-			var at := Vector2i(int(site.get("x", -1)), int(site.get("y", -1)))
-			if at.x >= 0 and not reachable.call(at):
+			var site_id := String(beat.get("site_id", ""))
+			if site_id == "":
+				problems.append("物語の拍（%s）が土地に結ばれていない" % String(beat.get("id", "?")))
+				continue
+			var at := map.pos_of_site_id(site_id)
+			if at.x < 0:
+				problems.append("物語の拍（%s）の土地 %s が世界に無い" % [
+					String(beat.get("id", "?")), site_id
+				])
+			elif not reachable.call(at):
 				problems.append("物語の拍（%s）の土地に歩けない" % String(beat.get("id", "?")))
 
 	# 7. 買い物ができること。町に 1 つも歩けないと、備えの手段が宝箱だけになる

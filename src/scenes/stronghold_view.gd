@@ -25,7 +25,9 @@ const ROSTER_RECT := Rect2(8, 50, 176, 164)
 const DETAIL_RECT := Rect2(192, 50, 312, 164)
 const MENU_RECT := Rect2(8, 220, 496, 92)
 
-const ROW_HEIGHT := 23
+## 名簿の行送り。4 人 + へんせい/アップグレード/出撃する の 7 行が
+## 窓の内側（150px）に収まる値。23 だと最後の行が 9px 出た。
+const ROW_HEIGHT := 21
 
 
 ## 前の画面を閉じた決定キーが、そのままこの画面の決定として流れ込むのを防ぐ。
@@ -236,7 +238,9 @@ func _input_job(event: InputEvent) -> void:
 
 
 ## 熟練一覧に入る行数。枠の高さから決まる。
-const MASTERY_ROWS := 7
+## 熟練一覧に入る行数。窓の内側（150px）に収まる数。
+## 7 だと最後の行が 7px 出た。
+const MASTERY_ROWS := 6
 
 
 ## 表示する熟練の行（職業の添字）。選んでいる職業が必ず入るように窓をずらす。

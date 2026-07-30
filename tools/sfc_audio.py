@@ -125,6 +125,17 @@ BELL = Instrument("sine", attack=0.002, decay=0.45, sustain=0.05, release=0.30, 
 FLUTE = Instrument("triangle", attack=0.05, decay=0.10, sustain=0.75, release=0.20,
                    vibrato_hz=5.0, vibrato_depth=0.006, gain=0.48)
 
+# 後期 SFC の「同じ波形でも役割が違って聞こえる」音色。生波形を増やすより、
+# 包絡と揺れを変えたほうが、少ない同時発音で編成を読ませやすい。
+OBOE = Instrument("pulse", duty=0.42, attack=0.025, decay=0.12, sustain=0.68,
+                  release=0.18, vibrato_hz=5.4, vibrato_depth=0.005, gain=0.46)
+HARP = Instrument("triangle", attack=0.002, decay=0.24, sustain=0.08, release=0.26,
+                  gain=0.66)
+CHOIR = Instrument("sine", attack=0.22, decay=0.24, sustain=0.66, release=0.46,
+                   vibrato_hz=3.2, vibrato_depth=0.004, detune=0.008, gain=0.40)
+LOW_BRASS = Instrument("saw", attack=0.015, decay=0.10, sustain=0.72, release=0.14,
+                       vibrato_hz=3.8, vibrato_depth=0.002, detune=0.004, gain=0.58)
+
 
 # --------------------------------------------------------------------------
 # バッファ

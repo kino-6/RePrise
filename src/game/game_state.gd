@@ -374,6 +374,34 @@ func enter_site(at: Vector2i) -> Dictionary:
 	return site
 
 
+## その場所で次の拍が起きるか（起きなければ空）。
+##
+## 拍は順番どおりにしか進まない。3 拍目の土地へ先に着いても何も起きない。
+## **順序を崩すと話が読めなくなる**ので、進みは 1 本道に保つ。
+func story_beat_at(pos: Vector2i) -> Dictionary:
+	if world == null:
+		return {}
+	var beat := world.next_beat()
+	if beat.is_empty():
+		return {}
+	if String(beat.get("site_id", "")) != world.site_id_at(pos):
+		return {}
+	return beat
+
+
+## 拍を 1 つ進める。
+func advance_story() -> void:
+	if world != null:
+		world.story_beat += 1
+
+
+## 物語がどこまで来たか（画面に出す）。
+func story_progress() -> String:
+	if world == null or world.story.get("beats", []).is_empty():
+		return ""
+	return "%d/%d" % [world.story_beat, world.story.get("beats", []).size()]
+
+
 ## いま入っている洞に封があるか（無ければ空）。
 func seal_here() -> Dictionary:
 	if world == null or String(site.get("kind", "")) != "cave":
@@ -419,6 +447,20 @@ func cave_depth() -> int:
 
 
 ## ランの終了。ここで失うものを捨て、持ち帰るものだけを残して保存する。
+## 物語の結末の 1 行。まだ選んでいなければ、そこまでの状態を短く述べる。
+func _story_ending() -> String:
+	if world == null or not bool(world.story.get("valid", false)):
+		return ""
+	var who := String(world.story.get("skin", {}).get("anchor_name", ""))
+	if world.story_choice == "":
+		if world.story_beat <= 0:
+			return ""
+		return "%s の話は、まだ途中で途切れた。" % who
+	var resolved := StoryArcGenerator.resolve_ending(world.story, world.story_choice, [])
+	var line := String(resolved.get("line", ""))
+	return line if line != "" else "%s との約束は果たされた。" % who
+
+
 func end_run(victory: bool) -> Dictionary:
 	# 道中スコアは失う側の値（階・撃破・稼ぎ）から作り、残響だけを残す側へ移す。
 	# 全滅でも必ず何かが増えるので、失敗したランも次のランの足しになる。
@@ -429,6 +471,9 @@ func end_run(victory: bool) -> Dictionary:
 	var summary := {
 		"victory": victory,
 		"seed": run_seed,
+		# 物語の結末。選ばなかった（途中で終わった）ときは、たどり着いた拍までで
+		# 締める。**六拍を回収しないと、物語を出した意味が無い。**
+		"story_ending": _story_ending(),
 		"floor": floor_number,
 		"gold": gold,
 		"gold_earned": gold_earned,
