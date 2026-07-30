@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bbqwjqlfvelrt"
-path="res://.godot/imported/current_enemies_contact.png-542af711f817660214a6e97707cab838.ctex"
+uid="uid://n13xmo2exqeh"
+path="res://.godot/imported/candidate_boss_frostbound_oracle_preview.png-ac0dec7bb91b3bd1f6abfc10e1c97499.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tmp/enemy_refine/current_enemies_contact.png"
-dest_files=["res://.godot/imported/current_enemies_contact.png-542af711f817660214a6e97707cab838.ctex"]
+source_file="res://docs/chara_image/candidate_boss_frostbound_oracle_preview.png"
+dest_files=["res://.godot/imported/candidate_boss_frostbound_oracle_preview.png-ac0dec7bb91b3bd1f6abfc10e1c97499.ctex"]
 
 [params]
 

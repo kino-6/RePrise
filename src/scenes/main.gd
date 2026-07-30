@@ -182,6 +182,13 @@ func _capture(which: String) -> void:
 					break
 		"boss":
 			_start_run()
+			# 主の絵を撮るのが目的なので、開幕で壊滅しない程度に育てておく。
+			# 敵 AI が範囲攻撃を選ぶようになってから、レベル 1 では 1 手で全滅する。
+			for m in GameState.active_party():
+				while m.level < 20:
+					m.gain_exp(m.exp_to_next())
+				m.hp = m.max_hp()
+				m.mp = m.max_mp()
 			while GameState.floor_number < GameState.FINAL_FLOOR:
 				GameState.descend()
 			_enter_floor()
@@ -244,7 +251,17 @@ func _capture(which: String) -> void:
 			_start_run()
 			result.show_summary(GameState.end_run(false))
 			_set_mode(Mode.RESULT)
-	await get_tree().create_timer(0.7).timeout
+		"chronicle":
+			# ローカル AI が書いた戦記を確かめる（届かなければテンプレートのまま）。
+			_start_run()
+			GameState.kills = 18
+			GameState.gold_earned = 240
+			while GameState.floor_number < 7:
+				GameState.descend()
+			result.show_summary(GameState.end_run(false))
+			_set_mode(Mode.RESULT)
+	# 戦記の撮影だけは、ローカル AI の文章が届くのを少し待つ。
+	await get_tree().create_timer(9.0 if which == "chronicle" else 0.7).timeout
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	var path := "res://docs/preview/screen_%s.png" % which
@@ -302,6 +319,11 @@ const FADE_TIME := 0.14
 ## 暗転の幕。最前面に置いた黒い板で、透明度だけを動かす。
 var _curtain: ColorRect = null
 
+## 進行中の暗転。**最後に頼まれた画面が必ず勝つ**ようにするために持つ。
+## 飛んでいる暗転を放っておくと、そのコールバックがあとから来た切り替えを
+## 上書きする（戦記を出したのに探索画面が出た、という不具合が実際に起きた）。
+var _fade_tween: Tween = null
+
 
 func _make_curtain() -> void:
 	_curtain = ColorRect.new()
@@ -318,13 +340,35 @@ func _fade_to(mode: Mode) -> void:
 	if _curtain == null:
 		_set_mode(mode)
 		return
-	var tween := create_tween()
-	tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
-	tween.tween_callback(_set_mode.bind(mode))
-	tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
+	_cancel_fade()
+	_fade_tween = create_tween()
+	_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
+	# 幕の裏で切り替えるのは _apply_mode。_set_mode を呼ぶと自分の暗転を
+	# 自分で殺してしまい、幕が上がらなくなる。
+	_fade_tween.tween_callback(_apply_mode.bind(mode))
+	_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
 
 
+## 飛んでいる暗転を捨てて幕を上げる。
+func _cancel_fade() -> void:
+	if _fade_tween != null and _fade_tween.is_valid():
+		_fade_tween.kill()
+	_fade_tween = null
+	if _curtain != null:
+		_curtain.color.a = 0.0
+
+
+## 画面を切り替える（暗転なし）。
+##
+## **最後に頼まれた画面が必ず勝つ。** 飛んでいる暗転はここで捨てる。
+## 放っておくと、そのコールバックがあとから来た切り替えを上書きする
+## （戦記を出したのに探索画面が出た、という不具合が実際に起きた）。
 func _set_mode(mode: Mode) -> void:
+	_cancel_fade()
+	_apply_mode(mode)
+
+
+func _apply_mode(mode: Mode) -> void:
 	_mode = mode
 	title.visible = mode == Mode.TITLE
 	stronghold.visible = mode == Mode.STRONGHOLD

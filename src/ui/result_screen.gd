@@ -16,13 +16,44 @@ var title := ""
 var _ready_to_dismiss := false
 
 
+## 戦記をローカル AI に書かせるか。切りたいときは --no-ai を付けて起動する。
+## 既定は入り。届かなければテンプレートのままなので、Ollama が無くても困らない。
+var _ai: ChronicleAI = null
+
+
 func show_summary(summary: Dictionary) -> void:
 	title = "生還" if bool(summary.get("victory", false)) else "全滅"
+	# まずテンプレート版を出す。生成はそのあとで差し替えるだけ。
 	lines = Chronicle.write(summary)
+	_request_ai(summary)
 	_ready_to_dismiss = false
 	set_process_unhandled_input(true)
 	# 直後の入力で飛ばしてしまわないよう、一拍おいてから受け付ける
 	get_tree().create_timer(0.6).timeout.connect(func() -> void: _ready_to_dismiss = true)
+	queue_redraw()
+
+
+## 生成を依頼する。届いたら 1 度だけ差し替える。
+##
+## テンプレートを消してから待つのではなく、**出したうえで**差し替える。
+## 生成が失敗しても遅くても画面が空白にならない、というのがこの順番の理由。
+func _request_ai(summary: Dictionary) -> void:
+	if "--no-ai" in OS.get_cmdline_user_args():
+		return
+	if _ai == null:
+		_ai = ChronicleAI.new()
+		add_child(_ai)
+		_ai.written.connect(_on_ai_written)
+	_ai.request(summary)
+
+
+func _on_ai_written(ai_lines: PackedStringArray) -> void:
+	# 事実の行（何階で何を倒した）は残し、語りの部分だけ差し替える。
+	var kept := PackedStringArray()
+	for i in mini(lines.size(), 3):
+		kept.append(lines[i])
+	kept.append_array(ai_lines)
+	lines = kept
 	queue_redraw()
 
 

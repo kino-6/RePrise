@@ -1252,7 +1252,42 @@ def build_monster(name: str, half_rows: list[str], palette: Palette, width: int 
     _emit_monster(name, half)
 
 
+## 敵の絵の上限。これを超えるものは戦闘画面に収まらない。
+MONSTER_MAX = (64, 64)
+
+
+def _load_monster_sheet(name: str) -> Canvas | None:
+    """外で描いた敵の絵を読む。無ければ None（＝ ASCII マップから起こす）。
+
+    敵は 1 体ずつ寸法が違う（ゲルは 48x40、主は 64x64）ので、
+    寸法は候補のものをそのまま受け取り、上限だけを見る。
+    """
+    for stem in (f"candidate_enemy_{name}_refined", f"candidate_enemy_{name}"):
+        path = HERO_SOURCE_DIR / f"{stem}.png"
+        if not path.exists():
+            continue
+        sheet, moved = _quantize(load_png(path))
+        if sheet.w > MONSTER_MAX[0] or sheet.h > MONSTER_MAX[1]:
+            raise ValueError(
+                "%s: %dx%d は大きすぎる（上限 %dx%d）"
+                % (stem, sheet.w, sheet.h, MONSTER_MAX[0], MONSTER_MAX[1])
+            )
+        _verify_sheet(stem, sheet, (sheet.w, sheet.h))
+        if moved:
+            print(f"    {stem}: {moved} 色を BGR555 へ丸めた")
+        print(f"  取り込み: {name}.png（chara_image/{stem}.png）")
+        return sheet
+    return None
+
+
 def _emit_monster(name: str, half: Canvas) -> None:
+    # 外で描いた絵があればそれを使う（鏡像で綴じる必要が無い）。
+    imported = _load_monster_sheet(name)
+    if imported is not None:
+        imported.to_png(ASSETS / "sprites" / f"{name}.png")
+        imported.scaled(4).to_png(PREVIEW / f"{name}.png")
+        return
+
     full = Canvas(half.w * 2, half.h)
     full.blit(half, 0, 0)
     full.blit(mirrored(half), half.w, 0)

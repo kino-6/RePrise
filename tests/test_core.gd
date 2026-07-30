@@ -23,6 +23,7 @@ func _initialize() -> void:
 	_test_cover_and_buff_expiry()
 	_test_dungeon_determinism()
 	_test_dungeon_reachable()
+	_test_docs_hygiene()
 	_test_data_integrity()
 	_test_save_migration()
 	_test_dungeon_route()
@@ -259,6 +260,30 @@ func _test_dungeon_reachable() -> void:
 			all_ok = false
 			print("    シード %d で階段に到達できない" % seed_value)
 	_check("%d 個のシードすべてで階段に到達できる" % checked, all_ok)
+
+
+## 積んだ「やること」が読める量に収まっているか。
+##
+## 長い一覧は読まれない。読まれない一覧は棚卸しされず、
+## 終わった項目と生きている項目が混ざって、結局どれも進まなくなる。
+## 超えたら済んだものを docs/tasks_archive.md へ移す。
+const TASKS_LIMIT := 200
+
+
+func _test_docs_hygiene() -> void:
+	var text := FileAccess.get_file_as_string("res://tasks.md")
+	_check("tasks.md がある", text != "")
+	var count := text.split("
+").size()
+	if count > TASKS_LIMIT:
+		print("    tasks.md が %d 行。済んだものを docs/tasks_archive.md へ移すこと" % count)
+	_check("tasks.md が %d 行以内（いま %d 行）" % [TASKS_LIMIT, count], count <= TASKS_LIMIT)
+
+	# 控えのほうは伸びてよいが、存在は要る（移す先が無いと棚卸しできない）
+	_check(
+		"docs/tasks_archive.md がある",
+		FileAccess.get_file_as_string("res://docs/tasks_archive.md") != ""
+	)
 
 
 ## データの整合。職業が 15 まで増えたので、手で並べた JSON の取りこぼしを機械で見る。
