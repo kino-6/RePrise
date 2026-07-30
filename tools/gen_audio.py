@@ -117,32 +117,84 @@ def lay_march_drums(song: Song, bars: int) -> None:
 
 
 # --------------------------------------------------------------------------
-# BGM 1: 拠点 — 長調の堂々とした行進
+# BGM
+#
+# ループは A → B → A' の 3 部にする。
+#
+# 8 小節や 16 小節で回すと、1 回の戦闘のあいだに何度も同じところへ戻ってきて、
+# それだけで安く聞こえる。SFC 期の曲が短いループでも保っていたのは、
+# 中に**抜き差し**（対旋律が入る、打楽器が抜ける、和声が一段上がる）が
+# あったから。長さと変化の両方が要る。
+# --------------------------------------------------------------------------
+
+
+def lay_fill(song: Song, bar_index: int) -> None:
+    """小節の終わりに打楽器の埋め。区切りが耳で分かるようになる。"""
+    start = song.bar(bar_index)
+    for k in range(4):
+        song.drum(start + 3.0 + k * 0.25, "snare" if k % 2 else "hat")
+
+
+def lay_march_drums_range(song: Song, first: int, last: int, hats: bool = True) -> None:
+    """指定した小節だけに行進の打楽器を敷く（B 部で抜くために範囲を取る）。"""
+    for i in range(first, last):
+        start = song.bar(i)
+        song.drum(start, "kick")
+        song.drum(start + 1, "snare")
+        song.drum(start + 2, "kick")
+        song.drum(start + 3, "snare")
+        if hats:
+            for k in range(8):
+                if k % 2 == 1:
+                    song.drum(start + k * 0.5, "hat")
+
+
+def lay_arpeggio(song: Song, first: int, last: int, progression: list[str],
+                 inst, amp: float = 0.30) -> None:
+    """和音を八分で分散させて内声に置く。
+
+    旋律と低音のあいだが空いていると、音数が少ないぶん寂しく聞こえる。
+    ここを埋めるだけで「作り込まれた」印象になる（SFC 期の常套手段）。
+    """
+    for i in range(first, last):
+        triad, _, _ = CHORDS[progression[i % len(progression)]]
+        start = song.bar(i)
+        order = [triad[0], triad[1], triad[2], triad[1]]
+        for k in range(8):
+            song.note(start + k * 0.5, 0.45, order[k % 4], inst, amp)
+
+
+# --------------------------------------------------------------------------
+# BGM 1: 拠点 — 長調の堂々とした歩調（A8 / B8 / A8 / C8）
 # --------------------------------------------------------------------------
 
 
 def bgm_stronghold() -> None:
-    bars = 16
+    bars = 32
     song = Song(bpm=104, bars=bars)
 
-    progression = [
-        "C", "G", "Am", "Em",
-        "F", "C", "Dm", "G",
-        "C", "Am", "F", "G",
-        "C", "F", "G", "C",
-    ]
+    a_prog = ["C", "G", "Am", "Em", "F", "C", "Dm", "G"]
+    b_prog = ["F", "G", "Em", "Am", "Dm", "G", "C", "C"]
+    c_prog = ["Am", "F", "C", "G", "F", "Em", "Dm", "G"]
+    progression = a_prog + b_prog + a_prog + c_prog
+
     lay_backing(song, progression, march=False, pad_amp=1.0)
 
     # 低音は二分で歩く（行進というより儀式の歩調）
     for i, name in enumerate(progression):
         _, root, fifth = CHORDS[name]
         start = song.bar(i)
+        # B 部だけ半分の密度にして、息を抜く
+        if 8 <= i < 16:
+            song.note(start, 1.9, root, BASS, 0.70)
+            song.note(start + 2, 1.9, fifth, BASS, 0.58)
+            continue
         song.note(start, 0.95, root, BASS, 0.80)
         song.note(start + 1, 0.95, fifth, BASS, 0.62)
         song.note(start + 2, 0.95, root, BASS, 0.74)
         song.note(start + 3, 0.95, fifth, BASS, 0.58)
 
-    melody = [
+    a_melody = [
         [("g4", 1), ("c5", 1), ("e5", 1), ("c5", 1)],
         [("d5", 2), ("b4", 2)],
         [("c5", 1), ("e5", 1), ("a5", 1), ("e5", 1)],
@@ -151,45 +203,68 @@ def bgm_stronghold() -> None:
         [("e5", 2), ("g4", 2)],
         [("a4", 1), ("d5", 1), ("f5", 1), ("a5", 1)],
         [("g5", 2.5), ("d5", 1.5)],
-        [("e5", 1), ("g5", 1), ("c6", 1), ("g5", 1)],
-        [("a5", 2), ("e5", 2)],
-        [("f5", 1), ("a5", 1), ("c6", 1), ("a5", 1)],
+    ]
+    # B 部は音域を上げて、旋律の輪郭を変える（同じ節を繰り返さない）
+    b_melody = [
+        [("a5", 1.5), ("g5", 0.5), ("f5", 1), ("e5", 1)],
+        [("d5", 2), ("g5", 2)],
+        [("e5", 1), ("g5", 1), ("b5", 1), ("g5", 1)],
+        [("a5", 3), ("e5", 1)],
+        [("f5", 1), ("a5", 1), ("d6", 1), ("a5", 1)],
         [("b5", 2), ("g5", 2)],
-        [("c6", 1), ("b5", 1), ("a5", 1), ("g5", 1)],
+        [("c6", 1.5), ("b5", 0.5), ("a5", 1), ("g5", 1)],
+        [("e5", 4)],
+    ]
+    # C 部は短調側へ振ってから戻る（終わりに向かう感じを作る）
+    c_melody = [
+        [("a5", 1), ("e5", 1), ("c5", 1), ("e5", 1)],
+        [("f5", 2), ("a5", 2)],
+        [("g5", 1), ("e5", 1), ("c5", 1), ("g4", 1)],
+        [("b4", 2), ("d5", 2)],
         [("f5", 1), ("e5", 1), ("d5", 1), ("c5", 1)],
-        [("d5", 2), ("b4", 2)],
+        [("e5", 2), ("g5", 2)],
+        [("d5", 1.5), ("c5", 0.5), ("b4", 1), ("d5", 1)],
         [("c5", 4)],
     ]
+    melody = a_melody + b_melody + a_melody + c_melody
     for i, phrase in enumerate(melody):
         song.phrase(song.bar(i), phrase, BRASS, 0.92)
 
-    # 後半だけ、旋律の 1 オクターブ上に笛を重ねて厚みを足す
-    for i in range(8, bars):
-        song.phrase(song.bar(i), melody[i], FLUTE, 0.34)
+    # 対旋律と内声。B 部と C 部だけに入れて、A 部との差を作る。
+    for i in range(8, 16):
+        song.phrase(song.bar(i), melody[i], FLUTE, 0.32)
+    lay_arpeggio(song, 8, 16, b_prog, BELL, 0.22)
+    for i in range(24, 32):
+        song.phrase(song.bar(i), melody[i], FLUTE, 0.30)
+
+    for i in [7, 15, 23, 31]:
+        lay_fill(song, i)
 
     finish(song.track, AUDIO / "bgm" / "stronghold.wav",
            cutoff=5400.0, echo_ms=142.0, echo_fb=0.32)
 
 
 # --------------------------------------------------------------------------
-# BGM 2: 潜行 — 短調の行進（i - ♭VI - ♭VII - i）
+# BGM 2: 潜行 — 短調の行進（A8 / B8 / A8 / C8）
 # --------------------------------------------------------------------------
 
 
 def bgm_descent() -> None:
-    bars = 16
+    bars = 32
     song = Song(bpm=132, bars=bars)
 
-    progression = [
-        "Am", "F", "G", "Am",
-        "Am", "F", "G", "Am",
-        "C", "G", "Am", "F",
-        "C", "G", "E", "Am",
-    ]
-    lay_backing(song, progression, march=True)
-    lay_march_drums(song, bars)
+    a_prog = ["Am", "F", "G", "Am", "Am", "F", "G", "Am"]
+    b_prog = ["C", "G", "Am", "F", "C", "G", "E", "Am"]
+    c_prog = ["Dm", "Am", "Bf", "F", "Dm", "E", "Am", "Am"]
+    progression = a_prog + b_prog + a_prog + c_prog
 
-    melody = [
+    lay_backing(song, progression, march=True)
+    # B 部は打楽器を抜いて、低音と旋律だけにする（ここで一段静まる）
+    lay_march_drums_range(song, 0, 8)
+    lay_march_drums_range(song, 8, 16, hats=False)
+    lay_march_drums_range(song, 16, 32)
+
+    a_melody = [
         [("a4", 1.5), ("a4", 0.5), ("c5", 1), ("b4", 1)],
         [("a4", 2), ("g4", 1), ("f4", 1)],
         [("g4", 1.5), ("a4", 0.5), ("b4", 1), ("d5", 1)],
@@ -198,19 +273,32 @@ def bgm_descent() -> None:
         [("c5", 2), ("b4", 1), ("a4", 1)],
         [("b4", 1.5), ("c5", 0.5), ("d5", 1), ("b4", 1)],
         [("a4", 4)],
+    ]
+    b_melody = [
         [("e5", 1), ("g5", 1), ("e5", 1), ("c5", 1)],
         [("d5", 2), ("b4", 2)],
         [("c5", 1), ("e5", 1), ("a5", 1), ("g5", 1)],
         [("f5", 2), ("e5", 2)],
         [("e5", 1.5), ("d5", 0.5), ("c5", 1), ("d5", 1)],
         [("b4", 2), ("d5", 2)],
-        [("gs4", 2), ("b4", 2)],  # G# は和声的短音階の導音。ここで一段持ち上がる
+        [("gs4", 2), ("b4", 2)],  # 和声的短音階の導音。ここで一段持ち上がる
         [("a4", 4)],
     ]
+    c_melody = [
+        [("d5", 1), ("f5", 1), ("a5", 1), ("f5", 1)],
+        [("e5", 2), ("c5", 2)],
+        [("d5", 1), ("f5", 1), ("bf5", 1), ("a5", 1)],
+        [("f5", 2), ("c5", 2)],
+        [("d5", 1.5), ("e5", 0.5), ("f5", 1), ("d5", 1)],
+        [("gs4", 2), ("b4", 2)],
+        [("a4", 1), ("c5", 1), ("e5", 1), ("a5", 1)],
+        [("a4", 4)],
+    ]
+    melody = a_melody + b_melody + a_melody + c_melody
     for i, phrase in enumerate(melody):
         song.phrase(song.bar(i), phrase, LEAD, 0.95)
 
-    # 主旋律の下に 3 度でブラスを重ねる（SFC の勇ましい曲の定番）
+    # 3 度下のブラス（A 部だけ）。B 部は笛に持ち替えて色を変える。
     harmony = [
         [("c4", 1.5), ("c4", 0.5), ("e4", 1), ("d4", 1)],
         [("c4", 2), ("bf3", 1), ("a3", 1)],
@@ -223,25 +311,37 @@ def bgm_descent() -> None:
     ]
     for i, phrase in enumerate(harmony):
         song.phrase(song.bar(i), phrase, BRASS, 0.40)
+        song.phrase(song.bar(16 + i), phrase, BRASS, 0.40)
+    for i in range(8, 16):
+        song.phrase(song.bar(i), melody[i], FLUTE, 0.28)
+    lay_arpeggio(song, 24, 32, c_prog, BELL, 0.20)
+
+    for i in [7, 15, 23, 31]:
+        lay_fill(song, i)
 
     finish(song.track, AUDIO / "bgm" / "descent.wav",
            cutoff=5000.0, echo_ms=124.0, echo_fb=0.30)
 
 
 # --------------------------------------------------------------------------
-# BGM 3: 戦闘 — 短く速い 8 小節ループ
+# BGM 3: 戦闘 — 速い短調（A8 / B8 / A8）
 # --------------------------------------------------------------------------
 
 
 def bgm_battle() -> None:
-    bars = 8
+    bars = 24
     song = Song(bpm=164, bars=bars)
 
-    progression = ["Am", "Am", "F", "G", "Am", "Dm", "E", "Am"]
-    lay_backing(song, progression, march=True, pad_amp=0.75)
-    lay_march_drums(song, bars)
+    a_prog = ["Am", "Am", "F", "G", "Am", "Dm", "E", "Am"]
+    b_prog = ["C", "G", "Dm", "Am", "F", "G", "E", "E"]
+    progression = a_prog + b_prog + a_prog
 
-    melody = [
+    lay_backing(song, progression, march=True, pad_amp=0.75)
+    lay_march_drums_range(song, 0, 8)
+    lay_march_drums_range(song, 8, 16, hats=False)
+    lay_march_drums_range(song, 16, 24)
+
+    a_melody = [
         [("a4", 0.5), ("c5", 0.5), ("e5", 0.5), ("a5", 0.5), ("e5", 1), ("c5", 1)],
         [("d5", 0.5), ("c5", 0.5), ("b4", 0.5), ("a4", 0.5), ("b4", 2)],
         [("f5", 0.5), ("e5", 0.5), ("d5", 0.5), ("c5", 0.5), ("f5", 2)],
@@ -251,11 +351,28 @@ def bgm_battle() -> None:
         [("gs4", 0.5), ("b4", 0.5), ("e5", 0.5), ("gs5", 0.5), ("b5", 2)],
         [("a5", 4)],
     ]
+    # B 部は刻みを止めて長い音にする。速い曲は、緩む部分があると速さが際立つ。
+    b_melody = [
+        [("g5", 2), ("e5", 2)],
+        [("d5", 2), ("b4", 2)],
+        [("f5", 2), ("d5", 2)],
+        [("e5", 2), ("c5", 2)],
+        [("a5", 1), ("g5", 1), ("f5", 2)],
+        [("g5", 1), ("f5", 1), ("e5", 2)],
+        [("gs5", 0.5), ("b5", 0.5), ("gs5", 0.5), ("e5", 0.5), ("b4", 2)],
+        [("e5", 4)],
+    ]
+    melody = a_melody + b_melody + a_melody
     for i, phrase in enumerate(melody):
         song.phrase(song.bar(i), phrase, LEAD, 1.0)
 
+    lay_arpeggio(song, 8, 16, b_prog, BELL, 0.26)
+    for i in [7, 15, 23]:
+        lay_fill(song, i)
+
     finish(song.track, AUDIO / "bgm" / "battle.wav",
            cutoff=5600.0, echo_ms=108.0, echo_fb=0.26)
+
 
 
 # --------------------------------------------------------------------------

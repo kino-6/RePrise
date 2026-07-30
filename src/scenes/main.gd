@@ -165,6 +165,13 @@ func _capture(which: String) -> void:
 		"job":
 			_enter_stronghold()
 			stronghold.debug_open_job_menu(0)
+		"depart":
+			# 潜る理由の 3 行が名簿と重なっていないかを見るため
+			_enter_stronghold()
+			stronghold.debug_open_depart()
+		"upgrade":
+			_enter_stronghold()
+			stronghold.debug_open_upgrades()
 		"explore":
 			_start_run()
 		"items":

@@ -25,13 +25,20 @@ const MODEL := "huihui_ai/qwen3-abliterated:8b"
 const TIMEOUT := 8.0
 
 ## 文章の指示はここに置く。事実の構造（facts）には文体を混ぜない。
+##
+## 世界の前提（Lore.WORLD）も**事実とは分けて**渡す。前提を facts に混ぜると
+## モデルが数値と同じ重さで扱い、設定のほうを膨らませはじめる。
+## ここでは「地の文の背景」として置き、書いてよいのは事実だけだと念を押す。
 const PROMPT := """あなたは SFC 期の日本語 RPG の語り部です。
 次の事実だけを使って、ラン（潜行）の記録を 3 行で書いてください。
+
+%s
 
 制約:
 - 各行 34 文字以内。改行で 3 行に区切る。
 - ひらがな主体、漢字は易しいものだけ。
 - 事実に無いことを足さない。名前と職業は事実のものを使う。
+- 前提は雰囲気づくりにだけ使う。前提から出来事を作らない。
 - 見出し・記号・箇条書き・英語・思考過程を書かない。本文 3 行だけを返す。
 
 事実:
@@ -59,7 +66,7 @@ func request(summary: Dictionary) -> void:
 	var facts := JSON.stringify(Chronicle.facts_for_llm(summary), "  ")
 	var body := JSON.stringify({
 		"model": MODEL,
-		"prompt": PROMPT % facts,
+		"prompt": PROMPT % [Lore.WORLD, facts],
 		"stream": false,
 		# Qwen3 系は既定で思考ブロックを吐き、num_predict を思考だけで使い切って
 		# 本文が空で返ってくる。思考は要らないので切る。

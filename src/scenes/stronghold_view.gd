@@ -175,6 +175,13 @@ func debug_open_upgrades() -> void:
 	queue_redraw()
 
 
+## 開発用。出撃（潜る理由と名簿）の画面を撮るために使う。
+func debug_open_depart() -> void:
+	_index = _depart_row()
+	_state = State.MEMBER
+	queue_redraw()
+
+
 ## 開発用。編成の画面を撮るために使う。
 func debug_open_party() -> void:
 	_index = _party_row()
@@ -506,16 +513,18 @@ func _draw_detail() -> void:
 func _draw_departure_note() -> void:
 	var origin := PixelUI.content(DETAIL_RECT).position
 	PixelUI.draw_text(self, origin + Vector2(6, 2), "地下へ もぐる", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
-	var lines := [
-		"レベルは もちかえれない。",
-		"じゅくれんと わざだけが のこる。",
-	]
-	for i in lines.size():
-		PixelUI.draw_text(self, origin + Vector2(6, 28 + i * 19), lines[i], PixelUI.C_TEXT_DIM)
+	# 1 行目が「なぜもぐるか」、残りが「何を失い、何が残るか」。
+	# 文言は Lore 側（根拠は docs/premise.md）。3 行を超えると名簿と重なる。
+	for i in Lore.DEPART_LINES.size():
+		PixelUI.draw_text(
+			self, origin + Vector2(6, 26 + i * 19), Lore.DEPART_LINES[i], PixelUI.C_TEXT_DIM
+		)
 
 	for i in members.size():
 		var m := members[i]
-		var row := origin + Vector2(6, 76 + i * 20)
+		# 前提の 3 行を入れたぶん、名簿を下げて行間を詰める。
+		# 窓の内側は 150px しかないので、4 人目（84+48+文字高）でちょうど収まる。
+		var row := origin + Vector2(6, 84 + i * 16)
 		PixelUI.draw_text(self, row, m.name, PixelUI.C_TEXT)
 		PixelUI.draw_text(self, row + Vector2(58, 0), _job_name(m.job_id), PixelUI.C_TEXT_DIM)
 		PixelUI.draw_text(
@@ -571,7 +580,7 @@ func _draw_upgrade_note() -> void:
 		PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
 	)
 	PixelUI.draw_text(
-		self, origin + Vector2(6, 26), "もぐるほど 毎回もらえる。", PixelUI.C_TEXT_DIM
+		self, origin + Vector2(6, 26), Lore.ECHO_LINE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 	)
 	PixelUI.draw_text(self, origin + Vector2(150, 50), Terms.RANK, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	PixelUI.draw_text(self, origin + Vector2(200, 50), Terms.PRICE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
