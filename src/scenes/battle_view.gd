@@ -65,6 +65,10 @@ const AUTO_LINE_DELAY := 0.10
 const AUTO_BLINK := 0.12
 const BLINK := 0.3
 
+## 大技の閃光。
+const AUTO_FLASH := 0.18
+const FLASH := 0.55
+
 enum State { TURN_START, COMMAND, LIST, TARGET, MESSAGE, DONE }
 
 ## 第 1 階層の項目。順番は固定する（毎回同じ位置にあることが速さになる）。
@@ -545,8 +549,10 @@ func _show(lines: Array[String]) -> void:
 	# 点滅もオート中は短く。ここが 0.3 のままだと、待ちを詰めても 1 手番が縮まない。
 	var blink_time := AUTO_BLINK if _auto != AutoTactic.Mode.OFF else BLINK
 	_blink = blink_time if not system.last_hit_ids.is_empty() else 0.0
+	# 大技の閃光もオート中は短く。**待ちと点滅だけ詰めても、ここが 0.55 のままだと
+	# 大技が出た手番だけ長い。** 詰めるところは 3 つ（待ち・点滅・閃光）。
 	if not system.last_hit_ids.is_empty() and _is_big_hit(system.last_ability_id):
-		_flash = 0.55
+		_flash = AUTO_FLASH if _auto != AutoTactic.Mode.OFF else FLASH
 	_queue = lines.duplicate()
 	_shown.clear()
 	_state = State.MESSAGE

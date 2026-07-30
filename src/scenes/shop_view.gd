@@ -319,7 +319,12 @@ func _draw_menu() -> void:
 		desc = "%d %sで 傷も魔力も すっかり戻す。" % [rest_price(), Terms.GOLD]
 	else:
 		desc = "ダンジョンへ もどる。"
-	PixelUI.draw_text(self, origin + Vector2(8, 0), desc, PixelUI.C_TEXT)
+	# 説明は 1 行で収める。装備は「説明＋能力値」で長くなるので切る
+	# （切らずに置いたら窓から 3px 出た）。
+	PixelUI.draw_text(
+		self, origin + Vector2(8, 0),
+		PixelUI.clip(desc, 464.0, PixelUI.SIZE_TEXT), PixelUI.C_TEXT
+	)
 
 	PixelUI.draw_text(self, origin + Vector2(8, 26), "もちもの", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	var owned := GameState.inventory_ids()
