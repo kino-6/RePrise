@@ -1833,7 +1833,8 @@ func _refresh_hud() -> void:
 ## そこに何が出るかは生物相で決まるので、名前が見えていれば備えられる。
 func _place_label() -> String:
 	var danger := Terms.DANGER_AT % GameState.floor_number
-	match String(GameState.site.get("kind", "")):
+	var site_kind := String(GameState.site.get("kind", ""))
+	match site_kind:
 		"cave":
 			return "%s%s　%s" % [
 				String(GameState.site.get("place", "")),
@@ -1842,6 +1843,10 @@ func _place_label() -> String:
 		"castle":
 			return "%s　%s" % [Terms.CASTLE, danger]
 	var place := GameState.place_name()
+	# 町では生物相ではなく固有名を残す。入場通知が消えたあとも、
+	# どの Profile の町に居るかを画面だけで判別できるようにする。
+	if site_kind == "town" and _town != null:
+		place = _town.town_name
 	var head := danger if place == "" else "%s　%s" % [place, danger]
 	# 封の残りを常に見せる。何をすれば先へ進めるかが画面から読めること。
 	var left := GameState.seals_remaining()

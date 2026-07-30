@@ -1076,18 +1076,36 @@ func _test_town_generation() -> void:
 	var folk_blocked := true
 	var entrance_fixed := true
 	var arrival_clear := true
+	var profile_connected := true
+	var generation_problems: Array[String] = []
+	var fingerprints := {}
 	for seed_value in range(1, 101):
-		var town := TownGenerator.generate(DetRng.new(seed_value), 3, "dungeon")
+		var town_index := (seed_value - 1) % 4
+		var world_variant := seed_value % TownProfile.cycle_size()
+		var town := TownGenerator.generate(
+			DetRng.new(seed_value), 3, "dungeon",
+			town_index, world_variant
+		)
+		var problems := TownGenerator.verify(town)
+		if not problems.is_empty():
+			generation_problems.append(
+				"種%d:%s" % [seed_value, "/".join(problems)]
+			)
 		@warning_ignore("integer_division")
 		var expected_exit := Vector2i(town.width / 2, town.height - 1)
 		if town.exit_pos != expected_exit or town.start_pos != expected_exit + Vector2i.UP:
 			entrance_fixed = false
-		for y in range(town.height - 3, town.height - 1):
+		for y in range(town.height - 4, town.height - 1):
 			for x in range(town.exit_pos.x - 2, town.exit_pos.x + 3):
 				var at := Vector2i(x, y)
-				if (
-					town.folk.has(at)
-					or town.get_tile(x, y) != TownMap.T_GROUND
+				var tile := town.get_tile(x, y)
+				var planned_road := (
+					at in town.main_street
+					and tile == TownMap.T_GROUND_ALT
+					and x == town.exit_pos.x
+				)
+				if town.folk.has(at) or (
+					not planned_road and tile != TownMap.T_GROUND
 				):
 					arrival_clear = false
 		var dist := town.distance_field(town.start_pos)
@@ -1104,26 +1122,65 @@ func _test_town_generation() -> void:
 			var at: Vector2i = pos
 			if town.is_walkable(at.x, at.y):
 				folk_blocked = false
+		if town.profile == null:
+			profile_connected = false
+		else:
+			var profile_line_found := false
+			for pos in town.folk:
+				var person: Dictionary = town.folk[pos]
+				var profile_line := town.profile.line_for(
+					String(person.get("kind", ""))
+				)
+				if profile_line != "" and String(person.get("line", "")) == profile_line:
+					profile_line_found = true
+				if String(person.get("profile", "")) != town.profile.signature():
+					profile_connected = false
+			if not profile_line_found:
+				profile_connected = false
+		fingerprints[TownGenerator.internal_fingerprint(town)] = true
 
 	_check("町の宿・店・出口に必ず辿り着ける", reachable)
 	_check("町に人が居る", has_folk)
 	_check("町に名前が付く", named)
 	_check("町の人は通り抜けられない", folk_blocked)
 	_check("100町すべて南辺中央が入口", entrance_fixed)
-	_check("入口内側5x2に人・建物・装飾がない", arrival_clear)
+	_check("入口内側5x3は主街路以外の人・建物・装飾がない", arrival_clear)
+	_check("Profileが住人の役と台詞へ接続される", profile_connected)
+	_check(
+		"100町すべて生成契約を通る",
+		generation_problems.is_empty(),
+		str(generation_problems.slice(0, 3))
+	)
+	_check(
+		"固定入口と装飾を除く内部指紋が50通り以上",
+		fingerprints.size() >= 50,
+		"%d通り" % fingerprints.size()
+	)
 
-	# **町ごとに形が違うこと。** 固定座標で作っていたころは、名前と人の位置
-	# 以外がすべて同じで「街ぜんぶ一緒」になっていた。
-	var shapes := {}
-	for seed_value in range(1, 13):
-		var m := TownGenerator.generate(DetRng.new(seed_value * 977), 3, "dungeon")
-		shapes["%dx%d:%s" % [m.width, m.height, str(m.exit_pos)]] = true
-	_check("12 個の町が 10 通り以上の形になる（%d 通り）" % shapes.size(), shapes.size() >= 10)
+	# 同じ世界の4町は、生業・問題・目印の組を重複させない。
+	var profiles_unique := true
+	for variant in range(16):
+		var signatures := {}
+		for town_index in range(4):
+			var town := TownGenerator.generate(
+				DetRng.new(variant * 997 + town_index),
+				3 + town_index, "grassland", town_index, variant
+			)
+			signatures[town.profile.signature()] = true
+		if signatures.size() != 4:
+			profiles_unique = false
+	_check("同一世界4町のProfileが重複しない", profiles_unique)
 
-	var a := TownGenerator.generate(DetRng.new(555), 3, "dungeon")
-	var b := TownGenerator.generate(DetRng.new(555), 3, "dungeon")
+	var a := TownGenerator.generate(DetRng.new(555), 3, "dungeon", 2, 7)
+	var b := TownGenerator.generate(DetRng.new(555), 3, "dungeon", 2, 7)
 	_check("同じ種から同じ町が出る", a.to_ascii() == b.to_ascii())
 	_check("同じ種なら名前も同じ", a.town_name == b.town_name)
+	_check("同じ入力ならProfileも同じ", a.profile.to_dict() == b.profile.to_dict())
+
+	# 検算自身が壊れた町を見逃さないこと。
+	var broken := TownGenerator.generate(DetRng.new(8181), 4, "forest", 1, 3)
+	broken.main_street.clear()
+	_check("主街路を消した町は検算に落ちる", not TownGenerator.verify(broken).is_empty())
 
 	# ExploreView は Sound Autoload を参照するため、`--headless --script` から
 	# 直接生成できない。入退場の状態契約はソース Gate と実プレイで検証する。

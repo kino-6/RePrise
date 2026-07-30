@@ -251,7 +251,7 @@ static func _choose_plaza(map: TownMap, rng: DetRng) -> Vector2i:
 	@warning_ignore("integer_division")
 	var x := clampi(map.exit_pos.x + rng.range_i(-2, 2), 7, map.width - 8)
 	@warning_ignore("integer_division")
-	var y := clampi(map.height / 2 + rng.range_i(-1, 1), 7, map.height - 6)
+	var y := clampi(map.height / 2 + rng.range_i(-1, 1), 7, map.height - 7)
 	return Vector2i(x, y)
 
 
@@ -273,7 +273,7 @@ static func _paint_plaza(map: TownMap) -> void:
 static func _paint_main_street(map: TownMap) -> void:
 	map.main_street.clear()
 	var cursor := map.start_pos
-	var bend_y := mini(map.plaza_pos.y + 3, map.start_pos.y - 2)
+	var bend_y := mini(map.plaza_pos.y + 3, map.start_pos.y - 3)
 	_add_path_tile(map, cursor, map.main_street)
 	while cursor.y > bend_y:
 		cursor += Vector2i.UP
@@ -524,7 +524,9 @@ static func verify(map: TownMap) -> Array[String]:
 			if tile == TownMap.T_GROUND_ALT and at in map.main_street:
 				continue
 			if tile != TownMap.T_GROUND:
-				problems.append("到着余白に計画外の物がある")
+				problems.append(
+					"到着余白に計画外の物がある:%s=%d" % [str(at), tile]
+				)
 
 	if map.main_street.size() < 3:
 		problems.append("主街路が3歩に満たない")

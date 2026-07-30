@@ -76,6 +76,14 @@ func _initialize() -> void:
 
 	print("---")
 	_print_verdict(reports)
+	if not _out_of_band.is_empty():
+		print("---")
+		print("帯の外: %s" % "、".join(_out_of_band))
+		print("難度を直すか、帯そのものを直す。**黙って通さない。**")
+		# **`quit()` は関数を抜けない。** ここで return しないと、下の
+		# `quit()` が終了コードを 0 に上書きして、赤いはずの回が緑で通る。
+		quit(1)
+		return
 	quit()
 
 
@@ -164,6 +172,20 @@ const OLD_LINE_DELAY := 0.10
 
 ## これを超えたら「長い戦」とみなす手番数。0.40 秒 x 30 = 12 秒。
 const LONG_TURNS := 30
+
+## 宝箱 1 つぶんの基準ゴールド（`main.gd` の `_on_chest` と同じ扱い）。
+const CHEST_GOLD := 40
+
+## 全周で目指す帯（tasks.md の D-2）。**外れたら終了コード 1。**
+const REACH_MIN := 28
+const REACH_MAX := 38
+const WIN_MIN := 10
+const WIN_MAX := 18
+
+## 帯を外れた項目。空でなければ落ちる。
+var _out_of_band: Array[String] = []
+
+const ChestReward := preload("res://src/dungeon/chest_reward.gd")
 
 
 func _print_report(title: String, r: Dictionary) -> void:
@@ -276,6 +298,23 @@ func _print_verdict(reports: Dictionary) -> void:
 		print("封: 効いている（直行 0%% → 封 %d%% → 全周 %d%%）。" % [seal_win, t_win])
 		print("      急げば城には着くが扉が開かない、が数字として在る。")
 
+	# **帯を外れたら終了コード 1（D-2）。**
+	#
+	# それまでは所見を print するだけで、赤くならなかった。数字が動いても
+	# 誰も止めないので、判定が「妥当」と言い続けているあいだに実際の難度が
+	# ずれていく。ここで落ちるようにして、**帯の外は不合格**にする。
+	#
+	# 帯の根拠は tasks.md の D-2（到達 28〜38% / 勝利 10〜18%）。
+	# **この値は「人が操作したとき」の目標**で、Sim は道具も買い物も使わない
+	# ぶん下振れする。外れたら難度を直すか、帯そのものを直す。
+	var t_reach := int(tour["reached"]) * 100 / _runs
+	var out_of_band: Array[String] = []
+	if t_reach < REACH_MIN or t_reach > REACH_MAX:
+		out_of_band.append("到達 %d%%（帯 %d〜%d%%）" % [t_reach, REACH_MIN, REACH_MAX])
+	if t_win < WIN_MIN or t_win > WIN_MAX:
+		out_of_band.append("勝利 %d%%（帯 %d〜%d%%）" % [t_win, WIN_MIN, WIN_MAX])
+	_out_of_band = out_of_band
+
 	# 手近な洞を 2 つ拾うだけでは足りないこと（封の洞を選ぶ意味）
 	if d_win > 0:
 		print("注意: 封と関係ない洞を 2 つ回るだけで %d%% 勝てている。" % d_win)
@@ -302,6 +341,9 @@ func _simulate(seed_value: int, policy: Policy) -> Dictionary:
 		# 長い戦がどこに固まっているか（危険度 → [長い戦, 全戦闘, 手番合計]）。
 		# **敵の数で説明がつかなかった**ので、危険度の側から見る。
 		"turns_by_danger": {},
+		# 宿で休んだ回数と、拾って着けていない装備。
+		"rests": 0,
+		"gear_stock": [] as Array[String],
 	}
 
 	# 行き先の列。
@@ -383,6 +425,11 @@ func _walk(
 		if world.sites.has(at):
 			weighted = 0  # 拠点地の上は安全（ExploreView と同じ扱い）
 			walked = 0
+			# **町を通ったら休む（D-2）。** 宿は無料で全回復・毒治療なので、
+			# 実プレイでは町の前を素通りしない。ここを飛ばしていたせいで、
+			# Sim は「町のある世界でも一度も回復しない」測り方になっていた。
+			if String(world.site_at(at).get("kind", "")) == "town":
+				_rest(members, state)
 			continue
 		weighted += world.encounter_weight(at.x, at.y)
 		walked += 1
@@ -413,6 +460,12 @@ func _delve(
 		var here: int = mini(danger + floor_number - 1, WorldMap.MAX_DANGER)
 		state["danger"] = here
 		var map := DungeonGenerator.generate(rng.fork("cave:%d" % floor_number), here, false)
+		# **経路の近くの宝箱だけ開ける。**
+		#
+		# 全部開けると寛容すぎる ―― 階段までの道すがら、部屋の隅の箱までは
+		# 寄らない。逆に 0 個にすると、初期装備のまま 10 階を戦うことになる
+		# （それが直す前の状態で、「深いほど勝てない」が実際より強く出ていた）。
+		_open_chests(members, rng, state, _chests_on_route(map), here)
 		var biome := String(site.get("biome", ""))
 		var steps := map.route(map.start_pos, map.stairs_pos).size()
 		var weighted := 0
@@ -431,6 +484,67 @@ func _delve(
 			if not _fight(members, foes, rng, here, state):
 				state["dead"] = true
 				return
+
+
+## 階段までの道から `CHEST_REACH` 歩以内にある宝箱の数。
+##
+## 遊ぶ側は階段へ向かいながら、目に入った箱に寄る。全部でも 0 でもない。
+const CHEST_REACH := 4
+
+
+func _chests_on_route(map: DungeonMap) -> int:
+	if map.chests.is_empty():
+		return 0
+	var path := map.route(map.start_pos, map.stairs_pos)
+	var near := 0
+	for chest in map.chests:
+		for step in path:
+			var at: Vector2i = step
+			if absi(at.x - chest.x) + absi(at.y - chest.y) <= CHEST_REACH:
+				near += 1
+				break
+	return near
+
+
+## 宿で休む。**無料で全回復と毒の治療**（`main.gd` の `_on_inn` と同じ）。
+func _rest(members: Array[PartyMember], state: Dictionary) -> void:
+	state["rests"] = int(state.get("rests", 0)) + 1
+	for m in members:
+		if m.hp <= 0:
+			continue   # 倒れた者は宿では起きない（実プレイと同じ）
+		m.hp = m.max_hp()
+		m.mp = m.max_mp()
+		m.cure_poison()
+
+
+## 宝箱を開ける。**手に入れた装備はその場で着せる**（C-9 と C-10 の経路）。
+##
+## 飛ばしていたせいで、Sim は初期装備のまま 10 階ぶんを戦っていた。
+## 実プレイでは危険度が上がるほど良い装備が出るので、ここが抜けると
+## 「深いほど勝てない」が実際より強く出る。
+func _open_chests(
+	members: Array[PartyMember], rng: DetRng, state: Dictionary,
+	count: int, danger: int
+) -> void:
+	var stock: Array[String] = state.get("gear_stock", [] as Array[String])
+	for _i in count:
+		var reward: Dictionary = ChestReward.roll(rng, danger, CHEST_GOLD)
+		state["gold"] = int(state["gold"]) + int(reward.get("gold", 0))
+		var gear_id := String(reward.get("gear", ""))
+		if gear_id != "":
+			stock.append(gear_id)
+	state["gear_stock"] = stock
+	if stock.is_empty():
+		return
+	# **人と同じ処理で着せる。** ここに別の判断を書くと、測っている強さと
+	# 遊べる強さが別物になる（毒で手番が消えていたのと同じ事故）。
+	for move in BestGear.plan(members, stock):
+		var member: PartyMember = members[int(move["member"])]
+		var removed := member.equip(String(move["gear"]))
+		stock.erase(String(move["gear"]))
+		if removed != "":
+			stock.append(removed)
+	state["gear_stock"] = stock
 
 
 func _result(
