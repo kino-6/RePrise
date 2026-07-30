@@ -139,14 +139,42 @@ const WINDOW_MARGIN := 8.0
 const WINDOW_ALPHA := 0.72
 
 
+## 窓の中の階調。上を明るく、下を沈ませる。
+##
+## **半透明にしただけでは後期 SFC にならない。** 透過は要素のひとつでしかなく、
+## DQ6 の窓が richer に見えたのは、透過に加えて「中の階調」「面取り」「落ち影」が
+## 全部乗っていたから。単色の板に枠を描くと、透けていてもファミコンに見える。
+const WINDOW_TOP := Color8(0x30, 0x4C, 0x9C)
+const WINDOW_BOTTOM := Color8(0x0C, 0x14, 0x3C)
+
+## 階調を何段で塗るか。**わざと段にする。**
+## SFC の階調は実際に段になっていて、滑らかに繋ぐとむしろ時代がずれる。
+const WINDOW_BANDS := 12
+
+## 面取りの色。内側の上辺と左辺に明線、下辺と右辺に暗線を置くと厚みが出る。
+const WINDOW_BEVEL_LIGHT := Color8(0x6C, 0x90, 0xE0)
+const WINDOW_BEVEL_DARK := Color8(0x06, 0x0A, 0x20)
+
+## 窓の落ち影。背景から浮かせる。
+const WINDOW_SHADOW := Vector2(3, 3)
+
+
 ## 青い窓を 9-slice で描く。
 ##
 ## 単純な draw_texture_rect だと枠ごと引き伸ばされ、角の 1px 線が太くなって
 ## 一気に「ドット絵でないもの」に見える。角は等倍、辺は 1 方向だけ、
 ## 中央は両方向へ伸ばす。
+##
+## 順番は 落ち影 → 枠 → 中の階調 → 面取り。階調を枠より先に塗ると枠が沈む。
 static func draw_window(
 	canvas: CanvasItem, rect: Rect2, texture: Texture2D, alpha: float = WINDOW_ALPHA
 ) -> void:
+	# 1. 落ち影。背景の上に置かれている、と読めるようにする。
+	canvas.draw_rect(
+		Rect2(rect.position + WINDOW_SHADOW, rect.size), Color(0.0, 0.0, 0.03, alpha * 0.5), true
+	)
+
+	# 2. 枠（9-slice）
 	var tint := Color(1.0, 1.0, 1.0, alpha)
 	var tex := texture.get_size()
 	var m := WINDOW_MARGIN
@@ -161,6 +189,31 @@ static func draw_window(
 			var dst := Rect2(dst_x[i], dst_y[j], dst_x[i + 1] - dst_x[i], dst_y[j + 1] - dst_y[j])
 			if dst.size.x > 0.0 and dst.size.y > 0.0:
 				canvas.draw_texture_rect_region(texture, dst, src, tint)
+
+	# 3. 中の階調
+	var inner := rect.grow(-FRAME)
+	if inner.size.x <= 0.0 or inner.size.y <= 0.0:
+		return
+	var step := inner.size.y / float(WINDOW_BANDS)
+	for i in WINDOW_BANDS:
+		var k := float(i) / float(maxi(WINDOW_BANDS - 1, 1))
+		var band := Rect2(
+			inner.position.x, floorf(inner.position.y + step * i),
+			inner.size.x, ceilf(step) + 1.0
+		)
+		canvas.draw_rect(band, Color(WINDOW_TOP.lerp(WINDOW_BOTTOM, k), alpha * 0.8), true)
+
+	# 4. 面取り。1px の明暗 2 本で厚みが出る（枠の絵を描き替えずに済む）。
+	var light := Color(WINDOW_BEVEL_LIGHT, alpha * 0.85)
+	var dark := Color(WINDOW_BEVEL_DARK, alpha * 0.85)
+	canvas.draw_rect(Rect2(inner.position, Vector2(inner.size.x, 1)), light, true)
+	canvas.draw_rect(Rect2(inner.position, Vector2(1, inner.size.y)), light, true)
+	canvas.draw_rect(
+		Rect2(inner.position.x, inner.end.y - 1, inner.size.x, 1), dark, true
+	)
+	canvas.draw_rect(
+		Rect2(inner.end.x - 1, inner.position.y, 1, inner.size.y), dark, true
+	)
 
 
 ## 画面の中央に出す一言（買った / たりない / おぼえた など）。

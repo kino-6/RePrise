@@ -677,11 +677,7 @@ func _telegraph() -> String:
 func _draw() -> void:
 	if system == null:
 		return
-	# 一色で塗ると背景が「無い」ように見える。上を暗く、床の高さを明るく。
-	PixelUI.draw_gradient(
-		self, Rect2(Vector2.ZERO, PixelUI.SCREEN),
-		Color8(0x06, 0x08, 0x12), Color8(0x1C, 0x22, 0x3C)
-	)
+	_draw_backdrop()
 	_draw_enemies()
 	_draw_message_or_command()
 	_draw_party_status()
@@ -689,6 +685,74 @@ func _draw() -> void:
 		_draw_list()
 	# フラッシュは最前面。窓の上に乗らないと「画面が光った」に見えない。
 	PixelUI.draw_flash(self, _flash)
+
+
+## 足元の影。楕円を横に潰した帯で描く（draw_circle だと丸すぎる）。
+func _draw_ground_shadow(center: Vector2, radius: float) -> void:
+	var rows := 5
+	for i in rows:
+		var k := float(i) / float(rows - 1)
+		# 中央が濃く、縁へ向かって薄く細く
+		var w := radius * (1.0 - absf(k - 0.5) * 1.4)
+		var a := 0.34 * (1.0 - absf(k - 0.5) * 1.2)
+		draw_rect(
+			Rect2(center.x - w, center.y - rows * 0.5 + i, w * 2.0, 1.0),
+			Color(0.0, 0.0, 0.04, a), true
+		)
+
+
+## 戦場の背景。
+##
+## **一枚の階調で塗るだけでは「場所」にならない。** 後期 SFC の戦闘背景が
+## richer に見えたのは、空と地面が別の階調で、その境目に地平線があり、
+## 地面に敵の影が落ちていたから。ここは絵を足さずに階調と影だけで作る。
+##
+## 空は上を暗く、地平に向かって少し明るく。地面は地平で明るく、手前で沈ませる。
+## 境目に 1 本明線を置くと、そこが「立っている面」だと読める。
+const HORIZON := 118.0
+
+
+func _draw_backdrop() -> void:
+	var biome := GameState.biome_here()
+	var ground_top: Color = GROUND_TOP.get(biome, GROUND_TOP["_"])
+	var ground_bottom: Color = GROUND_BOTTOM.get(biome, GROUND_BOTTOM["_"])
+
+	# 空
+	PixelUI.draw_gradient(
+		self, Rect2(0, 0, PixelUI.SCREEN.x, HORIZON),
+		Color8(0x04, 0x06, 0x10), Color8(0x1E, 0x26, 0x4C), 12
+	)
+	# 地面。手前へ向かって沈ませると奥行きが出る。
+	PixelUI.draw_gradient(
+		self, Rect2(0, HORIZON, PixelUI.SCREEN.x, PixelUI.SCREEN.y - HORIZON),
+		ground_top, ground_bottom, 14
+	)
+	# 地平線。1 本入れるだけで空と地面が別の面になる。
+	draw_rect(Rect2(0, HORIZON, PixelUI.SCREEN.x, 1), Color8(0x50, 0x60, 0x98), true)
+
+
+## 地面の色は土地ごとに変える。雪原で戦っているのに土色だと、
+## せっかく生物相を持たせた意味が薄れる。
+const GROUND_TOP := {
+	"_": Color8(0x24, 0x2C, 0x50),
+	"grassland": Color8(0x2E, 0x4A, 0x2A),
+	"forest": Color8(0x24, 0x3C, 0x24),
+	"wetland": Color8(0x22, 0x34, 0x2C),
+	"badland": Color8(0x40, 0x34, 0x22),
+	"desert": Color8(0x54, 0x44, 0x2A),
+	"snowfield": Color8(0x50, 0x58, 0x70),
+	"volcano": Color8(0x48, 0x22, 0x1C),
+}
+const GROUND_BOTTOM := {
+	"_": Color8(0x0A, 0x0C, 0x1E),
+	"grassland": Color8(0x10, 0x1C, 0x12),
+	"forest": Color8(0x0C, 0x16, 0x0E),
+	"wetland": Color8(0x0C, 0x14, 0x12),
+	"badland": Color8(0x18, 0x12, 0x0C),
+	"desert": Color8(0x22, 0x1A, 0x10),
+	"snowfield": Color8(0x1C, 0x20, 0x30),
+	"volcano": Color8(0x1C, 0x0A, 0x08),
+}
 
 
 func _draw_enemies() -> void:
@@ -708,6 +772,11 @@ func _draw_enemies() -> void:
 			continue
 		var tex: Texture2D = sprite_of(b.sprite)
 		var pos := Vector2(spacing * (i + 1) - tex.get_width() * 0.5, ENEMY_BASELINE - tex.get_height())
+		# 足元の影。これが無いと敵が宙に浮いて見える（浮遊しているわけではない）。
+		# 楕円ひとつで「地面に立っている」が伝わる。
+		_draw_ground_shadow(
+			Vector2(pos.x + tex.get_width() * 0.5, ENEMY_BASELINE - 1.0), tex.get_width() * 0.42
+		)
 		draw_texture(tex, pos.floor())
 
 		# 受けたダメージを相手の上に出す。メッセージ窓の文字だけだと
