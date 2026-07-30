@@ -42,6 +42,9 @@ var _battle_rng: DetRng = null
 ## ローカル AI の窓口（唯一の接続点）。
 var _ai: LocalAI = null
 
+## いま頼んでいるのがイベントの表層か（封の名か）。
+var _awaiting_event_text := false
+
 ## 今の戦闘が主との戦いか。勝った時にランを閉じるかどうかがここで変わる。
 var _boss_battle := false
 
@@ -116,7 +119,15 @@ func _ready() -> void:
 	# ローカル AI の窓口は 1 つだけ。戦記もクエスト文もここを通す。
 	_ai = LocalAI.new()
 	add_child(_ai)
-	_ai.answered.connect(_on_quest_text)
+	# 窓口は 1 つなので、返りは「いま何を頼んだか」で振り分ける。
+	_ai.answered.connect(func(text: String) -> void:
+		if _awaiting_event_text:
+			_awaiting_event_text = false
+			_on_event_text(text)
+			return
+		_on_quest_text(text)
+		# 封の名が済んだら、続けてイベントの表層を頼む（印は _ask_event_text が立てる）。
+		_ask_event_text())
 
 	title.started.connect(_enter_stronghold)
 	stronghold.departed.connect(_start_run)
@@ -625,6 +636,56 @@ func _ask_quest_text() -> void:
 	_ai.ask(QUEST_PROMPT % facts, 8.0, "quest")
 
 
+## イベントの表層を AI に頼む。**構造は渡さない**（id・選択肢・数値は含めない）。
+## `WorldEventCatalog.facts_for_ai()` が既にそこまで削ってある。
+const EVENT_PROMPT := """あなたは SFC 期の日本語 RPG の名づけ役です。
+次の出来事に、題・関係者・原因・情景を付けてください。
+
+%s
+
+制約:
+- それぞれ指定の文字数以内。ひらがな主体で、漢字は易しいものだけ。
+- **数字を書かない。** 英字を書かない。記号・箇条書き・思考過程を書かない。
+- 他社の作品に出てくる固有名詞を使わない。
+- JSON だけを返す: {"title":"…","actor":"…","cause":"…","flavor":"…"}
+"""
+
+
+func _ask_event_text() -> void:
+	if GameState.world == null or _ai.is_busy():
+		return
+	for pos in GameState.world.events:
+		if _event_skinned.has(pos):
+			continue
+		_event_skin_pos = pos
+		var facts := JSON.stringify(
+			WorldEventCatalog.facts_for_ai(GameState.world.events[pos]), "  "
+		)
+		# **頼んだ側で印を立てる。** 受け取る側で立てると、返りが来る前に
+		# 次を頼んだ瞬間に取り違える（実際に封の名の処理へ流れ込んだ）。
+		if _ai.ask(EVENT_PROMPT % facts, 8.0, "event"):
+			_event_skinned[pos] = true
+			_awaiting_event_text = true
+		return
+
+
+var _event_skinned: Dictionary = {}
+var _event_skin_pos := Vector2i(-1, -1)
+
+
+func _on_event_text(text: String) -> void:
+	var reply := LocalAI.extract_json(text)
+	if reply.is_empty() or not GameState.world.events.has(_event_skin_pos):
+		return
+	var before: Dictionary = GameState.world.events[_event_skin_pos]
+	GameState.world.events[_event_skin_pos] = WorldEventCatalog.apply_ai_skin(before, reply)
+	if LocalAI.debug_enabled():
+		print("[AI:event] 却下 %s" % str(
+			GameState.world.events[_event_skin_pos].get("rejected", [])))
+	# 次のイベントの表層を続けて頼む（1 件ずつ、待たせない）。
+	_ask_event_text()
+
+
 func _on_quest_text(text: String) -> void:
 	var reply := LocalAI.extract_json(text)
 	if reply.is_empty():
@@ -915,9 +976,28 @@ func _on_event_choice(choice: Dictionary) -> void:
 	var danger := GameState.floor_number
 	var lines: Array[String] = []
 	lines.append_array(EventEffects.pay(GameState, choice.get("costs", []), danger))
+
+	# **危険は実際に振る。** 並べておいて起きないなら、それは危険ではなく飾り。
+	var fired: Array = []
+	for raw in choice.get("risks", []):
+		var token := String(raw)
+		if not _battle_rng.chance(RISK_ODDS):
+			continue
+		fired.append(token)
+		lines.append("%s。" % EventEffects.label(token, "risk"))
+	if not fired.is_empty():
+		lines.append_array(EventEffects.pay(GameState, fired, danger))
+	elif not choice.get("risks", []).is_empty():
+		lines.append("あぶないところは 起きなかった。")
+
 	lines.append_array(
 		EventEffects.grant(GameState, choice.get("rewards", []), danger, _battle_rng)
 	)
+
+	# 前に同じ傾向を選んでいたら一言添える（世界が覚えている感じを作る）。
+	var echoed := _remember_choice()
+	if echoed != "":
+		lines.append(echoed)
 	if GameState.event_shop_bonus > 0:
 		pass  # 町の品数は ShopView が読む
 	_refresh_hud()
@@ -934,8 +1014,24 @@ func _on_event_choice(choice: Dictionary) -> void:
 	_set_mode(Mode.EVENT)
 
 
+## 危険が実際に起きる確率。**並べておいて起きないなら飾りになる。**
+const RISK_ODDS := 45
+
 var _pending_fight := false
 var _outcome_open := false
+
+
+## 選んだ手の傾向を覚え、前に同じ傾向を選んでいれば一言返す。
+func _remember_choice() -> String:
+	var event := _event_at(_event_pos)
+	var tags: Array = event.get("tags", [])
+	var echoed := ""
+	for raw in tags:
+		var tag := String(raw)
+		if GameState.chose_tag_before(tag) and echoed == "":
+			echoed = "まえに 似た えらび方を したのを、道の者が 覚えていた。"
+		GameState.event_tags[tag] = int(GameState.event_tags.get(tag, 0)) + 1
+	return echoed
 
 
 ## 結果の窓を閉じた。戦いが要るならここで入る。

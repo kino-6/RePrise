@@ -1,0 +1,1006 @@
+{
+  "_comment": "複数ランにまたがる物語の骨格。選択、真相、進行条件はScriptが所有し、同時に進むのは一型だけ。表示用skinもDetRngで確定し、AIを必要としない。",
+  "version": 1,
+  "phase_order": ["seed", "echo", "reversal", "reckoning"],
+  "placements": ["run_result", "town_low", "town_mid", "cave_mid", "castle_pre_boss", "stronghold"],
+  "failure_events": ["run_lost", "beat_missed", "carrier_damaged"],
+  "skin_keys": ["title", "anchor_name", "motif", "origin_name"],
+  "arcs": [
+    {
+      "id": "undelivered_reply",
+      "theme": "届かなかった言葉と継承",
+      "carrier": "chronicle",
+      "selection": {"weight": 10, "min_runs_attempted": 2, "min_completed_arcs": 0},
+      "span": {"min_runs": 4, "max_runs": 6, "cooldown_runs": 3},
+      "promise": "失われた世界から届いた返事を、意味の分からないまま捨てない。",
+      "reversal": "返書の一節は個人の言葉ではなく、閉じる世界から次の世界へ渡されてきた避難信号だった。",
+      "skin": {
+        "title": ["宛先のない返書", "世界を渡る一文", "歌になった手紙"],
+        "anchor_name": ["ユラ", "セト", "ミナ"],
+        "motif": ["青い返書", "欠けた封印", "雨染みの紙片"],
+        "origin_name": ["鈴雨の町", "風待ちの村", "水枝の里"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "run_result",
+          "line": "戦記の末尾に、誰も書いていない一文が残る。{origin_name}の{anchor_name}へ、{motif}を返してほしいとある。",
+          "loss_line": "敗走の記録に混じり、読めないはずの返書だけが砦まで届く。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "town_low",
+          "line": "別世界の子どもが、{motif}と同じ一文を古い子守歌として歌う。{anchor_name}という名だけは知らない。",
+          "loss_line": "町へ届かなかった歌を、道端の避難標へ刻まれた一節から知る。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "town_mid",
+          "line": "記録係は、その一文が世界崩壊時の避難信号だと示す。{anchor_name}も最初の書き手ではなく、受け取って次へ渡した一人だった。",
+          "loss_line": "失われた町の瓦礫から信号の規則だけを回収し、返書が何世代も渡ってきたと分かる。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "砦の全戦記へ同じ一文が浮かぶ。宛先を一人へ絞るか、すべての世界へ流すか、希望の歌へ書き換えるかを決めなければならない。",
+          "loss_line": "決着を選ぶ前に世界を失っても、返書は消えず、次の帰還まで同じ一文を待ち続ける。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "broadcast", "label": "全世界へ流す",
+          "immediate_cost": "多くの町に起きる混乱",
+          "preserves": "危機を知って避難できる可能性",
+          "sacrifices": "静かに暮らしていた時間",
+          "ending_id": "many_receivers", "result_flags": ["reply_broadcast"]
+        },
+        {
+          "id": "deliver_one", "label": "本来の一人へ届ける",
+          "immediate_cost": "他の世界へ知らせる機会",
+          "preserves": "返事を待った一人との約束",
+          "sacrifices": "信号としての広がり",
+          "ending_id": "one_receiver", "result_flags": ["reply_delivered"]
+        },
+        {
+          "id": "rewrite_song", "label": "希望の歌へ変える",
+          "immediate_cost": "元の警告が持つ正確さ",
+          "preserves": "世界を越えて覚えられる言葉",
+          "sacrifices": "最初の書き手の真意",
+          "ending_id": "living_song", "result_flags": ["reply_transformed"]
+        }
+      ],
+      "endings": {
+        "many_receivers": {
+          "tone": "bittersweet",
+          "line": "無数の町で警鐘が鳴り、混乱の中から避難路が生まれる。{anchor_name}の宛名は消えるが、返書は多くの命へ届く。",
+          "chronicle_line": "宛先のない返書を、すべての世界へ流した。"
+        },
+        "one_receiver": {
+          "tone": "grave",
+          "line": "砦は一度だけ細い門を開き、返書を待ち続けた一人へ届ける。信号は途絶えるが、待つ時間には終わりが来る。",
+          "chronicle_line": "返書を、本来待っていた一人へ届けた。"
+        },
+        "living_song": {
+          "tone": "hopeful",
+          "line": "{motif}の言葉は短い歌へ変わる。警告の形は失われても、知らない世界の子どもが続きを歌い継ぐ。",
+          "chronicle_line": "返書を、世界を渡る歌へ変えた。"
+        }
+      },
+      "fallback_choice": "rewrite_song",
+      "fail_forward": [
+        {"when": "run_lost", "change": "失った世界の名が信号へ一つ加わる。"},
+        {"when": "beat_missed", "change": "直接会えなかった人物の言葉を、標識や歌から拾う。"},
+        {"when": "carrier_damaged", "change": "欠けた文章を複数世界の反復から補う。"}
+      ]
+    },
+    {
+      "id": "name_rebellion",
+      "theme": "名前と自由意志",
+      "carrier": "mechanical_name",
+      "selection": {"weight": 9, "min_runs_attempted": 3, "min_completed_arcs": 0},
+      "span": {"min_runs": 4, "max_runs": 7, "cooldown_runs": 4},
+      "promise": "命令番号を拒んだ機械が、自分で選んだ名前を忘れない。",
+      "reversal": "その名前は自由意志を広げる呼び声であると同時に、帝国機械を一斉停止できる管理符号だった。",
+      "skin": {
+        "title": ["名前を拒む機械", "呼び合う鉄の声", "番号ではない者"],
+        "anchor_name": ["ネム", "トキ", "ハク"],
+        "motif": ["銅の名札", "青い発声灯", "削られた番号板"],
+        "origin_name": ["炉坂の町", "鉄雨の宿場", "歯車野の里"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "town_low",
+          "line": "{origin_name}で再起動した機械は番号を拒み、{anchor_name}と名乗る。壊れても{motif}だけは砦の戦記へ残してほしいと頼む。",
+          "loss_line": "停止した機械の{motif}だけが戦記に写り、選んだ名が砦へ帰る。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "cave_mid",
+          "line": "別世界の帝国機械が{anchor_name}という音を聞いて攻撃を止める。命令記録にない迷いが、隊列全体へ広がっていく。",
+          "loss_line": "全滅直前、敵機械が{anchor_name}と発声し、一行への最後の攻撃を外す。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "castle_pre_boss",
+          "line": "帝国の中枢記録は、{anchor_name}が全機械を止める古い管理符号だと示す。使えば戦争は止まるが、名を得た人格も初期化される。",
+          "loss_line": "主に敗れても管理符号の半分が戦記へ残り、次の帝国施設で真相を補える。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "{motif}が砦の機械へも反応する。停止符号を使うか、破壊するか、目覚めた機械自身へ選択を返すかを決める。",
+          "loss_line": "決断を保留すると、機械たちは命令と名前の間で動きを止めたまま次の帰還を待つ。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "invoke_code", "label": "停止符号を使う",
+          "immediate_cost": "目覚めた機械たちの人格",
+          "preserves": "機械戦争の即時停止",
+          "sacrifices": "名前を選んだ記憶",
+          "ending_id": "silent_army", "result_flags": ["machine_code_used"]
+        },
+        {
+          "id": "destroy_code", "label": "管理符号を壊す",
+          "immediate_cost": "戦争をすぐ止める手段",
+          "preserves": "名前が命令に戻らない未来",
+          "sacrifices": "確実な停戦",
+          "ending_id": "unbound_names", "result_flags": ["machine_code_destroyed"]
+        },
+        {
+          "id": "let_machines_choose", "label": "機械自身へ返す",
+          "immediate_cost": "結果を管理する権利",
+          "preserves": "機械たちの自己決定",
+          "sacrifices": "人間側の安全な予測",
+          "ending_id": "chosen_orders", "result_flags": ["machine_choice_returned"]
+        }
+      ],
+      "endings": {
+        "silent_army": {
+          "tone": "grave",
+          "line": "すべての機械が静止する。初期化された{anchor_name}は名を知らないが、{motif}へ触れた手だけが一瞬止まる。",
+          "chronicle_line": "戦争を止めるため、機械たちの名前を消した。"
+        },
+        "unbound_names": {
+          "tone": "bittersweet",
+          "line": "管理符号は壊れ、戦争は続く。それでも各地の機械は自分で選んだ名を名乗り、命令へ理由を問い始める。",
+          "chronicle_line": "停止符号を壊し、名前を命令から解放した。"
+        },
+        "chosen_orders": {
+          "tone": "hopeful",
+          "line": "機械たちは長い沈黙の後、それぞれ異なる命令を選ぶ。{anchor_name}の名は符号でなく、最初の問いとして残る。",
+          "chronicle_line": "機械たちへ、自分の命令を選ぶ権利を返した。"
+        }
+      },
+      "fallback_choice": "let_machines_choose",
+      "fail_forward": [
+        {"when": "run_lost", "change": "敗北時に敵機械が見せた迷いが、次の世界の手掛かりになる。"},
+        {"when": "beat_missed", "change": "会えなかった機械の発声記録を帝国端末から回収する。"},
+        {"when": "carrier_damaged", "change": "壊れた名札の傷を、別機体が同じ位置へ刻む。"}
+      ]
+    },
+    {
+      "id": "remembered_technique",
+      "theme": "継承された技と罪",
+      "carrier": "mastery",
+      "selection": {"weight": 10, "min_runs_attempted": 2, "min_completed_arcs": 0},
+      "span": {"min_runs": 4, "max_runs": 6, "cooldown_runs": 3},
+      "promise": "滅びる世界で教わった技を、使い方まで含めて受け継ぐ。",
+      "reversal": "英雄の技として教わった型は、かつて世界の門を破壊した処刑技でもあった。",
+      "skin": {
+        "title": ["身体が覚えた剣", "罪を継ぐ型", "最後の一手"],
+        "anchor_name": ["サイ", "レン", "イオ"],
+        "motif": ["逆手の構え", "三歩の呼吸", "白布の手甲"],
+        "origin_name": ["剣垣の村", "石輪の町", "朝霧の道場"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "castle_pre_boss",
+          "line": "{origin_name}の{anchor_name}は決戦前、一行へ{motif}を教える。武器を失っても身体なら世界を越えると言う。",
+          "loss_line": "主に敗れても、最後に繰り返した{motif}だけは身体へ残る。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "town_low",
+          "line": "別世界の衛兵が{motif}を見て跪く。そこでは救国の英雄だけが使った型として伝わっている。",
+          "loss_line": "敵に追われる途中、同じ型を恐れる者と敬う者がいることだけを知る。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "cave_mid",
+          "line": "封印壁の記録は、{anchor_name}の型が門を破壊し、逃げ遅れた世界を閉じる処刑技だったと示す。英雄と加害者は同じ人物だった。",
+          "loss_line": "記録の大半を失い、技が救出と処刑の両方に使われた事実だけが残る。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "砦の門にも{motif}が通用すると分かる。完成させるか、救助の型へ変えるか、誰にも継がず封じるかを選ぶ。",
+          "loss_line": "決着を避けても身体は型を忘れず、眠るたび最後の一歩だけを繰り返す。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "complete_form", "label": "技を完成させる",
+          "immediate_cost": "砦の門を傷つける危険",
+          "preserves": "世界を閉じる最後の手段",
+          "sacrifices": "二度と使わないという安心",
+          "ending_id": "keeper_of_last_step", "result_flags": ["technique_completed"]
+        },
+        {
+          "id": "change_form", "label": "救助の型へ変える",
+          "immediate_cost": "元の技が持つ確実な力",
+          "preserves": "継承を加害だけで終わらせない未来",
+          "sacrifices": "師から受け取った完全な形",
+          "ending_id": "open_hand_form", "result_flags": ["technique_transformed"]
+        },
+        {
+          "id": "seal_form", "label": "技を封じる",
+          "immediate_cost": "受け継いだ力",
+          "preserves": "門を再び壊さない誓い",
+          "sacrifices": "必要な時に使える可能性",
+          "ending_id": "unspoken_form", "result_flags": ["technique_sealed"]
+        }
+      ],
+      "endings": {
+        "keeper_of_last_step": {
+          "tone": "grave",
+          "line": "一行は最後の一歩まで身につける。使わないために覚え続けるという、重い役目だけが砦へ残る。",
+          "chronicle_line": "世界を閉じる技を完成させ、使う責任ごと継いだ。"
+        },
+        "open_hand_form": {
+          "tone": "hopeful",
+          "line": "{motif}の最後は刃でなく差し出す手へ変わる。別世界の弟子は、それを救助の型として覚え始める。",
+          "chronicle_line": "処刑の技を、世界から人を救い出す型へ変えた。"
+        },
+        "unspoken_form": {
+          "tone": "bittersweet",
+          "line": "型の名と手順は戦記から消される。それでも危機の瞬間、身体だけが最初の二歩を思い出す。",
+          "chronicle_line": "受け継いだ技を封じ、記録から消した。"
+        }
+      },
+      "fallback_choice": "change_form",
+      "fail_forward": [
+        {"when": "run_lost", "change": "敗北時に無意識で出た一手が、型の続きを示す。"},
+        {"when": "beat_missed", "change": "師の代わりに敵や石像の動きから型を読み取る。"},
+        {"when": "carrier_damaged", "change": "忘れた手順を別の仲間が身体の癖として補う。"}
+      ]
+    },
+    {
+      "id": "silver_homing_beast",
+      "theme": "絆と追跡",
+      "carrier": "beast_mark",
+      "selection": {"weight": 9, "min_runs_attempted": 3, "min_completed_arcs": 0},
+      "span": {"min_runs": 4, "max_runs": 7, "cooldown_runs": 4},
+      "promise": "姿が変わっても同じ仕草をする魔獣を、兵器ではなく一つの命として扱う。",
+      "reversal": "魔獣は帝国が砦を探すため世界ごとに生み直す、生体追跡標だった。",
+      "skin": {
+        "title": ["銀毛の帰還獣", "同じ目をした獣", "砦を嗅ぐもの"],
+        "anchor_name": ["シロガネ", "ユキネ", "ハイロ"],
+        "motif": ["銀毛の房", "割れた首輪", "青い足環"],
+        "origin_name": ["牧鐘の里", "霧爪の町", "獣笛の村"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "town_low",
+          "line": "{origin_name}で傷ついた魔獣を助ける。{anchor_name}と呼ぶと、{motif}を鳴らして一行の手へ額を寄せる。",
+          "loss_line": "救えなかった魔獣の{motif}だけが、帰還の門を最後まで追ってくる。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "cave_mid",
+          "line": "別世界で姿の違う魔獣が同じ仕草をする。以前の扱いを覚えているように、助けるか距離を取るかを選ぶ。",
+          "loss_line": "敗走路を魔獣が一度だけ守り、以前の呼び名に耳を動かす。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "castle_pre_boss",
+          "line": "帝国装置は{motif}を生体追跡標と認証する。{anchor_name}は一行を慕っていたのではなく、砦への門を嗅ぎ当てるよう作られていた。",
+          "loss_line": "追跡装置を壊せなくても、魔獣が命令に逆らって門から離れた記録が残る。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "{anchor_name}が砦の門前へ現れる。絆ごと追跡を断つか、帝国を偽の門へ導くか、魔獣自身へ行き先を選ばせるかを決める。",
+          "loss_line": "魔獣は門前で眠り、選択を急かさない。次の帰還でも同じ場所で待っている。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "sever_mark", "label": "追跡標を断つ",
+          "immediate_cost": "魔獣が一行を覚えている感覚",
+          "preserves": "砦の位置と魔獣の自由",
+          "sacrifices": "積み重ねた絆の記憶",
+          "ending_id": "stranger_at_gate", "result_flags": ["beast_mark_severed"]
+        },
+        {
+          "id": "mislead_empire", "label": "偽の門へ導く",
+          "immediate_cost": "魔獣をもう一度危険へ送ること",
+          "preserves": "砦と多くの世界の猶予",
+          "sacrifices": "共に暮らす未来",
+          "ending_id": "false_trail", "result_flags": ["beast_false_trail"]
+        },
+        {
+          "id": "let_beast_choose", "label": "魔獣へ任せる",
+          "immediate_cost": "帝国に発見される危険",
+          "preserves": "魔獣の自己決定",
+          "sacrifices": "安全な結論",
+          "ending_id": "chosen_den", "result_flags": ["beast_choice_returned"]
+        }
+      ],
+      "endings": {
+        "stranger_at_gate": {
+          "tone": "grave",
+          "line": "{motif}は外れ、魔獣は一行を知らない目で見る。それでも門を出る前、一度だけ同じ仕草で額を寄せる。",
+          "chronicle_line": "砦を守るため、帰還獣との記憶を断った。"
+        },
+        "false_trail": {
+          "tone": "bittersweet",
+          "line": "{anchor_name}は帝国艦を偽の門へ導き、遠い世界へ消える。砦には時折、傷のない銀毛だけが届く。",
+          "chronicle_line": "帰還獣へ偽の道を託し、帝国の追跡を逸らした。"
+        },
+        "chosen_den": {
+          "tone": "hopeful",
+          "line": "魔獣は門にも帝国にも向かわず、砦の外壁の下へ伏せる。命令でなく、自分でそこを巣に選ぶ。",
+          "chronicle_line": "帰還獣に、自分の帰る場所を選ばせた。"
+        }
+      },
+      "fallback_choice": "let_beast_choose",
+      "fail_forward": [
+        {"when": "run_lost", "change": "魔獣が敗走路を守った行動を、次の個体が引き継ぐ。"},
+        {"when": "beat_missed", "change": "足跡と抜け毛から、同じ仕草の個体がいたと知る。"},
+        {"when": "carrier_damaged", "change": "壊れた追跡具を外し、魔獣自身の記憶だけで関係を測る。"}
+      ]
+    },
+    {
+      "id": "empty_fifth_seat",
+      "theme": "失われた仲間と記憶",
+      "carrier": "missing_member",
+      "selection": {"weight": 8, "min_runs_attempted": 5, "min_completed_arcs": 1},
+      "span": {"min_runs": 5, "max_runs": 8, "cooldown_runs": 5},
+      "promise": "名簿にいない同行者が存在した証拠を、間違いとして消さない。",
+      "reversal": "帰還時に狭間へ落ちた仲間の記憶と技が、現在の一行へ分散して残っていた。",
+      "skin": {
+        "title": ["五人目の空席", "名簿にない仲間", "誰かの歩幅"],
+        "anchor_name": ["カナタ", "ナギ", "レイ"],
+        "motif": ["空の椅子", "五つ目の杯", "余分な足跡"],
+        "origin_name": ["白卓の町", "五橋の里", "遠鐘の宿場"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "run_result",
+          "line": "戦記の挿絵には一行が五人描かれ、{motif}のそばに{anchor_name}という読めない署名がある。名簿には該当者がいない。",
+          "loss_line": "全滅の記録だけが五人分の足跡を数え、帰還者は四人しかいない。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "town_low",
+          "line": "{origin_name}の住民が、以前助けてくれた五人組へ礼を言う。{anchor_name}はいつも最後尾を歩き、{motif}を忘れなかったという。",
+          "loss_line": "町へ入れなくても、道標に五人分の感謝の印が残されている。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "cave_mid",
+          "line": "狭間の残響から、{anchor_name}が帰還時に身体を失い、覚えた技と口癖だけが仲間へ分かれたと分かる。思い出すほど現在の人格が揺らぐ。",
+          "loss_line": "残響をすべて集められず、仲間の一人が知らない口癖を話す証拠だけが残る。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "{motif}の席へ人影が戻る。記憶を集めて{anchor_name}を復元するか、仲間の中へ残すか、存在した証だけを新しい戦記へ刻むかを選ぶ。",
+          "loss_line": "復元に失敗しても人影は責めず、次の帰還まで空席として残る。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "restore_member", "label": "記憶を集めて戻す",
+          "immediate_cost": "仲間たちから失われる記憶の一部",
+          "preserves": "五人目が再び名乗る身体",
+          "sacrifices": "現在の一行が完全に同じでいること",
+          "ending_id": "returned_different", "result_flags": ["fifth_member_restored"]
+        },
+        {
+          "id": "leave_distributed", "label": "皆の中へ残す",
+          "immediate_cost": "一人として再会する可能性",
+          "preserves": "現在の仲間が得た技と癖",
+          "sacrifices": "空席が埋まる未来",
+          "ending_id": "four_carry_one", "result_flags": ["fifth_member_distributed"]
+        },
+        {
+          "id": "record_exist", "label": "存在した証を刻む",
+          "immediate_cost": "復元を試す最後の機会",
+          "preserves": "誰かが確かに同行した事実",
+          "sacrifices": "本人の声を聞くこと",
+          "ending_id": "named_empty_seat", "result_flags": ["fifth_member_recorded"]
+        }
+      ],
+      "endings": {
+        "returned_different": {
+          "tone": "bittersweet",
+          "line": "{anchor_name}は戻るが、以前のすべてを持たない。一行もいくつかの思い出を失い、初対面のように名を尋ね合う。",
+          "chronicle_line": "失われた五人目を、不完全な姿で砦へ戻した。"
+        },
+        "four_carry_one": {
+          "tone": "hopeful",
+          "line": "空席は残る。それでも四人は同じ瞬間に{anchor_name}の癖で笑い、五人分の歩幅で次の門へ向かう。",
+          "chronicle_line": "五人目の記憶を、今いる仲間全員で持ち続けた。"
+        },
+        "named_empty_seat": {
+          "tone": "grave",
+          "line": "{motif}へ{anchor_name}の名が刻まれる。声も顔も戻らないが、以後の戦記は一行を決して四人だけとは書かない。",
+          "chronicle_line": "空席へ名を刻み、五人目が存在した証を残した。"
+        }
+      },
+      "fallback_choice": "record_exist",
+      "fail_forward": [
+        {"when": "run_lost", "change": "全滅記録にだけ現れる五人目の行動が手掛かりになる。"},
+        {"when": "beat_missed", "change": "会えなかった証人の代わりに、五人用へ直された道具を見つける。"},
+        {"when": "carrier_damaged", "change": "失われた記憶を復元せず、複数人の癖が一致する事実から追う。"}
+      ]
+    },
+    {
+      "id": "chronicle_margins",
+      "theme": "英雄譚と不都合な真実",
+      "carrier": "marginalia",
+      "selection": {"weight": 10, "min_runs_attempted": 3, "min_completed_arcs": 0},
+      "span": {"min_runs": 4, "max_runs": 6, "cooldown_runs": 3},
+      "promise": "戦記に書かれなかった人々の言葉を、勝敗の外へ捨てない。",
+      "reversal": "余白の書き手は失われた世界の記録係で、砦が美談へ整えた部分だけを訂正していた。",
+      "skin": {
+        "title": ["戦記の余白", "勝利ではない記録", "消せない訂正"],
+        "anchor_name": ["フミ", "シノ", "トエ"],
+        "motif": ["赤い校正線", "煤の筆跡", "細い銀文字"],
+        "origin_name": ["書架の町", "紙灯の里", "墨雨の宿場"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "run_result",
+          "line": "戦記の勝利という文字へ{motif}が引かれ、これは救出ではないと訂正される。署名は{origin_name}の{anchor_name}。",
+          "loss_line": "敗北の頁にも、失った人数を書き忘れるなという訂正だけが現れる。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "town_low",
+          "line": "別世界の書記が同じ{motif}を使い、英雄名より避難できなかった住民を先に記す。{anchor_name}の書式を師から学んだという。",
+          "loss_line": "町を救えなくても、書記が最後まで住民名を読み上げた声が戦記へ混ざる。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "run_result",
+          "line": "{anchor_name}は最初の世界で既に失われていた。残響へ混ざった記録意志が、砦による美しい要約から代償を取り戻していた。",
+          "loss_line": "失敗の頁ほど訂正が少なく、砦が勝利だけを整えている事実が浮かぶ。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "表の戦記をすべて真実へ直すか、士気を守る物語を残すか、代償を記した裏の戦記を併設するかを決める。",
+          "loss_line": "決断を保留すると、{motif}は新しい戦記の空白だけを静かに囲む。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "publish_truth", "label": "真実へ書き直す",
+          "immediate_cost": "砦が支えにした英雄像",
+          "preserves": "失われた者と代償の記録",
+          "sacrifices": "迷いなく出撃できる物語",
+          "ending_id": "unclean_record", "result_flags": ["chronicle_truth_public"]
+        },
+        {
+          "id": "keep_heroic", "label": "表の戦記を守る",
+          "immediate_cost": "書かれない犠牲者の声",
+          "preserves": "砦の士気と分かりやすい希望",
+          "sacrifices": "勝利の全容",
+          "ending_id": "useful_legend", "result_flags": ["chronicle_legend_kept"]
+        },
+        {
+          "id": "keep_two_books", "label": "二冊を残す",
+          "immediate_cost": "記録を読む者が負う迷い",
+          "preserves": "希望と代償の両方",
+          "sacrifices": "一つだけの正史",
+          "ending_id": "double_ledger", "result_flags": ["chronicle_double_ledger"]
+        }
+      ],
+      "endings": {
+        "unclean_record": {
+          "tone": "grave",
+          "line": "戦記から輝かしい題名が減り、名もない犠牲者が増える。出撃者は重くなった本を、それでも閉じずに読む。",
+          "chronicle_line": "砦の戦記を、代償まで含む真実へ書き直した。"
+        },
+        "useful_legend": {
+          "tone": "bittersweet",
+          "line": "表の物語は人々を次の門へ送り出す。余白の{motif}だけが、そこに書かれなかった名を覚えている。",
+          "chronicle_line": "砦を支えるため、英雄の戦記を残した。"
+        },
+        "double_ledger": {
+          "tone": "hopeful",
+          "line": "砦には語るための戦記と、忘れないための戦記が並ぶ。{anchor_name}の訂正は後者の最初の頁になる。",
+          "chronicle_line": "希望の戦記と代償の戦記を、二冊とも残した。"
+        }
+      },
+      "fallback_choice": "keep_two_books",
+      "fail_forward": [
+        {"when": "run_lost", "change": "敗北記録は削られにくく、砦の編集傾向を示す証拠になる。"},
+        {"when": "beat_missed", "change": "証人に会えなくても、その人物が残した訂正記号を追う。"},
+        {"when": "carrier_damaged", "change": "読めない文字を、訂正された位置と消された名から復元する。"}
+      ]
+    },
+    {
+      "id": "same_named_towns",
+      "theme": "故郷の名と複数の真実",
+      "carrier": "place_name",
+      "selection": {"weight": 8, "min_runs_attempted": 4, "min_completed_arcs": 0},
+      "span": {"min_runs": 5, "max_runs": 8, "cooldown_runs": 4},
+      "promise": "同じ名を持つ異なる町を、どれか一つの偽物として消さない。",
+      "reversal": "戦記へ強く残った町名が新世界へ染み出し、別々の住民に同じ故郷を作らせていた。",
+      "skin": {
+        "title": ["同じ名の町", "幾つもの故郷", "名前だけの帰還"],
+        "anchor_name": ["マチエ", "カヤ", "スイ"],
+        "motif": ["同じ町名板", "三本線の紋", "古い門札"],
+        "origin_name": ["花守の町", "水明の里", "白鐘の宿場"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "town_low",
+          "line": "{origin_name}の記録係{anchor_name}は、町が消えても{motif}に名を残してほしいと頼む。",
+          "loss_line": "町を救えず、焼けた{motif}から{origin_name}という名だけを持ち帰る。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "town_low",
+          "line": "別世界に同じ{origin_name}がある。住民も歴史も違うが、中央には同じ{motif}が掲げられている。",
+          "loss_line": "町へ着けなくても、街道標が存在しないはずの{origin_name}を指している。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "town_mid",
+          "line": "三つ目の{origin_name}で、戦記の町名が新世界へ根を下ろしていると分かる。どの町も模倣ではなく、その世界で本物の故郷になっていた。",
+          "loss_line": "住民を失っても、異なる三つの由来を持つ同じ町名が戦記へ残る。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "干渉を止めるため名を消すか、複数の故郷として認めるか、一つを正史へ固定するかを選ぶ。",
+          "loss_line": "選ばない限り、次の世界にも新しい{origin_name}が生まれ続ける。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "erase_name", "label": "町名を消す",
+          "immediate_cost": "すべての町が共有した名前",
+          "preserves": "新世界への記録干渉を止めること",
+          "sacrifices": "故郷を呼ぶ共通の言葉",
+          "ending_id": "nameless_homes", "result_flags": ["town_name_erased"]
+        },
+        {
+          "id": "accept_many", "label": "全て故郷と認める",
+          "immediate_cost": "唯一の由来を決めること",
+          "preserves": "異なる住民が同じ名を愛した事実",
+          "sacrifices": "一つだけの正史",
+          "ending_id": "many_true_homes", "result_flags": ["towns_many_true"]
+        },
+        {
+          "id": "fix_original", "label": "一つを正史にする",
+          "immediate_cost": "他の町が偽物と呼ばれること",
+          "preserves": "最初の町の由来と記録",
+          "sacrifices": "後から生まれた故郷の対等さ",
+          "ending_id": "one_origin", "result_flags": ["town_origin_fixed"]
+        }
+      ],
+      "endings": {
+        "nameless_homes": {
+          "tone": "grave",
+          "line": "町名は戦記から消える。住民たちは新しい名を選ぶが、古い{motif}を見ると理由のない懐かしさを覚える。",
+          "chronicle_line": "世界への干渉を止めるため、共有された町名を消した。"
+        },
+        "many_true_homes": {
+          "tone": "hopeful",
+          "line": "戦記は複数の{origin_name}を別々の故郷として記す。同じ名は奪い合う証でなく、失われても家を作り直す言葉になる。",
+          "chronicle_line": "同じ名を持つ町を、すべて本当の故郷と認めた。"
+        },
+        "one_origin": {
+          "tone": "bittersweet",
+          "line": "最初の町の由来が正史になる。後の町は名を変えるが、それぞれの門札へ小さく{motif}を残す。",
+          "chronicle_line": "一つの町を起源として選び、他の故郷へ別の名を与えた。"
+        }
+      },
+      "fallback_choice": "accept_many",
+      "fail_forward": [
+        {"when": "run_lost", "change": "失った町の名ほど強く戦記へ残り、次の世界に現れやすくなる。"},
+        {"when": "beat_missed", "change": "町へ入れず、街道標と住民の歌から同名の故郷を知る。"},
+        {"when": "carrier_damaged", "change": "欠けた町名板を異なる由来の証拠として残す。"}
+      ]
+    },
+    {
+      "id": "lords_testament",
+      "theme": "敵の役目と砦への疑い",
+      "carrier": "boss_words",
+      "selection": {"weight": 7, "min_runs_attempted": 6, "min_completed_arcs": 1},
+      "span": {"min_runs": 5, "max_runs": 9, "cooldown_runs": 5},
+      "promise": "異なる主が遺した言葉を、敗者の戯言として切り捨てない。",
+      "reversal": "主たちは世界を閉じる敵であると同時に、砦から流れ込む何かを封じる役目も負っていた。",
+      "skin": {
+        "title": ["主たちの遺言", "敵が守った門", "途切れた警告"],
+        "anchor_name": ["門守", "封じ手", "最後の主"],
+        "motif": ["黒い封片", "逆向きの紋", "砕けた冠"],
+        "origin_name": ["封環の城", "暮鐘の砦", "灰門の宮"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "castle_pre_boss",
+          "line": "{origin_name}の主は倒れる直前、砦から来るものを止めろと言い、{motif}を残す。",
+          "loss_line": "主に敗れると、戦記へ警告の長い断片が混ざる。ただし声は歪み、真偽を判別できない。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "castle_pre_boss",
+          "line": "別世界の主が前の言葉の続きを語る。姿も勢力も違うのに、{anchor_name}という役目と{motif}だけが一致する。",
+          "loss_line": "敗北時の断片は多いが矛盾も増え、勝敗どちらの記録も必要になる。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "run_result",
+          "line": "断片をつなぐと、主は世界を支配しながら砦の流入も封じていたと分かる。討伐は世界を救う一方、封を一つずつ薄くしていた。",
+          "loss_line": "最後の断片を得られなくても、砦の門に主の封印と同じ傷が現れる。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "主の討伐を続けるか、次の主と交渉するか、砦の門を閉じて役割そのものを変えるかを選ぶ。",
+          "loss_line": "選択を先送りするほど砦の門の傷が広がり、主たちの警告は明瞭になる。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "continue_hunt", "label": "討伐を続ける",
+          "immediate_cost": "封が薄くなる危険",
+          "preserves": "各世界を主から解放する現在の方法",
+          "sacrifices": "警告を確かめる猶予",
+          "ending_id": "known_duty", "result_flags": ["lords_hunt_continues"]
+        },
+        {
+          "id": "negotiate_lord", "label": "次の主と交渉する",
+          "immediate_cost": "主を倒せる機会と砦の信頼",
+          "preserves": "封の真相を確かめる道",
+          "sacrifices": "敵味方を単純に分けること",
+          "ending_id": "shared_watch", "result_flags": ["lords_negotiation"]
+        },
+        {
+          "id": "change_fortress", "label": "砦の門を閉じる",
+          "immediate_cost": "しばらく世界へ渡れないこと",
+          "preserves": "砦からの流入を止める可能性",
+          "sacrifices": "現在の救援方法",
+          "ending_id": "closed_silver_gate", "result_flags": ["fortress_gate_changed"]
+        }
+      ],
+      "endings": {
+        "known_duty": {
+          "tone": "grave",
+          "line": "一行は主を討つ役目を続ける。ただし戦記は以後、敵が守っていたものも必ず一行記す。",
+          "chronicle_line": "主たちの警告を知ったうえで、討伐を続けた。"
+        },
+        "shared_watch": {
+          "tone": "bittersweet",
+          "line": "次の主は武器を下ろさず、一行も背を向けない。敵同士のまま、同じ門を監視する短い協定が始まる。",
+          "chronicle_line": "次の主と交渉し、砦と世界の間を共に監視した。"
+        },
+        "closed_silver_gate": {
+          "tone": "hopeful",
+          "line": "銀の門は初めて閉じる。救えない世界が生まれる一方、砦の傷は止まり、新しい渡航法を探す時間が残る。",
+          "chronicle_line": "銀の門を閉じ、砦の役割を問い直した。"
+        }
+      },
+      "fallback_choice": "negotiate_lord",
+      "fail_forward": [
+        {"when": "run_lost", "change": "敗北時は主の言葉を長く聞けるが、歪んだ断片として扱う。"},
+        {"when": "beat_missed", "change": "主と会えなかった世界では、城門の封印傷を証拠にする。"},
+        {"when": "carrier_damaged", "change": "欠けた遺言を勝利と敗北の両記録から突き合わせる。"}
+      ]
+    },
+    {
+      "id": "drifting_imperial_fleet",
+      "theme": "敵軍の分裂と帰属",
+      "carrier": "fleet_trace",
+      "selection": {"weight": 9, "min_runs_attempted": 4, "min_completed_arcs": 0},
+      "span": {"min_runs": 5, "max_runs": 8, "cooldown_runs": 4},
+      "promise": "各世界へ漂着した帝国兵、機械、魔獣を一つの敵軍として決めつけない。",
+      "reversal": "漂着物は別部隊ではなく、世界の狭間で砕けた同じ艦隊の一部だった。",
+      "skin": {
+        "title": ["漂着する帝国艦隊", "砕けた空の軍勢", "旗艦への帰路"],
+        "anchor_name": ["副長セイ", "機関士ラグ", "獣番ミネ"],
+        "motif": ["半分の軍旗", "割れた航路盤", "青銅の艦章"],
+        "origin_name": ["灰天艦隊", "鉄雲船団", "暮星艦隊"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "town_mid",
+          "line": "町外れに帝国艇が墜ち、{origin_name}の{anchor_name}が{motif}を守っている。負傷兵を救うか捕らえるかを一行へ問う。",
+          "loss_line": "墜落艇を調べられず、帝国式の{motif}だけが戦記に写る。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "cave_mid",
+          "line": "別世界で同じ{motif}を付けた機械兵と馴致魔獣を見つける。以前の扱いにより、残党は一行を救援者か略奪者として認識する。",
+          "loss_line": "敗走中、助けた残党か恨む残党のどちらかが一度だけ進路を開く。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "castle_pre_boss",
+          "line": "航路盤から、すべてが同じ{origin_name}の破片だと分かる。旗艦は残党を回収しながら銀の砦へ近づいている。",
+          "loss_line": "旗艦を止められなくても、これまで救った部隊の数だけ進路情報が砦へ届く。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "旗艦が砦前へ現れる。残党と共闘して反乱を起こすか、艦を撃沈するか、魔獣と避難民だけを受け入れるかを選ぶ。",
+          "loss_line": "旗艦戦に敗れても、艦内の協力者が退路を開き、次の帰還時に決着をやり直せる。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "support_mutiny", "label": "反乱を支える",
+          "immediate_cost": "帝国残党を砦へ近づける危険",
+          "preserves": "兵士たちが命令を選び直す未来",
+          "sacrifices": "敵艦を完全に消す確実さ",
+          "ending_id": "fleet_without_emperor", "result_flags": ["fleet_mutiny"]
+        },
+        {
+          "id": "sink_flagship", "label": "旗艦を沈める",
+          "immediate_cost": "艦内の協力者と捕虜",
+          "preserves": "砦の即時安全",
+          "sacrifices": "残党が別の軍になれる可能性",
+          "ending_id": "last_wreck", "result_flags": ["fleet_destroyed"]
+        },
+        {
+          "id": "rescue_noncombatants", "label": "非戦闘員を救う",
+          "immediate_cost": "旗艦と武装兵を逃がすこと",
+          "preserves": "魔獣、整備員、避難民の命",
+          "sacrifices": "帝国戦力をここで止める機会",
+          "ending_id": "new_hangar", "result_flags": ["fleet_noncombatants_saved"]
+        }
+      ],
+      "endings": {
+        "fleet_without_emperor": {
+          "tone": "hopeful",
+          "line": "{anchor_name}は{motif}から帝国章を削る。残った艦は軍旗でなく、世界間の救難船として最初の航路へ出る。",
+          "chronicle_line": "漂着艦隊の反乱を支え、救難船へ作り替えた。"
+        },
+        "last_wreck": {
+          "tone": "grave",
+          "line": "旗艦は砦へ届く前に沈む。各世界の残骸が同時に光を失い、{motif}だけが格納庫へ残る。",
+          "chronicle_line": "砦を守るため、帝国旗艦と残党を沈めた。"
+        },
+        "new_hangar": {
+          "tone": "bittersweet",
+          "line": "砦の空き区画が魔獣と避難民の居場所になる。逃げた旗艦は脅威として残るが、救った者たちは追跡法を知っている。",
+          "chronicle_line": "旗艦を逃がし、艦内の非戦闘員を砦へ迎えた。"
+        }
+      },
+      "fallback_choice": "rescue_noncombatants",
+      "fail_forward": [
+        {"when": "run_lost", "change": "過去に助けた残党が敗走路を作り、物語を次の世界へ運ぶ。"},
+        {"when": "beat_missed", "change": "漂着地点の残骸と航路盤から部隊の行方を追う。"},
+        {"when": "carrier_damaged", "change": "欠けた艦章を複数の残党部隊が持つことで同一艦隊だと証明する。"}
+      ]
+    },
+    {
+      "id": "child_of_the_fortress",
+      "theme": "救済と本人の居場所",
+      "carrier": "fortress_guest",
+      "selection": {"weight": 5, "min_runs_attempted": 6, "min_completed_arcs": 1},
+      "span": {"min_runs": 5, "max_runs": 9, "cooldown_runs": 6},
+      "promise": "例外として砦へ救い出した子どもに、救われた後の人生まで選ぶ権利を渡す。",
+      "reversal": "子どもは閉じなかった世界の一部を抱えており、砦に長く留まるほど門を不安定にする。",
+      "skin": {
+        "title": ["砦で育つ子ども", "帰る世界のない子", "門前の小さな靴"],
+        "anchor_name": ["リノ", "アオ", "ヒナ"],
+        "motif": ["木彫りの鳥", "片方の靴", "種の入った袋"],
+        "origin_name": ["朝苗の村", "小鐘の町", "風実の里"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "run_result",
+          "line": "{origin_name}を失った{anchor_name}だけが門を越え、{motif}を抱いて砦へ残る。次の世界も救えるのかと尋ねる。",
+          "loss_line": "全滅から回収された{anchor_name}は、なぜ自分だけ戻ったのかを一行へ尋ね続ける。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "stronghold",
+          "line": "{anchor_name}は帰還のたび戦記を読み、勝利と敗北で異なる答えを覚える。{motif}へ次に行きたい場所の絵を足す。",
+          "loss_line": "敗北の戦記も隠さず読むと、{anchor_name}は救えなかった名を先に覚える。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "run_result",
+          "line": "{anchor_name}の周囲で門が勝手に開く。身体に{origin_name}の残りが宿り、砦へ新しい世界を引き寄せていると分かる。",
+          "loss_line": "不安定な門から故郷の声だけが漏れ、{anchor_name}が世界の欠片である証拠になる。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "{anchor_name}を狭間の故郷へ返すか、砦を改造して定着させるか、本人が選んだ新世界へ送り出すかを決める。",
+          "loss_line": "決められない一行へ、{anchor_name}は次の帰還まで自分でも考える時間がほしいと言う。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "return_origin", "label": "故郷へ返す",
+          "immediate_cost": "再会できない可能性",
+          "preserves": "生まれた世界と共にいる権利",
+          "sacrifices": "砦で得た安全と関係",
+          "ending_id": "child_in_still_world", "result_flags": ["child_returned"]
+        },
+        {
+          "id": "anchor_fortress", "label": "砦へ定着させる",
+          "immediate_cost": "砦の門を改造する危険",
+          "preserves": "砦で育てた生活と人間関係",
+          "sacrifices": "故郷へ戻る最後の道",
+          "ending_id": "fortress_home", "result_flags": ["child_anchored"]
+        },
+        {
+          "id": "send_chosen_world", "label": "選んだ世界へ送る",
+          "immediate_cost": "一行が将来を見届けられないこと",
+          "preserves": "本人が新しい故郷を選ぶ権利",
+          "sacrifices": "砦に留めて守る安心",
+          "ending_id": "chosen_horizon", "result_flags": ["child_departed"]
+        }
+      ],
+      "endings": {
+        "child_in_still_world": {
+          "tone": "grave",
+          "line": "{anchor_name}は止まった故郷へ戻り、{motif}を門の外へ置く。扉が閉じる直前、今度は自分が皆を起こすと言う。",
+          "chronicle_line": "砦で育った子を、止まった故郷へ返した。"
+        },
+        "fortress_home": {
+          "tone": "bittersweet",
+          "line": "砦の一角が{origin_name}の土で満たされる。門は不安定なままだが、{anchor_name}は初めて明日の予定を書く。",
+          "chronicle_line": "門の危険を受け入れ、子どもを砦の住民として迎えた。"
+        },
+        "chosen_horizon": {
+          "tone": "hopeful",
+          "line": "{anchor_name}は自分で選んだ世界へ{motif}を持って歩く。救われた子ではなく、最初の移住者として名乗る。",
+          "chronicle_line": "子どもへ、新しい故郷を自分で選ばせた。"
+        }
+      },
+      "fallback_choice": "send_chosen_world",
+      "fail_forward": [
+        {"when": "run_lost", "change": "敗北の戦記を隠さず見せたことが、子どもの判断材料になる。"},
+        {"when": "beat_missed", "change": "世界側の場面を逃しても、砦での会話として進行する。"},
+        {"when": "carrier_damaged", "change": "壊れた思い出の品より、本人が今選ぶ言葉を優先する。"}
+      ]
+    },
+    {
+      "id": "repeated_execution",
+      "theme": "反復される悲劇と選別",
+      "carrier": "repeated_scene",
+      "selection": {"weight": 8, "min_runs_attempted": 5, "min_completed_arcs": 1},
+      "span": {"min_runs": 5, "max_runs": 8, "cooldown_runs": 5},
+      "promise": "一人を犠牲にすれば町が救われるという同じ問いへ、慣れた答えを返さない。",
+      "reversal": "銀の砦が強い残響を得るため、似た悲劇を持つ世界を無意識に選別していた。",
+      "skin": {
+        "title": ["繰り返される処刑日", "同じ形の犠牲", "選ばれた悲劇"],
+        "anchor_name": ["ユエ", "カイ", "スズ"],
+        "motif": ["白い処刑布", "止まった鐘", "折れた拘束輪"],
+        "origin_name": ["断鐘の町", "白壇の里", "夕刑の宿場"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "town_mid",
+          "line": "{origin_name}で{anchor_name}を処刑すれば町が救われると告げられる。処刑台には{motif}が残る。",
+          "loss_line": "町を救えず、処刑の成否も分からないまま{motif}の映像だけが戦記へ残る。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "town_mid",
+          "line": "別世界で種族も罪も違う{anchor_name}が、同じ配置の処刑台へ立つ。町人は同じ言葉で犠牲を正当化する。",
+          "loss_line": "処刑場へ着けなくても、止まった鐘が前世界と同じ時刻を示す。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "run_result",
+          "line": "戦記を比較すると、砦が強い悲嘆を残す世界を優先して門へ結んでいたと分かる。偶然ではなく、救援先の選別だった。",
+          "loss_line": "敗北した世界ほど多い残響を生み、選別の証拠を強める。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
+          "line": "処刑を止めて町全体へ代償を分けるか、世界選別を停止するか、仕組みを公表して出撃者へ選ばせるかを決める。",
+          "loss_line": "選択を避けると、次の門の向こうでも同じ鐘が鳴り始める。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "share_cost", "label": "代償を皆で分ける",
+          "immediate_cost": "町全体が負う長い困窮",
+          "preserves": "一人を道具にしない原則",
+          "sacrifices": "即座に問題を終える方法",
+          "ending_id": "many_small_scars", "result_flags": ["execution_cost_shared"]
+        },
+        {
+          "id": "stop_selection", "label": "世界選別を止める",
+          "immediate_cost": "救援先を安定して見つける力",
+          "preserves": "悲劇を資源として選ばないこと",
+          "sacrifices": "多くの世界へ届く効率",
+          "ending_id": "silent_bell", "result_flags": ["tragic_selection_stopped"]
+        },
+        {
+          "id": "reveal_selection", "label": "仕組みを公表する",
+          "immediate_cost": "砦と出撃への信頼",
+          "preserves": "出撃者が事情を知って選ぶ権利",
+          "sacrifices": "無垢な救援者でいられること",
+          "ending_id": "informed_departure", "result_flags": ["tragic_selection_revealed"]
+        }
+      ],
+      "endings": {
+        "many_small_scars": {
+          "tone": "hopeful",
+          "line": "処刑台は解体され、町人は少しずつ食料と労働を分ける。誰も無傷ではないが、一人だけが消える結末は止まる。",
+          "chronicle_line": "一人の処刑を止め、代償を町全体で引き受けた。"
+        },
+        "silent_bell": {
+          "tone": "grave",
+          "line": "砦の門は長く沈黙し、救えない世界が増える。それでも残響を得るために悲劇を選ぶ鐘は二度と鳴らない。",
+          "chronicle_line": "悲劇を選ぶ機構を止め、銀の門の効率を捨てた。"
+        },
+        "informed_departure": {
+          "tone": "bittersweet",
+          "line": "出撃前に選別の事実が読み上げられる。去る者も残る者も増えるが、誰も善意だけを理由に利用されない。",
+          "chronicle_line": "砦の世界選別を公表し、出撃するかを各人へ返した。"
+        }
+      },
+      "fallback_choice": "reveal_selection",
+      "fail_forward": [
+        {"when": "run_lost", "change": "敗北で増えた残響量そのものが選別の証拠になる。"},
+        {"when": "beat_missed", "change": "処刑を見られなくても、同じ鐘と台座の配置を比較する。"},
+        {"when": "carrier_damaged", "change": "壊れた映像を町人の定型句と戦記の配置記録から補う。"}
+      ]
+    },
+    {
+      "id": "world_that_did_not_close",
+      "theme": "過去の総決算と見届ける責任",
+      "carrier": "distress_signal",
+      "selection": {"weight": 2, "min_runs_attempted": 10, "min_completed_arcs": 3},
+      "span": {"min_runs": 6, "max_runs": 10, "cooldown_runs": 8},
+      "promise": "成功にも失敗にもならず狭間へ止まった世界の結末を、最後まで見届ける。",
+      "reversal": "救難信号の発信源は新しい世界ではなく、過去の戦記から行き場を失った人物と町が重なった世界だった。",
+      "skin": {
+        "title": ["閉じなかった世界", "狭間からの救難信号", "終わりを待つ地"],
+        "anchor_name": ["呼び手", "門待ち", "残り声"],
+        "motif": ["途切れた救難灯", "四枚の地図片", "鳴らない帰還鐘"],
+        "origin_name": ["時止まりの地", "名残野の世界", "境目の国"]
+      },
+      "beats": [
+        {
+          "id": "seed", "phase": "seed", "placement": "run_result",
+          "line": "複数の戦記に同じ救難信号が一音ずつ混ざる。つなぐと、{origin_name}の{anchor_name}が{motif}を灯している。",
+          "loss_line": "敗北の雑音にだけ信号の続きを聞き、成功と失敗の両記録が必要だと分かる。"
+        },
+        {
+          "id": "echo", "phase": "echo", "placement": "town_low",
+          "line": "新しい世界に、過去の町と人物を不完全に写した場所が現れる。誰も本物ではないが、以前の選択の続きを覚えている。",
+          "loss_line": "写しの町を失っても、住民が最後に選んだ方角が{motif}の地図へ加わる。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "placement": "castle_pre_boss",
+          "line": "信号源は、世界を閉じられなかった記録同士が作った{origin_name}だった。救出すれば過去の住民を混ぜた存在が砦へ流れ込む。",
+          "loss_line": "狭間の主に敗れても門の座標は固定され、次の世界から再び接続できる。"
+        },
+        {
+          "id": "reckoning", "phase": "reckoning", "placement": "castle_pre_boss",
+          "line": "住民を砦へ回収するか、世界を再始動するか、苦しみを終えるため完全に閉じるかを選ぶ。{anchor_name}はどの結末も見届けてほしいと頼む。",
+          "loss_line": "決着の世界で敗れても物語は終了せず、傷を増やした{origin_name}へ次のランで再挑戦できる。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "rescue_residents", "label": "住民を砦へ回収する",
+          "immediate_cost": "砦へ流れ込む不安定な記憶",
+          "preserves": "混ざり合った住民たちの命",
+          "sacrifices": "元の世界の形",
+          "ending_id": "many_memories_home", "result_flags": ["stalled_world_rescued"]
+        },
+        {
+          "id": "restart_world", "label": "世界を再始動する",
+          "immediate_cost": "再び滅びへ進む可能性",
+          "preserves": "住民が自分の世界で未来を選ぶこと",
+          "sacrifices": "停止していた安全",
+          "ending_id": "clock_moves_again", "result_flags": ["stalled_world_restarted"]
+        },
+        {
+          "id": "close_world", "label": "世界を完全に閉じる",
+          "immediate_cost": "残っていたすべての住民",
+          "preserves": "終わらない苦痛を止めること",
+          "sacrifices": "救出と再生の可能性",
+          "ending_id": "witnessed_end", "result_flags": ["stalled_world_closed"]
+        }
+      ],
+      "endings": {
+        "many_memories_home": {
+          "tone": "bittersweet",
+          "line": "住民たちは複数の故郷と名前を持ったまま砦へ着く。誰の写しか決めず、今日選んだ名から生活を始める。",
+          "chronicle_line": "閉じなかった世界の住民を、不完全な記憶ごと砦へ迎えた。"
+        },
+        "clock_moves_again": {
+          "tone": "hopeful",
+          "line": "{origin_name}の鐘が動き、朝が次の時刻へ進む。再び危機が来るとしても、住民は停止でなく未来を選ぶ。",
+          "chronicle_line": "止まっていた世界を再始動し、未来の危険ごと住民へ返した。"
+        },
+        "witnessed_end": {
+          "tone": "grave",
+          "line": "一行が最後の名を読み終えると、{motif}は消える。何も持ち帰れないが、その世界が無かったことにはならない。",
+          "chronicle_line": "閉じなかった世界の最後を見届け、完全に閉じた。"
+        }
+      },
+      "fallback_choice": "restart_world",
+      "fail_forward": [
+        {"when": "run_lost", "change": "決着の世界だけは消えず、傷を増やして次の挑戦を待つ。"},
+        {"when": "beat_missed", "change": "過去の人物へ会えなくても、以前の選択痕から進路を得る。"},
+        {"when": "carrier_damaged", "change": "欠けた信号を成功と敗北の両戦記から組み直す。"}
+      ]
+    }
+  ]
+}

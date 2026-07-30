@@ -116,6 +116,18 @@ var event_boon := ""            ## temporary_* のうち 1 つ
 ## 済んだイベント（同じものを二度出さない）。
 var event_done: Dictionary = {}
 
+## これまでに選んだ手の傾向（tag -> 回数）。
+##
+## **世界がプレイヤーを覚えている**ようにするためのもの。後のイベントで
+## 同じ傾向の tag が出たら、その文に一言添える。1 件ごとに独立していると、
+## 何件並べても「無関係な出来事の列」で終わる。
+var event_tags: Dictionary = {}
+
+
+## その tag を前に選んだことがあるか。
+func chose_tag_before(tag: String) -> bool:
+	return int(event_tags.get(tag, 0)) > 0
+
 
 ## 一時効果を 1 歩ぶん進める。切れたら戻す。
 func step_event_effects() -> void:
@@ -269,6 +281,7 @@ func start_new_run(seed_value: int = -1) -> void:
 	event_shop_bonus = 0
 	event_boon = ""
 	event_done = {}
+	event_tags = {}
 	run_active = true
 	runs_attempted += 1
 	for m in active_party():
