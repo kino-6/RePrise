@@ -98,6 +98,28 @@ static func debug_enabled() -> bool:
 	return "--ai-debug" in OS.get_cmdline_user_args()
 
 
+## 窓口を 1 つ作って `parent` へぶら下げる。**構築はここだけ**（D-3）。
+##
+## 接続点が散ると、片方だけタイムアウトを直したり、片方だけ `think` を
+## 切り忘れたりする（実際に別々に書いていた）。窓口そのものは用途ごとに
+## 分ける必要がある ―― 1 本にすると戦記の返事とクエスト文の返事が混ざる ――
+## ので、**作る場所だけを 1 つにする**。
+##
+## `--no-ai` のときは null を返す。呼ぶ側は「窓口が無ければ頼まない」だけでよく、
+## AI の有無を各所で判定しなくて済む。
+static func create(parent: Node) -> LocalAI:
+	if not enabled():
+		return null
+	var ai := LocalAI.new()
+	parent.add_child(ai)
+	return ai
+
+
+## AI を使う設定か。**判定もここ 1 か所。**
+static func enabled() -> bool:
+	return "--no-ai" not in OS.get_cmdline_user_args()
+
+
 ## 返事から JSON を取り出す。モデルは前後に説明を付けてくる。
 ## 取れなければ空の辞書（呼び出し側はテンプレートのままにする）。
 static func extract_json(text: String) -> Dictionary:

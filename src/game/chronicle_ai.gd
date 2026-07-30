@@ -47,9 +47,10 @@ var _ai: LocalAI = null
 
 
 func _ready() -> void:
-	_ai = LocalAI.new()
-	add_child(_ai)
-	_ai.answered.connect(_on_answered)
+	# **窓口を自分で作らない**（D-3）。作る場所は `LocalAI.create()` の 1 か所。
+	_ai = LocalAI.create(self)
+	if _ai != null:
+		_ai.answered.connect(_on_answered)
 
 
 ## 生成を依頼する。返りは signal で、失敗したときは何も飛ばさない。

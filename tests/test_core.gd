@@ -29,6 +29,7 @@ func _initialize() -> void:
 	_test_encounter_gap()
 	_test_docs_hygiene()
 	_test_no_white_flash()
+	_test_single_ai_connection()
 	_test_data_integrity()
 	_test_save_migration()
 	_test_save_to_disk()
@@ -330,6 +331,85 @@ func _test_encounter_gap() -> void:
 ## 消す事故を 2 度起こした。数えるのは行数ではなく**済んだ行が残っていないか**。
 ##
 ## 済んだ項目は `[x]` を付けて `docs/tasks_archive.md` へ移す（消さない）。
+## LLM の接続点は 1 か所（D-3）。
+##
+## 接続点が散ると、片方だけタイムアウトを直したり、片方だけ `think` を
+## 切り忘れたりする（実際に別々に書いていた）。窓口そのものは用途ごとに
+## 分ける必要がある ―― 1 本にすると戦記の返事とクエスト文の返事が混ざる ――
+## ので、**作る場所だけを 1 つにする**。
+##
+## あわせて「**AI は文章にしか触らない**」を見る。AI の返事を受ける経路が
+## 乱数やセーブや数値に触っていたら、AI の有無で進行がずれる
+## （＝同じ種から同じ世界が出なくなる）。
+func _test_single_ai_connection() -> void:
+	var made := 0
+	var dir := DirAccess.open("res://src")
+	var files := _gd_files("res://src")
+	for path in files:
+		var text := FileAccess.get_file_as_string(path)
+		made += text.count("LocalAI.new()")
+	_check("LocalAI を作る場所は 1 か所", made == 1, "(%d か所)" % made)
+
+	var factory := FileAccess.get_file_as_string("res://src/game/local_ai.gd")
+	_check("その 1 か所は LocalAI.create()", factory.contains("static func create("))
+	_check("AI の有無の判定も 1 か所", factory.contains("static func enabled("))
+
+	# **返事を「適用する関数」だけが対象。**
+	#
+	# ファイル全体を見ると、骨格を作る側（`fallback` / `roll`）が `DetRng` を
+	# 使っているので必ず引っかかる。あちらは AI の有無に関係なく回る決定的な
+	# 側なので、混ぜて見てはいけない。見たいのは
+	# **AI の返事が乱数列を進めたりセーブへ書いたりしないこと**。
+	var appliers := {
+		"res://src/game/quest_text.gd": "apply_to_world",
+		"res://src/quest/world_event_catalog.gd": "apply_ai_skin",
+	}
+	for path in appliers:
+		var body := _func_body(
+			FileAccess.get_file_as_string(path), String(appliers[path]))
+		_check("%s が見つかる" % String(appliers[path]), body != "")
+		_check(
+			"%s が乱数もセーブも触らない" % String(appliers[path]),
+			not body.contains("rng") and not body.contains("save")
+				and not body.contains("GameState")
+		)
+	_check("dir が開けた", dir != null)
+
+
+## 関数 1 つぶんの中身。次の `func ` が始まるまで。
+func _func_body(text: String, name: String) -> String:
+	var at := text.find("func %s(" % name)
+	if at < 0:
+		return ""
+	var rest := text.substr(at)
+	var next := rest.find("
+func ")
+	var alt := rest.find("
+static func ")
+	if alt >= 0 and (next < 0 or alt < next):
+		next = alt
+	return rest if next < 0 else rest.substr(0, next)
+
+
+## `res://src` 以下の .gd を集める。
+func _gd_files(root: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var dir := DirAccess.open(root)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while name != "":
+		var path := "%s/%s" % [root, name]
+		if dir.current_is_dir():
+			out.append_array(_gd_files(path))
+		elif name.ends_with(".gd"):
+			out.append(path)
+		name = dir.get_next()
+	dir.list_dir_end()
+	return out
+
+
 ## 遭遇の演出に白を戻さない。
 ##
 ## 調査の結論は `docs/screen_transition_design.md`。SFC の明度レジスタは

@@ -177,17 +177,19 @@ func _ready() -> void:
 			_on_story_choice({}))
 
 	# ローカル AI の窓口は 1 つだけ。戦記もクエスト文もここを通す。
-	_ai = LocalAI.new()
-	add_child(_ai)
+	# **窓口を自分で作らない**（D-3）。作る場所は `LocalAI.create()` の 1 か所。
+	# `--no-ai` なら null が返り、以降は「頼まない」だけになる。
+	_ai = LocalAI.create(self)
 	# 窓口は 1 つなので、返りは「いま何を頼んだか」で振り分ける。
-	_ai.answered.connect(func(text: String) -> void:
-		if _awaiting_event_text:
-			_awaiting_event_text = false
-			_on_event_text(text)
-			return
-		_on_quest_text(text)
-		# 封の名が済んだら、続けてイベントの表層を頼む（印は _ask_event_text が立てる）。
-		_ask_event_text())
+	if _ai != null:
+		_ai.answered.connect(func(text: String) -> void:
+			if _awaiting_event_text:
+				_awaiting_event_text = false
+				_on_event_text(text)
+				return
+			_on_quest_text(text)
+			# 封の名が済んだら、続けてイベントの表層を頼む（印は _ask_event_text が立てる）。
+			_ask_event_text())
 
 	title.started.connect(_on_title_started)
 	title.resumed.connect(_resume_run)
@@ -1148,7 +1150,7 @@ func _on_site_entered(
 ## 数秒後に届いたら表示だけ差し替える（構造は動かないので途中でも安全）。
 ## 届かなければテンプレートのまま、というだけ。
 func _ask_quest_text() -> void:
-	if GameState.world == null or _ai.is_busy():
+	if GameState.world == null or _ai == null or _ai.is_busy():
 		return
 	var facts := JSON.stringify(QuestText.facts_for_llm(GameState.world), "  ")
 	_ai.ask(QUEST_PROMPT % facts, 8.0, "quest")
@@ -1170,7 +1172,7 @@ const EVENT_PROMPT := """あなたは SFC 期の日本語 RPG の名づけ役で
 
 
 func _ask_event_text() -> void:
-	if GameState.world == null or _ai.is_busy():
+	if GameState.world == null or _ai == null or _ai.is_busy():
 		return
 	for pos in GameState.world.events:
 		if _event_skinned.has(pos):
