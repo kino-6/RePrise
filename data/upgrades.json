@@ -1,31 +1,66 @@
 {
-  "_comment": "恒久アップグレード。残響（毎ランの道中スコアに応じて必ず支払われる恒久通貨）で買う。effect の値は 1 段ごとの増分で、level 段まで積める。cost は 1 段目の値段で、段が上がるごとに cost_step ぶん高くなる。能力値そのものは上げない——レベルを失うことがランの代償なので、そこを恒久強化で埋めると代償が消える。",
-
+  "_comment": "拠点の恒久強化。**能力値には触れない**（レベルを失うのがランの土台なので、そこを埋めると土台が消える）。触れる軸は「立ち上がり」「情報」「保険」「値段」の 4 つ。同じ軸ばかり増やすと、数が増えても選ぶ意味が増えない。",
   "provisions": {
     "name": "旅支度",
     "desc": "出撃するとき ゴールドを持って出られる。",
-    "effect": "start_gold", "value": 40,
-    "levels": 3, "cost": 6, "cost_step": 5
+    "effect": "start_gold",
+    "value": 40,
+    "levels": 3,
+    "cost": 6,
+    "cost_step": 5
   },
-
   "handmemory": {
     "name": "手の記憶",
     "desc": "職業の熟練が 早く身につく。",
-    "effect": "mastery_gain", "value": 15,
-    "levels": 3, "cost": 10, "cost_step": 8
+    "effect": "mastery_gain",
+    "value": 15,
+    "levels": 3,
+    "cost": 10,
+    "cost_step": 8
   },
-
   "connections": {
     "name": "商いの伝手",
     "desc": "道中の出店に 品が多く並ぶ。",
-    "effect": "shop_stock", "value": 1,
-    "levels": 2, "cost": 12, "cost_step": 10
+    "effect": "shop_stock",
+    "value": 1,
+    "levels": 2,
+    "cost": 12,
+    "cost_step": 10
   },
-
   "preparation": {
     "name": "備え",
     "desc": "出撃するとき やくそうを持って出られる。",
-    "effect": "start_herb", "value": 1,
-    "levels": 3, "cost": 8, "cost_step": 6
+    "effect": "start_herb",
+    "value": 1,
+    "levels": 3,
+    "cost": 8,
+    "cost_step": 6
+  },
+  "seal_lore": {
+    "name": "封の言い伝え",
+    "desc": "出撃するとき 封の ありかが わかっている。",
+    "effect": "known_seals",
+    "value": 1,
+    "levels": 3,
+    "cost": 14,
+    "cost_step": 12
+  },
+  "lifeline": {
+    "name": "命の綱",
+    "desc": "1 ランに 1 度だけ 全滅を まぬがれる。",
+    "effect": "lifeline",
+    "value": 1,
+    "levels": 2,
+    "cost": 30,
+    "cost_step": 26
+  },
+  "haggle": {
+    "name": "商いの目",
+    "desc": "みせの 品が やすく 買える。",
+    "effect": "price_cut",
+    "value": 10,
+    "levels": 3,
+    "cost": 11,
+    "cost_step": 9
   }
 }

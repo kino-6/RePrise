@@ -311,8 +311,40 @@ func _grant_starting_gear() -> void:
 		m.mp = m.max_mp()
 
 
+## 1 ランに 1 度だけ全滅をまぬがれる残り回数（「命の綱」）。
+## **ラン内資源。** 恒久側には何も積まない。
+var lifeline_left := 0
+
+
+## 出撃前から在り処が分かっている封（「封の言い伝え」）。
+func reveal_known_seals() -> Array[String]:
+	var told: Array[String] = []
+	if world == null:
+		return told
+	var count := upgrade_value("known_seals")
+	for i in mini(count, world.seals.size()):
+		world.seals[i]["known"] = true
+		var at: Vector2i = world.seals[i].get("pos", Vector2i.ZERO)
+		told.append("%s は %s の 洞。" % [
+			String(world.seals[i].get("name", "封")), world.biome_name_at(at.x, at.y)
+		])
+	return told
+
+
+## 全滅を 1 度だけ肩代わりする。使えたら true。
+func spend_lifeline() -> bool:
+	if lifeline_left <= 0:
+		return false
+	lifeline_left -= 1
+	for m in active_party():
+		m.hp = maxi(m.max_hp() / 4, 1)
+		m.cure_poison()
+	return true
+
+
 func _apply_upgrades_to_run() -> void:
 	_grant_starting_gear()
+	lifeline_left = upgrade_value("lifeline")
 	gold = upgrade_value("start_gold")
 	var herbs := upgrade_value("start_herb")
 	if herbs > 0:

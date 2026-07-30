@@ -530,6 +530,10 @@ func _start_run() -> void:
 	var applied := DevCheats.apply_to_run(GameState)
 	if not applied.is_empty():
 		print("開発指定: %s" % "　".join(applied))
+	# 「封の言い伝え」を買っているぶん、出撃前から在り処が分かっている。
+	var told := GameState.reveal_known_seals()
+	if not told.is_empty():
+		hud.toast("言い伝え: %s" % " ".join(told))
 	_enter_world()
 
 
@@ -1192,7 +1196,17 @@ func _on_battle_finished(victory: bool) -> void:
 		_play_field_bgm()
 		_set_mode(Mode.EXPLORE)
 		return
-	# 全滅。ここでランが終わり、熟練度だけが拠点に残る。
+	# 全滅。**「命の綱」があれば 1 度だけ肩代わりする。**
+	# 恒久強化が能力値に触れないという前提を崩さずに、拠点の投資を
+	# 「勝てるようになる」ではなく「もう一度立てる」へ効かせる軸。
+	if GameState.spend_lifeline():
+		_boss_battle = false
+		Sound.play("learn")
+		Sound.play_bgm("descent")
+		hud.toast("命の綱が 切れた。まだ 立てる。")
+		_refresh_hud()
+		_set_mode(Mode.EXPLORE)
+		return
 	_boss_battle = false
 	Sound.play("defeat")
 	Sound.play_bgm("chronicle")

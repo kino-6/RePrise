@@ -96,6 +96,16 @@ func rest_price() -> int:
 	return REST_BASE_PRICE * _floor
 
 
+## 値段。「商いの目」を買っているぶん安くなる。
+##
+## **恒久強化は能力値に触れない**という前提を守りつつ、拠点の投資を
+## 道中の買い物へ効かせる軸。強くはならないが、選べる品が増える。
+func price_of(item_id: String) -> int:
+	var base := int(_entry(item_id).get("price", 0))
+	var cut := clampi(GameState.upgrade_value("price_cut"), 0, 60)
+	return maxi(base * (100 - cut) / 100, 1)
+
+
 func _stock_of(item_id: String) -> int:
 	return int(_stock.get(item_id, 0))
 
@@ -149,7 +159,7 @@ func _leave() -> void:
 
 
 func _buy(item_id: String) -> void:
-	var price := int(_entry(item_id).get("price", 0))
+	var price := price_of(item_id)
 	if _stock_of(item_id) <= 0:
 		Sound.play("cancel")
 		_notify("それは 売り切れだ")
@@ -246,7 +256,8 @@ func _draw_list() -> void:
 		var it := _entry(item_id)
 		var sold_out := _stock_of(item_id) <= 0
 		var right := "うりきれ" if sold_out else "%dG x%d" % [
-			int(it.get("price", 0)), _stock_of(item_id)
+			# **並ぶ数字も割引後にする。** 買うときだけ安いと、表示が嘘になる。
+			price_of(item_id), _stock_of(item_id)
 		]
 		_draw_row(base, inner, row, String(it.get("name", item_id)), right, sold_out)
 

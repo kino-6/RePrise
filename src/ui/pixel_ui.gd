@@ -132,6 +132,13 @@ static func _note_text(top_left: Vector2, text: String, size: int) -> void:
 		# 毎フレーム記録しているので、これを弾かないと自分自身と重なる。
 		if String(other["text"]) == text and b.position.distance_to(box.position) < 1.0:
 			return
+		# 同じ行と見なす縦の差。
+		#
+		# **4px より広げてはいけない。** 9px にしたら誤検出が溢れた ―― 戦闘画面は
+		# 同じ窓（MESSAGE_RECT）をメッセージとコマンドで描き分けるので、
+		# フレームの区切りが取りこぼされると別状態の文字どうしが並んで見える。
+		# サイズ違いの接触（見出し 17px と添え物 12px が 6px 差）は取りこぼすが、
+		# 誤検出だらけのゲートは誰も読まないので、狭いほうを選ぶ。
 		var same_row := absf(b.position.y - box.position.y) < 4.0
 		if not same_row:
 			continue

@@ -586,16 +586,16 @@ func _draw_upgrade_note() -> void:
 		self, origin + Vector2(6, 2), "%s %d" % [Terms.ECHO, GameState.echo],
 		PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
 	)
-	PixelUI.draw_text(
-		self, origin + Vector2(6, 26), Lore.ECHO_LINE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
-	PixelUI.draw_text(self, origin + Vector2(150, 50), Terms.RANK, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
-	PixelUI.draw_text(self, origin + Vector2(200, 50), Terms.PRICE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	# **見出しと説明を削って行に場所を回す。** 7 種に増えて縦が足りなくなった。
+	# 「段 / ひつよう」は数字の形（3/3、12）で読めるので落とす。
+	# 資源の説明も落とす ―― 右上へ寄せたら資源の数字に接触した（縦 6px 差だと
+	# 重なり検出の同一行の閾値もすり抜ける）。数字が読めれば足りる。
 
 	for i in _upgrade_ids.size():
 		var id := String(_upgrade_ids[i])
 		var u := Database.upgrade(id)
-		var row := origin + Vector2(6, 68 + i * 20)
+		# 7 種が窓（内側 150px）に収まる寸法。26 + 6*17 + 文字高 = 150。
+		var row := origin + Vector2(6, 26 + i * 17)
 		var level := GameState.upgrade_level(id)
 		var maxed := GameState.upgrade_maxed(id)
 		var on := _state == State.UPGRADE and i == _upgrade_index
