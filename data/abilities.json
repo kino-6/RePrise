@@ -358,5 +358,72 @@
     "mp": 0,
     "power": 0,
     "effect": "random"
+  },
+  "pierce_shot": {
+    "name": "つらぬき",
+    "desc": "守りを無視して撃つ。硬い相手に効く。",
+    "kind": "physical",
+    "target": "one_enemy",
+    "menu": "skill",
+    "cost": 130,
+    "mp": 4,
+    "power": 120,
+    "pierce": true
+  },
+  "bomb": {
+    "name": "ばくやく",
+    "desc": "敵 1 グループを爆ぜさせる。炎。",
+    "kind": "physical",
+    "target": "group_enemy",
+    "element": "fire",
+    "menu": "skill",
+    "cost": 150,
+    "mp": 4,
+    "power": 118
+  },
+  "time_stop": {
+    "name": "ときとまれ",
+    "desc": "敵全体の行動を鈍らせ、自分を速める。",
+    "kind": "debuff",
+    "target": "all_enemies",
+    "menu": "spell",
+    "cost": 170,
+    "mp": 12,
+    "power": 0,
+    "effect": "slow"
+  },
+  "beast_roar": {
+    "name": "じゅうのほうこう",
+    "desc": "敵全体を怯ませて眠らせる。",
+    "kind": "debuff",
+    "target": "all_enemies",
+    "menu": "skill",
+    "cost": 155,
+    "mp": 8,
+    "power": 0,
+    "effect": "sleep"
+  },
+  "sage_strike": {
+    "name": "けんじゃのいちげき",
+    "desc": "敵全体を雷で打ち、味方の傷も塞ぐ。",
+    "kind": "magical",
+    "target": "all_enemies",
+    "element": "bolt",
+    "menu": "spell",
+    "cost": 215,
+    "mp": 14,
+    "power": 140,
+    "effect": "mend"
+  },
+  "wild_card": {
+    "name": "きまぐれ",
+    "desc": "敵 1 グループに何かが起きる。とても軽い。",
+    "kind": "special",
+    "target": "group_enemy",
+    "menu": "skill",
+    "cost": 75,
+    "mp": 2,
+    "power": 0,
+    "effect": "random"
   }
 }

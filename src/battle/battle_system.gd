@@ -272,6 +272,15 @@ func _strike(
 
 		if not receiver.is_alive():
 			lines.append("%sを　たおした！" % receiver.name)
+
+	# 攻めながら味方も癒す技（賢者の一撃）。攻撃と回復を 1 手で兼ねるので、
+	# 手番の価値がいちばん高い。そのぶんコストと MP は重くしてある。
+	if String(ab.get("effect", "")) == "mend":
+		var mend := actor.mag / 2 + 12
+		for friend in (living_allies() if actor.is_ally else living_enemies()):
+			var healed := friend.heal(mend)
+			if healed > 0:
+				lines.append("%sの　きずが %d かいふくした" % [friend.name, healed])
 	return lines
 
 
@@ -317,10 +326,16 @@ func _resolve_targets(actor: Battler, ab: Dictionary, chosen: Battler) -> Array[
 
 
 @warning_ignore("integer_division")
-func _damage(actor: Battler, target: Battler, power: int, magical: bool, element: String) -> int:
+func _damage(
+	actor: Battler, target: Battler, power: int, magical: bool, element: String,
+	pierce: bool = false
+) -> int:
 	# 物理は防御力をまともに受け、魔法は半分しか受けない。
 	var base := (actor.mag if magical else actor.atk) * power / 100
 	var reduction := target.defense / 4 if magical else target.defense / 2
+	# 守りを抜く技は防御力を無視する。硬い相手に対する答えになる。
+	if pierce:
+		reduction = 0
 	var dmg := base - reduction
 	if element != "":
 		if element in target.weak:
@@ -385,6 +400,7 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 ##
 ## 「読めない」を乱数で作るときは、外れも当たりも同じ確率で並べないこと。
 ## 半分は何も起きないくらいで丁度よく、当たったときだけ強い手になる。
+## あそぶ / きまぐれ。対象 1 体ごとに引き直す（グループでも同じ結果が並ばない）。
 func _play_around(actor: Battler, target: Battler) -> Array[String]:
 	var lines: Array[String] = []
 	match rng.range_i(0, 5):

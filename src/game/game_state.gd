@@ -152,7 +152,8 @@ func recruit() -> PartyMember:
 	var job := String(STARTING_JOBS[index % STARTING_JOBS.size()])
 	var member := PartyMember.create(member_name, job)
 	roster.append(member)
-	save_game()
+	# 保存は呼び出し側の責任にする。ここで書くと、テストが実セーブを
+	# 書き換えてしまう（実際に名簿を 1 人に減らした）。
 	return member
 
 

@@ -157,16 +157,31 @@ func _send_input() -> void:
 			else:
 				_press("confirm")
 		"MENU":
-			# 奥（そうび・つよさ）まで潜らせたいが、居座られると探索が進まない。
-			# 長居したら出口へ向かわせる（人も見終わったら閉じる）。
-			if _mode_time > LINGER_LIMIT or _rng.chance(18):
+			# 乱数の入力では「そうび → 人 → スロット → 品」の 4 段を踏み抜けない。
+			# ときどき決まった手順で潜らせて、装備の付け替えまで確かめる。
+			if not _scripted.is_empty():
+				_press(String(_scripted.pop_front()))
+			elif _mode_time > LINGER_LIMIT or _rng.chance(18):
 				_press("cancel")
+			elif _rng.chance(25):
+				_scripted = EQUIP_STEPS.duplicate()
+				_press(String(_scripted.pop_front()))
 			elif _rng.chance(45):
 				_press(_rng.pick(["ui_up", "ui_down"]))
 			else:
 				_press("confirm")
 		_:
 			_press("confirm")
+
+
+## 装備を付け替えるまでの手順。
+## そうび（2 つ下）→ 先頭の人 → ぶきのスロット → 一覧の 1 つ目 → 戻る。
+const EQUIP_STEPS: Array[String] = [
+	"cancel", "ui_down", "ui_down", "confirm",
+	"confirm", "confirm", "ui_down", "confirm", "cancel",
+]
+
+var _scripted: Array[String] = []
 
 
 ## 歩く向き。毎回振り直すと酔歩になって同じ場所を往復するだけになり、

@@ -312,6 +312,7 @@ func _recruit() -> void:
 		Sound.play("cancel")
 		_notify("%s が %d 必要" % [Terms.ECHO, price])
 		return
+	GameState.save_game()
 	Sound.play("learn")
 	_notify("%s が 仲間に なった！" % member.name)
 

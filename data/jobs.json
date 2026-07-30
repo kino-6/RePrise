@@ -350,7 +350,7 @@
       {
         "rank": 2,
         "need": 112,
-        "ability": "rapid_shot"
+        "ability": "pierce_shot"
       },
       {
         "rank": 3,
@@ -393,7 +393,7 @@
       {
         "rank": 3,
         "need": 220,
-        "ability": "poison_blade"
+        "ability": "bomb"
       },
       {
         "rank": 4,
@@ -436,7 +436,7 @@
       {
         "rank": 4,
         "need": 400,
-        "ability": "bolt_all"
+        "ability": "sage_strike"
       }
     ]
   },
@@ -474,7 +474,7 @@
       {
         "rank": 4,
         "need": 400,
-        "ability": "haste_all"
+        "ability": "time_stop"
       }
     ]
   },
@@ -512,7 +512,7 @@
       {
         "rank": 4,
         "need": 360,
-        "ability": "power_slash"
+        "ability": "beast_roar"
       }
     ]
   },
@@ -546,7 +546,7 @@
       {
         "rank": 4,
         "need": 280,
-        "ability": "shadow_step"
+        "ability": "wild_card"
       }
     ]
   }

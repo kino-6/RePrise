@@ -13,6 +13,7 @@ extends RefCounted
 ## | `--dev-level=N` | 全員をレベル N にする（能力値も上がる） |
 ## | `--dev-floor=N` | 地下 N 階から始める |
 ## | `--dev-gear` | 手持ちに装備を一式入れて、全員に着せる |
+## | `--dev-stock` | 手持ちに装備を入れるが着せない（付け替えの道筋を試す） |
 ## | `--dev-items` | 道具を一式入れる |
 ## | `--dev-echo=N` | 恒久通貨を N 持たせる（拠点の強化を試すため） |
 ## | `--dev-master` | 全職業の技を全部覚えた状態にする |
@@ -77,6 +78,14 @@ static func apply_to_run(state: Node) -> Array[String]:
 				state.add_gear(gear_id)
 				state.equip_gear(party[i], gear_id)
 		applied.append("装備一式")
+
+	if has_flag("--dev-stock"):
+		# 手持ちに入れるが着せない。装備の付け替えの道筋を確かめるため
+		# （--dev-gear は着せてしまうので、UI を通ったかが分からない）。
+		for slot in ["weapon", "armor", "accessory"]:
+			for id in Database.gear_ids_in_slot(String(slot)):
+				state.add_gear(String(id))
+		applied.append("装備を手持ちへ")
 
 	if has_flag("--dev-items"):
 		for id in Database.all_items().keys():
