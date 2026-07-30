@@ -23,7 +23,23 @@ const ELEMENT_RESIST := 50
 
 ## 範囲攻撃の減衰。対象が少ないほど 1 体あたりが増える DQ 式。
 ## group は 2 体以下、all は 3 体以下で増える。
-const SPREAD_BONUS := {1: 150, 2: 120, 3: 100}
+## 範囲技の 1 体あたりの威力（百分率）。少ない相手に撃つほど得。
+##
+## 表で 1〜3 だけ持っていたので、**4 体以上が減衰なしで一番得**になっていた
+## （敵の上限を 6 へ上げた時点で、範囲技が常に最適解になる）。式に直す。
+const SPREAD_SOLO := 150
+const SPREAD_PAIR := 120
+## 3 体以上は 1 体増えるごとに 7% 落ちる。下限を置いて無意味にはしない。
+const SPREAD_STEP := 7
+const SPREAD_FLOOR := 76
+
+
+static func spread_bonus(count: int) -> int:
+	if count <= 1:
+		return SPREAD_SOLO
+	if count == 2:
+		return SPREAD_PAIR
+	return maxi(100 - (count - 3) * SPREAD_STEP, SPREAD_FLOOR)
 
 ## 敵が候補に入れる素点の下限（最善の何 % か）。
 ## 小さいほど気まぐれ、100 にすると常に最善を打って理不尽になる。
@@ -298,9 +314,9 @@ func _element_tag(target: Battler, element: String) -> String:
 ## これが無いと範囲攻撃が常に最適になり、単体攻撃を選ぶ理由が消える。
 func _spread_scale(scope: String, count: int) -> int:
 	if scope == "group_enemy":
-		return int(SPREAD_BONUS.get(mini(count, 3), 100)) if count <= 2 else 100
+		return spread_bonus(count)
 	if scope == "all_enemies":
-		return int(SPREAD_BONUS.get(mini(count, 3), 100))
+		return spread_bonus(count)
 	return 100
 
 

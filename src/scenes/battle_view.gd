@@ -780,7 +780,10 @@ func _draw_enemies() -> void:
 	if foes.is_empty():
 		return
 	# 画面の幅に等間隔で置く。1 体なら中央に来る。
-	var spacing := float(PixelUI.SCREEN.x) / (foes.size() + 1)
+	# **5 体以上は 2 段に分ける。** 1 列に詰めると 64px の絵が重なって
+	# どれを狙っているか分からなくなる（上限を 6 へ上げたときに重なった）。
+	var per_row := foes.size() if foes.size() <= 4 else int(ceil(foes.size() / 2.0))
+	var spacing := float(PixelUI.SCREEN.x) / (per_row + 1)
 	var highlighted := _highlighted_targets()
 	for i in foes.size():
 		var b := foes[i]
@@ -791,11 +794,19 @@ func _draw_enemies() -> void:
 		if _blink > 0.0 and b.id in system.last_hit_ids and fmod(_blink, 0.12) > 0.06:
 			continue
 		var tex: Texture2D = sprite_of(b.sprite)
-		var pos := Vector2(spacing * (i + 1) - tex.get_width() * 0.5, ENEMY_BASELINE - tex.get_height())
+		@warning_ignore("integer_division")
+		var tier := i / per_row
+		var slot := i % per_row
+		# 奥の段は少し上げて右へずらす（真上に重ねると 1 体に見える）。
+		var pos := Vector2(
+			spacing * (slot + 1) - tex.get_width() * 0.5 + tier * 18.0,
+			ENEMY_BASELINE - tex.get_height() - tier * 26.0
+		)
 		# 足元の影。これが無いと敵が宙に浮いて見える（浮遊しているわけではない）。
 		# 楕円ひとつで「地面に立っている」が伝わる。
 		_draw_ground_shadow(
-			Vector2(pos.x + tex.get_width() * 0.5, ENEMY_BASELINE - 1.0), tex.get_width() * 0.42
+			Vector2(pos.x + tex.get_width() * 0.5, pos.y + tex.get_height() - 1.0),
+			tex.get_width() * 0.42
 		)
 		draw_texture(tex, pos.floor())
 

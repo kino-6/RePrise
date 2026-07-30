@@ -9,7 +9,17 @@ extends RefCounted
 ## 日本語を含むファイルは UTF-8 で保存すること（BOM は付けない）。
 
 
-const MAX_ENEMIES := 3
+## 1 戦に出る敵の最大数。
+##
+## **もとは 3 で、理由は書かれていなかった**（初期に置いてそのまま見直していない）。
+## SFC 期の JRPG は 6〜8 体を並べていたので、3 は狭すぎた。範囲技と単体技の
+## 選び分けが「2 体か 3 体か」でしか起きず、群れと戦っている感じが出ない。
+##
+## 6 へ上げるために、3 に縛られていた 3 つを外した。
+##   * 接尾辞が Ａ/Ｂ/Ｃ の 3 つしかなかった（4 体目が無名になる）
+##   * 範囲技の減衰表が 1〜3 しか無く、4 体以上が減衰なしで得だった
+##   * 戦闘画面が 1 列に等間隔で並べるだけで、5 体以上は重なった
+const MAX_ENEMIES := 6
 
 ## --------------------------------------------------------------------------
 ## いつ敵が出るか。
@@ -36,7 +46,7 @@ static func should_meet(rng: DetRng, weighted_steps: int) -> bool:
 	var odds := 3 + weighted_steps / 2
 	return rng.chance(odds)
 
-const SUFFIX := ["Ａ", "Ｂ", "Ｃ"]
+const SUFFIX := ["Ａ", "Ｂ", "Ｃ", "Ｄ", "Ｅ", "Ｆ"]
 
 
 static func build(
@@ -47,7 +57,9 @@ static func build(
 	if pool.is_empty():
 		return result
 
-	var count := rng.range_i(1, mini(MAX_ENEMIES, 1 + floor_number / 2))
+	# 危険度が上がるほど数も増える。ただし 1 体だけの回も残す
+	# （群れしか出ないと、単体技を選ぶ理由が消える）。
+	var count := rng.range_i(1, mini(MAX_ENEMIES, 1 + floor_number * 2 / 3))
 	var chosen: Array = []
 	for _i in count:
 		chosen.append(rng.pick(pool))
@@ -61,7 +73,7 @@ static func build(
 		var id: String = chosen[i]
 		var index := int(seen.get(id, 0))
 		seen[id] = index + 1
-		var b := _to_battler(id, floor_number, first_id + i)
+		var b := _to_battler(id, floor_number, first_id + i, chosen.size())
 		if tally[id] > 1 and index < SUFFIX.size():
 			b.name += SUFFIX[index]
 		result.append(b)
@@ -79,7 +91,9 @@ static func build_boss(rng: DetRng, floor_number: int, first_id: int = 100) -> A
 
 
 @warning_ignore("integer_division")
-static func _to_battler(monster_id: String, floor_number: int, battler_id: int) -> Battler:
+static func _to_battler(
+	monster_id: String, floor_number: int, battler_id: int, pack: int = 1
+) -> Battler:
 	var m := Database.monster(monster_id)
 	var b := Battler.new()
 	b.id = battler_id
@@ -89,7 +103,8 @@ static func _to_battler(monster_id: String, floor_number: int, battler_id: int) 
 	b.is_ally = false
 
 	# 階層補正めE9%/隁Eから 12%/隁Eへ上げて戻す、E
-	var scale := stat_scale(floor_number)
+	# 危険度の倍率に、群れの大きさによる割り引きを掛ける。
+	var scale := stat_scale(floor_number) * pack_scale(pack) / 100
 	b.max_hp = maxi(int(m.get("hp", 10)) * scale / 100, 1)
 	b.hp = b.max_hp
 	b.max_mp = int(m.get("mp", 0))
@@ -106,6 +121,28 @@ static func _to_battler(monster_id: String, floor_number: int, battler_id: int) 
 	b.weak.assign(m.get("weak", []))
 	b.resist.assign(m.get("resist", []))
 	return b
+
+
+## 群れの大きさによる 1 体あたりの倍率（百分率）。
+##
+## **数だけ増やして強さを据え置くと成立しない。** 上限を 3 → 6 にした直後、
+## シミュレータで全方針 0% になった（6 体が横並びで殴ってくるので当然）。
+##
+## 群れで出るものは 1 体ずつ弱い、というのが往年の作法。ここを式にすると、
+## 「1 体の強敵」と「6 体の群れ」が別の脅威になり、範囲技と単体技の
+## 選び分けが初めて意味を持つ。総量は count を掛けて 100 → 171% と緩く上がる。
+##   1 体 100% / 2 体 67% / 3 体 50% / 4 体 40% / 5 体 33% / 6 体 29%
+## 1 体増えるごとに引く割合（百分率）。**実測で決めた**（tests/balance.gd）。
+##   割り引き 0  … 全方針 0%。6 体が横並びで殴るので成立しない
+##   割り引き 5  … 封 6% / 全周 14%
+##   割り引き 8  … 封 18% / 全周 32%。**採用**
+##   200/(n+1)   … 封 88% / 全周 94%。自動操縦で素通りになる
+## 直行が 0% であることは全通りで保たれている（封の門が効いている）。
+const PACK_DISCOUNT := 8
+
+
+static func pack_scale(count: int) -> int:
+	return maxi(100 - (maxi(count, 1) - 1) * PACK_DISCOUNT, 40)
 
 
 ## 危険度による能力値の倍率（百分率）。報酬もこれを土台にする。
@@ -172,10 +209,11 @@ static func _sum_field(enemies: Array[Battler], field: String) -> int:
 
 ## 経験値の合計（危険度で伸ばしたもの）。
 static func total_exp_at(enemies: Array[Battler], floor_number: int) -> int:
-	return _sum_field(enemies, "exp") * reward_scale(floor_number) / 100
+	# 群れは 1 体あたりの経験も割り引く（弱いものを数で狩るのが得になりすぎない）。
+	return _sum_field(enemies, "exp") * reward_scale(floor_number) 		* pack_scale(enemies.size()) / 10000
 
 
 ## ゴールドの合計（同上）。稼ぎが伸びないと出店が飾りになる。
 static func total_gold_at(enemies: Array[Battler], floor_number: int) -> int:
-	return _sum_field(enemies, "gold") * gold_scale(floor_number) / 100
+	return _sum_field(enemies, "gold") * gold_scale(floor_number) 		* pack_scale(enemies.size()) / 10000
 
