@@ -1102,7 +1102,8 @@ func _draw_root_menu(origin: Vector2) -> void:
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		if _roots[i] == Root.AUTO and _auto != AutoTactic.Mode.OFF:
 			tint = PixelUI.C_ACTIVE
-		PixelUI.draw_text(self, at, label, tint)
+		# コマンドは 4 列に並ぶ。列の取り分で切る（技名の外部化で伸びうる）。
+		_cell(at, ROOT_LABEL_W).line(label, tint)
 
 
 ## じゅもん / とくぎ / どうぐ のサブウィンドウ。
@@ -1114,6 +1115,9 @@ func _draw_root_menu(origin: Vector2) -> void:
 ## いまは幅として渡すので、長い技名はその列の中で詰まる。
 ## 味方 1 人ぶんの持ち幅と、そのうち名前に使える幅。
 ## 4 人が横に並ぶので、はみ出すと隣の人の欄に見える。
+## 第 1 階層のコマンド 1 つぶんの持ち幅（4 列）。
+const ROOT_LABEL_W := 112.0
+
 const ALLY_COL_W := 112.0
 const ALLY_NAME_W := 62.0
 

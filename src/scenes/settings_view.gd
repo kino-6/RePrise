@@ -351,7 +351,7 @@ func _draw() -> void:
 	elif _erase_open:
 		_wide(hint).line(Terms.SAVE_ERASE_HINT, PixelUI.C_TEXT_DIM)
 	elif _abandon_stage > 0:
-		PixelUI.draw_text(self, hint, Terms.RUN_ABANDON_HINT, PixelUI.C_TEXT_DIM)
+		_wide(hint).line(Terms.RUN_ABANDON_HINT, PixelUI.C_TEXT_DIM)
 	elif _notice != "":
 		_wide(hint).line(_notice, PixelUI.C_ACTIVE)
 	else:
@@ -412,13 +412,12 @@ func _draw_erase(origin: Vector2) -> void:
 
 func _draw_abandon(origin: Vector2) -> void:
 	var final := _abandon_stage == 2
-	PixelUI.draw_text(
-		self, origin + Vector2(0, 36),
+	# 打ち切りの確認は Terms 経由の外部化した文なので、長さを前提にしない。
+	_wide(origin + Vector2(0, 36)).line(
 		Terms.RUN_ABANDON_FINAL_QUESTION if final else Terms.RUN_ABANDON_FIRST_QUESTION,
 		PixelUI.C_TEXT, PixelUI.SIZE_HEAD
 	)
-	PixelUI.draw_text(
-		self, origin + Vector2(0, 66),
+	_wide(origin + Vector2(0, 66)).line(
 		Terms.RUN_ABANDON_FINAL_WARNING if final else Terms.RUN_ABANDON_FIRST_WARNING,
 		PixelUI.C_ACTIVE
 	)
@@ -429,9 +428,8 @@ func _draw_abandon(origin: Vector2) -> void:
 		var label := Terms.RUN_ABANDON_CANCEL
 		if i == 1:
 			label = Terms.RUN_ABANDON_EXECUTE if final else Terms.RUN_ABANDON_NEXT
-		PixelUI.draw_text(
-			self, at, label, PixelUI.C_TEXT if i == _abandon_index else PixelUI.C_TEXT_DIM
-		)
+		_wide(at).line(
+			label, PixelUI.C_TEXT if i == _abandon_index else PixelUI.C_TEXT_DIM)
 
 
 func _draw_keys(origin: Vector2) -> void:

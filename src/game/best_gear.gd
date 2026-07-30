@@ -34,6 +34,7 @@ const SCALE := {
 	"def": 0.8,
 	"agi": 0.9,
 	"hp": 0.25,
+	"mp": 0.20,
 }
 
 ## 行動コストの重み。**負が良い**（軽い装備は次の手番が早い）。
@@ -51,7 +52,7 @@ const EFFECT_BONUS := 3.0
 ## その者にとってのその装備の点。**高いほど良い。**
 static func score(member: PartyMember, gear_id: String) -> float:
 	var gear := Database.gear(gear_id)
-	if gear.is_empty():
+	if gear.is_empty() or not member.can_equip(gear_id):
 		return -INF
 	var growth: Dictionary = Database.job(member.job_id).get("growth", {})
 	var total := 0.0
@@ -60,6 +61,7 @@ static func score(member: PartyMember, gear_id: String) -> float:
 	total += float(gear.get("def", 0)) * float(growth.get("def", 0)) * SCALE["def"]
 	total += float(gear.get("agi", 0)) * float(growth.get("agi", 0)) * SCALE["agi"]
 	total += float(gear.get("hp", 0)) * float(growth.get("hp", 0)) * SCALE["hp"]
+	total += float(gear.get("mp", 0)) * float(growth.get("mp", 0)) * SCALE["mp"]
 	# 行動コストは負が良い。速さを伸ばす職ほど重く見る。
 	var cost_weight := COST_BASE + float(growth.get("agi", 0)) * COST_PER_AGI
 	total -= float(gear.get("cost_scale", 0)) * cost_weight
@@ -94,6 +96,8 @@ static func plan(members: Array, stock: Array) -> Array[Dictionary]:
 			var best_score := have
 			for id in pool:
 				if String(Database.gear(id).get("slot", "")) != slot:
+					continue
+				if not member.can_equip(id):
 					continue
 				var value := score(member, id)
 				# **同点では替えない。** 見た目が動くだけで強さが変わらない。

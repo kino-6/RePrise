@@ -76,8 +76,32 @@ func attack_element() -> String:
 	return String(Database.gear(String(equipment.get("weapon", ""))).get("element", ""))
 
 
+## その職業が装備できるか。
+##
+## 武器・防具は `jobs.json` の equip と `equipment.json` の kind を照合する。
+## かざりは全職共通にして、拾った品が完全な外れになる頻度を抑える。
+## kind の無い旧データは互換用に許可する。
+func can_equip(gear_id: String) -> bool:
+	var gear := Database.gear(gear_id)
+	if gear.is_empty():
+		return false
+	var slot := String(gear.get("slot", ""))
+	if slot == "":
+		return false
+	if slot == "accessory":
+		return true
+	var kind := String(gear.get("kind", ""))
+	if kind == "":
+		return true
+	var profile: Dictionary = Database.job(job_id).get("equip", {})
+	var allowed: Array = profile.get(slot, [])
+	return kind in allowed
+
+
 ## 装備する。同じスロットの先客は外れて戻り値で返る（空なら ""）。
 func equip(gear_id: String) -> String:
+	if not can_equip(gear_id):
+		return ""
 	var slot := String(Database.gear(gear_id).get("slot", ""))
 	if slot == "":
 		return ""

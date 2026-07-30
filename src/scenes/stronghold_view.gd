@@ -657,10 +657,10 @@ func _draw_party_note() -> void:
 ## 資源の使い道の一覧。何段まで伸ばしたかと、次の 1 段の値段を並べる。
 func _draw_upgrade_note() -> void:
 	var origin := PixelUI.content(DETAIL_RECT).position
-	PixelUI.draw_text(
-		self, origin + Vector2(6, 2), "%s %d" % [Terms.ECHO, GameState.echo],
-		PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
-	)
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 2),
+		Vector2(PixelUI.content(DETAIL_RECT).size.x - 12.0, PixelUI.LINE)
+	)).line("%s %d" % [Terms.ECHO, GameState.echo], PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	# **見出しと説明を削って行に場所を回す。** 7 種に増えて縦が足りなくなった。
 	# 「段 / ひつよう」は数字の形（3/3、12）で読めるので落とす。
 	# 資源の説明も落とす ―― 右上へ寄せたら資源の数字に接触した（縦 6px 差だと

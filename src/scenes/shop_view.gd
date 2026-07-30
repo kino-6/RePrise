@@ -281,7 +281,10 @@ func _draw_detail() -> void:
 	var origin := PixelUI.content(DETAIL_RECT).position
 
 	# パーティの体力。何を買うべきかは、この数字を見て決まる。
-	PixelUI.draw_text(self, origin + Vector2(6, 0), "みんなの ようす", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 0),
+		Vector2(PixelUI.content(DETAIL_RECT).size.x - 12.0, PixelUI.LINE)
+	)).line("みんなの ようす", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	var party := GameState.active_party()
 	for i in party.size():
 		var m := party[i]
