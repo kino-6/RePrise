@@ -25,6 +25,7 @@ var menu: FieldMenu
 var settings: SettingsView
 var result: ResultScreen
 var event_view: EventView
+var effect: EventEffect
 
 var _mode: Mode = Mode.EXPLORE
 
@@ -98,6 +99,11 @@ func _ready() -> void:
 	result = ResultScreen.new()
 	result.visible = false
 	add_child(result)
+
+	# 場面の節目の演出。**絵が無ければ何も出さない**ので、呼び出し側は
+	# 成否を気にしなくてよい（進行にも乱数にもセーブにも触らない）。
+	effect = EventEffect.new()
+	add_child(effect)
 
 	event_view = EventView.new()
 	event_view.visible = false
@@ -353,6 +359,13 @@ func _capture(which: String) -> void:
 			GameState.runs_attempted = 99
 			var last: Dictionary = (arc["beats"] as Array).back()
 			_open_cross_world_choice(last)
+		"effect":
+			# 演出の見え方を撮る。演出は 0.4 秒で終わるので、
+			# **世界を立ててから最後に流す**（下の待ちも短くしてある）。
+			_start_run()
+			GameState.world.story_beat = 99
+			await get_tree().create_timer(0.5).timeout
+			effect.play("seal_break", Vector2(256, 120))
 		"story":
 			# 物語の 1 拍目。語りが窓に収まっているかを見る。
 			_start_run()
@@ -519,7 +532,13 @@ func _capture(which: String) -> void:
 			result.show_summary(GameState.end_run(false))
 			_set_mode(Mode.RESULT)
 	# 戦記の撮影だけは、ローカル AI の文章が届くのを少し待つ。
-	await get_tree().create_timer(9.0 if which == "chronicle" else 0.7).timeout
+	# 戦記だけは AI の文章を待つ。演出は 0.4 秒で終わるので短く撮る。
+	var wait := 0.7
+	if which == "chronicle":
+		wait = 9.0
+	elif which == "effect":
+		wait = 0.15
+	await get_tree().create_timer(wait).timeout
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
 	var path := "res://docs/preview/screen_%s.png" % which
@@ -667,6 +686,8 @@ func _start_run() -> void:
 	var applied := DevCheats.apply_to_run(GameState)
 	if not applied.is_empty():
 		print("開発指定: %s" % "　".join(applied))
+	# 世界の門。**ランの始まりはここだけ**なので、節目として演出を置く。
+	effect.play("world_gate")
 	# 「封の言い伝え」を買っているぶん、出撃前から在り処が分かっている。
 	if _dev_save_name != "":
 		if GameState.dev_save(_dev_save_name):
@@ -1340,6 +1361,7 @@ func _on_boss_reached() -> void:
 		hud.toast("扉は かたく とざされている…")
 		return
 	Sound.play("boss_gate")
+	effect.play("imperial_alarm")
 	_begin_battle(foes, true)
 
 
@@ -1417,6 +1439,7 @@ func _finish_run(victory: bool) -> void:
 			GameState.advance_cross_world()
 	result.show_summary(summary)
 	_fade_to(Mode.RESULT)
+	effect.play("chronicle_echo", Vector2(PixelUI.SCREEN.x * 0.5, 46.0))
 
 
 ## 洞の階段。いちばん深い階まで来たら、次は下ではなく外へ出る。
@@ -1436,6 +1459,7 @@ func _on_descend() -> void:
 				return
 		if not seal.is_empty() and not bool(seal.get("broken", false)):
 			GameState.break_seal()
+			effect.play("seal_break")
 			Sound.play("seal_break")
 			var left := GameState.seals_remaining()
 			if left > 0:
