@@ -30,6 +30,9 @@ var _mode: Mode = Mode.EXPLORE
 ## いま歩いている洞の 1 階ぶん（世界の上にいるときは null）。
 var _map: DungeonMap = null
 
+## いま居る町の中（町に居ないときは null）。
+var _town: TownMap = null
+
 ## 階ごとに 1 本ずつ持つ乱数列。呼ぶたびに進むので、
 ## 同じ階で戦うたびに同じ敵が出る、という事故が起きない。
 var _encounter_rng: DetRng = null
@@ -91,12 +94,12 @@ func _ready() -> void:
 	explore.boss_reached.connect(_on_boss_reached)
 	explore.shop_entered.connect(_on_shop_entered)
 	explore.site_entered.connect(_on_site_entered)
+	explore.talked.connect(_on_talked)
+	explore.inn_entered.connect(_on_inn)
+	explore.town_left.connect(_on_town_left)
 	# 町を出たら世界へ戻る（世界の上に立ち直す）。洞の出店ならその階へ戻るだけ。
-	shop.closed.connect(func() -> void:
-		if String(GameState.site.get("kind", "")) == "town":
-			_leave_site()
-		else:
-			_set_mode(Mode.EXPLORE))
+	# 店を閉じたら、その場（町の中／洞の中）へ戻す。
+	shop.closed.connect(func() -> void: _set_mode(Mode.EXPLORE))
 	explore.chest_opened.connect(_on_chest)
 	battle.battle_finished.connect(_on_battle_finished)
 	explore.menu_requested.connect(_open_menu)
@@ -258,6 +261,12 @@ func _capture(which: String) -> void:
 		"world":
 			# 世界の全景。歩ける地形と拠点地の見分けを確かめる。
 			_start_run()
+		"town":
+			# 町の中の見え方（宿・店・人）を確かめる
+			_start_run()
+			var town_at := _first_site("town")
+			if town_at.x >= 0:
+				_on_site_entered(town_at)
 		"cave":
 			_start_run()
 			var cave := _first_site("cave")
@@ -415,6 +424,7 @@ func _leader_job() -> String:
 func _enter_world() -> void:
 	GameState.stand_on_world(GameState.world_pos)
 	_map = null
+	_town = null
 	_door_warned = false
 	_encounter_rng = GameState.rng_for("encounter")
 	_battle_rng = GameState.rng_for("battle")
@@ -458,21 +468,52 @@ func _on_site_entered(pos: Vector2i) -> void:
 			GameState.site = {}
 
 
-## 町。出店と宿を兼ねる（世界の上にある安全地帯）。
+## 町の中へ入る。
 ##
-## 在庫は町ごとに世界が覚える。出入りで戻ると買い占めができてしまうし、
-## 別の町では品が違ってほしい。
+## 品書きを直接開いていたころは、町が場所として存在していなかった。
+## 中を歩けるようにすると、宿・店・人が別々の場所になり、
+## 「誰に話すか」「何を先にするか」がそのまま行動になる。
 func _open_town() -> void:
 	Sound.play("confirm")
-	var key := "town:%d" % int(GameState.site.get("index", 0))
-	if not GameState.world.visited.has(key):
-		GameState.world.visited[key] = {}
-	shop.open(GameState.world.visited[key], GameState.floor_number)
-	_set_mode(Mode.SHOP)
+	_town = TownGenerator.generate(
+		GameState.rng_for("town"), GameState.floor_number,
+		String(GameState.site.get("tileset", "dungeon"))
+	)
+	_map = null
+	_encounter_rng = GameState.rng_for("encounter")
+	explore.setup(_town, _encounter_rng, _leader_job())
+	hud.toast(_town.town_name)
+	_fade_to(Mode.EXPLORE)
 
 
-## 拠点地から世界へ戻る。
+## 町の人の一言。
+func _on_talked(line: String) -> void:
+	Sound.play("confirm")
+	hud.toast(line)
+
+
+## 宿。**取り上げるものは無いので、ゴールドも取らない。**
+## 町まで戻ってきた手間がそのまま代金、という扱いにする。
+func _on_inn() -> void:
+	for m in GameState.active_party():
+		m.hp = m.max_hp()
+		m.mp = m.max_mp()
+		m.cure_poison()
+	Sound.play("learn")
+	_refresh_hud()
+	hud.toast("ゆっくり やすんだ。みな 元気に なった。")
+
+
+## 町を出て世界へ戻る。
+func _on_town_left() -> void:
+	Sound.play("stairs")
+	_town = null
+	_leave_site()
+
+
+## 拠点地から世界へ戻る。**必ず 1 マス外へ出す**（出た直後に再突入しないため）。
 func _leave_site() -> void:
+	GameState.world_pos = GameState.step_outside_site(GameState.world_pos)
 	GameState.site = {}
 	_enter_world()
 
@@ -743,11 +784,18 @@ func _on_descend() -> void:
 	_enter_floor()
 
 
-## 洞の中の出店。在庫はその階が持つ（降りれば品が戻る）。
+## 店。町なら町の在庫（世界が覚える）、洞の中ならその階の在庫。
 func _on_shop_entered() -> void:
+	Sound.play("confirm")
+	if _town != null:
+		var key := "town:%d" % int(GameState.site.get("index", 0))
+		if not GameState.world.visited.has(key):
+			GameState.world.visited[key] = {}
+		shop.open(GameState.world.visited[key], GameState.floor_number)
+		_set_mode(Mode.SHOP)
+		return
 	if _map == null:
 		return
-	Sound.play("confirm")
 	shop.open(_map.shop_stock, GameState.floor_number)
 	_set_mode(Mode.SHOP)
 

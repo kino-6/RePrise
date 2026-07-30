@@ -32,6 +32,7 @@ func _initialize() -> void:
 	_test_settings()
 	_test_dungeon_route()
 	_test_world_generation()
+	_test_town_generation()
 	_test_text_wrap()
 	_test_database_loaded()
 	_test_final_floor()
@@ -635,6 +636,43 @@ func _test_world_generation() -> void:
 		if not a.is_walkable(at.x, at.y):
 			on_walkable = false
 	_check("拠点地は必ず歩ける場所にある", on_walkable)
+
+
+## 町の生成。**迷わせないこと**と**用が足せること**を守る。
+##
+## 町は目的地であって迷路ではない。宿にも店にも出口にも辿り着けない町を
+## 1 つ出すと、そこに寄った時間が丸ごと無駄になる。
+func _test_town_generation() -> void:
+	var reachable := true
+	var has_folk := true
+	var named := true
+	var folk_blocked := true
+	for seed_value in [1, 9, 77, 4242, 31337]:
+		var town := TownGenerator.generate(DetRng.new(seed_value), 3, "dungeon")
+		var dist := town.distance_field(town.start_pos)
+		for goal in [town.inn_pos, town.shop_pos, town.exit_pos]:
+			# 入口そのものは通行可なので、そこへ届くかを直接見る
+			if dist[goal.y * town.width + goal.x] < 0:
+				reachable = false
+		if town.folk.size() < 2:
+			has_folk = false
+		if town.town_name == "":
+			named = false
+		# 人は押し当てて話すので、通れてはいけない（すり抜けると話せない）
+		for pos in town.folk:
+			var at: Vector2i = pos
+			if town.is_walkable(at.x, at.y):
+				folk_blocked = false
+
+	_check("町の宿・店・出口に必ず辿り着ける", reachable)
+	_check("町に人が居る", has_folk)
+	_check("町に名前が付く", named)
+	_check("町の人は通り抜けられない", folk_blocked)
+
+	var a := TownGenerator.generate(DetRng.new(555), 3, "dungeon")
+	var b := TownGenerator.generate(DetRng.new(555), 3, "dungeon")
+	_check("同じ種から同じ町が出る", a.to_ascii() == b.to_ascii())
+	_check("同じ種なら名前も同じ", a.town_name == b.town_name)
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。

@@ -18,6 +18,12 @@ signal chest_opened(amount: int)
 signal menu_requested
 ## ワールドで拠点地（町・洞・城）を踏んだ。中へ入れるかは main.gd が決める。
 signal site_entered(pos: Vector2i)
+## 町の人に話しかけた。
+signal talked(line: String)
+## 宿の扉を踏んだ。
+signal inn_entered
+## 町の出口を踏んだ。
+signal town_left
 ## 主の間の扉が隣にある。踏む前に知らせるためのもの。
 signal door_nearby
 ## 1 歩あるいた。毒の進行はここで解決する（歩数で削るのが DQ の作法）。
@@ -156,8 +162,39 @@ func _facing_for(dir: Vector2i) -> int:
 func _try_move(target: Vector2i) -> void:
 	if map is WorldMap:
 		_try_move_world(target)
+	elif map is TownMap:
+		_try_move_town(target)
 	else:
 		_try_move_dungeon(target)
+
+
+## 町の中を 1 歩。**町では敵が出ない**（安全地帯であることが町の値打ち）。
+func _try_move_town(target: Vector2i) -> void:
+	var town: TownMap = map
+
+	# 人は押し当てて話す（洞の宝箱と同じ作法）。マスには乗らない。
+	if town.folk.has(target):
+		facing = _facing_for(target - player_pos)
+		queue_redraw()
+		talked.emit(String(town.folk[target].get("line", "")))
+		return
+
+	if not map.is_walkable(target.x, target.y):
+		queue_redraw()
+		return
+
+	player_pos = target
+	_frame = (_frame + 1) % 3
+	_update_camera()
+	queue_redraw()
+
+	var tile := map.get_tile(target.x, target.y)
+	if tile == TownMap.T_SHOP:
+		shop_entered.emit()
+	elif tile == TownMap.T_DOOR:
+		inn_entered.emit()
+	elif tile == TownMap.T_EXIT:
+		town_left.emit()
 
 
 ## ワールドを 1 歩。踏んだ拠点地を知らせるだけで、中へ入れるかは main.gd が決める。
@@ -273,6 +310,20 @@ func _draw() -> void:
 				Rect2(t * TILE, 0, TILE, TILE)
 			)
 
+	# 町の人。主人公と同じ 24x32 のシートを使い、職業の絵を役に割り当てる。
+	# 専用の絵を起こさずに「人が居る」を作る。
+	if map is TownMap:
+		var town: TownMap = map
+		for pos in town.folk:
+			var who: Vector2i = pos
+			var tex := _folk_texture(String(town.folk[pos].get("kind", "")))
+			if tex == null:
+				continue
+			draw_texture_rect_region(
+				tex, Rect2((Vector2(who * TILE) + CHAR_OFFSET).floor(), Vector2(CHAR_W, CHAR_H)),
+				Rect2(CHAR_W, 0, CHAR_W, CHAR_H)
+			)
+
 	if hero_tex == null:
 		return
 	var at := Vector2(player_pos * TILE) + CHAR_OFFSET
@@ -281,6 +332,23 @@ func _draw() -> void:
 		Rect2(at.x, at.y, CHAR_W, CHAR_H),
 		Rect2(_frame * CHAR_W, facing * CHAR_H, CHAR_W, CHAR_H)
 	)
+
+
+## 町の人の見た目。役ごとに違う職業の絵を借りる（新しい絵を起こさない）。
+const FOLK_LOOKS := {
+	"keeper": "soldier", "trader": "thief", "elder": "priest", "child": "mage",
+}
+
+static var _folk_tex: Dictionary = {}
+
+
+func _folk_texture(kind: String) -> Texture2D:
+	if _folk_tex.has(kind):
+		return _folk_tex[kind]
+	var path := "res://assets/sprites/hero_%s.png" % String(FOLK_LOOKS.get(kind, "soldier"))
+	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+	_folk_tex[kind] = tex
+	return tex
 
 
 func _load_hero(job: String) -> Texture2D:

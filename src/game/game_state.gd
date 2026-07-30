@@ -306,6 +306,22 @@ func descend() -> void:
 	floor_changed.emit(floor_number)
 
 
+## 拠点地から出たあと、その 1 マス外へ降ろす。
+##
+## 中に居た場所（拠点地のマス）へそのまま戻すと、**一歩動いてまた入る**。
+## 人が操作していれば「出たのにまた入った」で済むが、自動プレイは
+## 町の出入りを延々と繰り返して先へ進まなくなった（100 秒で戦闘 1 回）。
+## DQ でも町を出れば町の外に立つ。そこに合わせる。
+func step_outside_site(from: Vector2i) -> Vector2i:
+	if world == null:
+		return from
+	for step in FieldMap.NEIGHBORS:
+		var at: Vector2i = from + step
+		if world.is_walkable(at.x, at.y) and not world.sites.has(at):
+			return at
+	return from
+
+
 ## 世界の上を 1 歩。危険度は立っている場所で決まる。
 func stand_on_world(at: Vector2i) -> void:
 	world_pos = at
