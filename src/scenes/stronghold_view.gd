@@ -39,6 +39,13 @@ const INPUT_LOCK := 0.15
 ## 覚えておく。_draw() の中で読むと、読み込み中の白い板が描かれてしまう。
 const PORTRAIT_SIZE := Vector2(24, 32)
 
+## 立ち絵の倍率。**3 倍（72x96）にする。**
+##
+## 2 倍（48x64）では角・仮面・有機的な襟がほぼ読めなかった。職業の描き分けは
+## シルエットで作っているので、小さいと**その努力が全部消える**。
+## 整数倍なのでドットは崩れない。
+const PORTRAIT_SCALE := 3.0
+
 static var _portraits: Dictionary = {}
 
 
@@ -481,7 +488,8 @@ func _draw_detail() -> void:
 	if portrait != null:
 		draw_texture_rect_region(
 			portrait,
-			Rect2(origin + Vector2(232, 4), PORTRAIT_SIZE * 2.0),
+			# 右上に寄せる。3 倍にしたぶん、熟練の一覧と重ならない位置へ。
+			Rect2(origin + Vector2(208, 2), PORTRAIT_SIZE * PORTRAIT_SCALE),
 			Rect2(Vector2.ZERO, PORTRAIT_SIZE)
 		)
 

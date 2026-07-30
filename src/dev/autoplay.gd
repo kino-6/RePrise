@@ -43,6 +43,16 @@ var _stuck_report: Array[String] = []
 
 ## 走らせるたびに数字で比べられるようにする集計。
 var _deepest := 1
+
+## 町に入った回数と、中に居た時間。**町を素通りしていないかを見る。**
+var _town_visits := 0
+var _town_time := 0.0
+var _talks := 0
+
+## 直近の画面の並び。2 つの画面を往復する足踏みを見つけるために持つ。
+const OSCILLATION_WINDOW := 8
+var _recent: Array[String] = []
+var _oscillation_noted := false
 var _battles := 0
 var _runs := 0
 var _equipped := 0
@@ -115,9 +125,22 @@ func _track_mode(delta: float) -> void:
 			_battles += 1
 		if mode.begins_with("RESULT"):
 			_runs += 1
-		var at := mode.find("地下")
+		# **表示を変えたらここも変える。** 「地下 N 階」を探したままだったので、
+		# 危険度 10 まで行っても「最も危険 1」と出ていた（2 度目の同じ抜け）。
+		var at := mode.find("危険度")
 		if at >= 0:
-			_deepest = maxi(_deepest, int(mode.substr(at + 2)))
+			_deepest = maxi(_deepest, int(mode.substr(at + 3)))
+		if mode.contains("町"):
+			_town_visits += 1
+
+		# **2 状態のあいだを往復しているのも詰まり。**
+		# 「同じ画面に貼り付く」だけを見ていたので、世界と町を出入りし続ける
+		# 足踏み（実際に起きた）は素通りしていた。
+		_recent.append(mode)
+		while _recent.size() > OSCILLATION_WINDOW:
+			_recent.pop_front()
+		_check_oscillation()
+
 		_last_mode = mode
 		_mode_time = 0.0
 		return
@@ -131,6 +154,8 @@ func _track_mode(delta: float) -> void:
 ## 画面ごとに「人がやりそうなこと」を送る。
 ## 賢く遊ぶのが目的ではなく、行き止まりを踏み抜くのが目的。
 func _send_input() -> void:
+	# 状態の 1 行（「EXPLORE 町 危険度2」）は場所の判別にも使う。
+	var status: String = _main.dev_status() if _main != null else ""
 	match _mode():
 		"TITLE", "RESULT":
 			_press("confirm")
@@ -141,7 +166,12 @@ func _send_input() -> void:
 			else:
 				_press("confirm")
 		"EXPLORE":
-			if _rng.chance(3):
+			# **町では用を足してから出る。** 素通りしていると NPC も宿も店も
+			# 一度も踏まれず、「絵はあるが出ない」を検出できない
+			# （実測で町の滞在が 0.3 秒だった）。
+			if status.contains("町"):
+				_press(_town_step())
+			elif _rng.chance(3):
 				_press("confirm")  # メニューを開ける
 			else:
 				_press(_explore_step())
@@ -217,6 +247,36 @@ const WALK_KEYS := ["ui_up", "ui_down", "ui_left", "ui_right"]
 
 var _walk_dir := ""
 var _walk_left := 0
+## 町に入ってから何秒ねばるか。用（人に話す・宿・店）を試すのに要る時間。
+const TOWN_DWELL := 12.0
+
+var _town_entered := -1.0
+
+
+## 町の中の 1 歩。
+##
+## **素通りさせない。** 実測で町の滞在が 0.3 秒しかなく、NPC も宿も店も
+## 一度も踏まれていなかった（「絵はあるが出ない」を検出できない）。
+## しばらく中を歩き回って人にぶつかり（＝話しかけ）、ねばり終えたら出口へ向かう。
+## 酔歩では閉じた広場から出られないので、出るときは経路に従う。
+func _town_step() -> String:
+	if _town_entered < 0.0:
+		_town_entered = _elapsed
+	_town_time += 0.016
+	if _elapsed - _town_entered > TOWN_DWELL:
+		_town_entered = -1.0
+		var out: String = _main.dev_step_to_exit()
+		if out != "":
+			return out
+	# 店へ向かいつつ、途中で当たった人には自然に話しかかる。
+	if _rng.chance(55):
+		var toward: String = _main.dev_step_to_shop()
+		if toward != "":
+			return toward
+	return String(_rng.pick(["ui_up", "ui_down", "ui_left", "ui_right"]))
+
+
+
 
 
 ## 探索の一歩。
@@ -241,6 +301,29 @@ func _walk() -> String:
 		_walk_left = _rng.range_i(6, 16)
 	_walk_left -= 1
 	return _walk_dir
+
+
+## 同じ 2 画面を往復し続けていないか。
+##
+## 「入れない場所から追い返されて、また入る」が起きると、画面は変わり続けるので
+## 貼り付き判定に掛からない。**変化しているのに進んでいない**状態を見つける。
+func _check_oscillation() -> void:
+	if _oscillation_noted or _recent.size() < OSCILLATION_WINDOW:
+		return
+	var seen := {}
+	for m in _recent:
+		# **戦闘を含む往復は正常。** 歩く↔戦うはゲームが動いている姿そのもので、
+		# これを詰まりと呼ぶと本物の足踏みが埋もれる。
+		if m.begins_with("BATTLE"):
+			return
+		seen[m] = true
+	if seen.size() > 2:
+		return
+	_oscillation_noted = true
+	_stuck_report.append(
+		"%5.1fs %s を往復している（%d 回連続で 2 画面だけ）"
+		% [_elapsed, "↔".join(seen.keys()), OSCILLATION_WINDOW]
+	)
 
 
 func _press(action: String) -> void:
@@ -272,6 +355,7 @@ func _report() -> void:
 			print("  " + line)
 	print("---")
 	print("最も危険  : 危険度 %d" % _deepest)
+	print("町に入った: %d 回（滞在 %.0f 秒）" % [_town_visits, _town_time])
 	print("戦闘      : %d 回" % _battles)
 	print("ランの終了 : %d 回" % _runs)
 	print("装備      : 最大 %d 個" % _equipped)
