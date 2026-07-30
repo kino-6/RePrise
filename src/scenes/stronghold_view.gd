@@ -482,9 +482,12 @@ func _draw_detail() -> void:
 	]
 	PixelUI.draw_text(self, origin + Vector2(6, 24), head, PixelUI.C_TEXT_DIM)
 	# 見出しは名前の右へ逃がす。1 行ぶん空けると職業が枠に収まらない。
-	PixelUI.draw_text(self, origin + Vector2(148, 6), Terms.MASTERY, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
-	PixelUI.draw_text(
-		self, origin + Vector2(212, 6), "%d/%d" % [_job_ids.find(shown_job) + 1, _job_ids.size()],
+	# 見出しと数を**右端で揃える**。左から固定の位置に置くと、
+	# 「じゅくれんど」の幅が数字にかぶって枠まで押し出す（実際にはみ出していた）。
+	# 右端は**立ち絵の左**まで。窓の右端まで寄せると絵の下に潜る。
+	PixelUI.draw_text_right(
+		self, origin + Vector2(226.0, 6),
+		"%s %d/%d" % [Terms.MASTERY, _job_ids.find(shown_job) + 1, _job_ids.size()],
 		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 	)
 

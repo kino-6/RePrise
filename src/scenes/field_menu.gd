@@ -218,6 +218,15 @@ func debug_open_jobs() -> void:
 	queue_redraw()
 
 
+## 開発用。つよさ の画面を撮るために使う。
+func debug_open_status() -> void:
+	_root_index = 1
+	_member_index = 0
+	_after_member = State.STATUS
+	_state = State.STATUS
+	queue_redraw()
+
+
 func _input_job(event: InputEvent) -> void:
 	if event.is_action_pressed("cancel"):
 		Sound.play("cancel")
@@ -581,9 +590,27 @@ func _draw_status() -> void:
 	var mastery := "★".repeat(m.mastery_rank()) + "☆".repeat(
 		maxi(Database.job(m.job_id).get("mastery", []).size() - m.mastery_rank(), 0)
 	)
-	var rows := [
+	# **値は列の右端で揃える。** ラベルから固定の位置に置くと、
+	# 長いラベル（「しょくぎょうの 熟練」）が必ず値と重なる（実際に重なっていた）。
+	# 右端で揃えれば、ラベルの長さが変わっても衝突しない。
+	#
+	# 長い 2 行は 2 列の格子に入れず、幅いっぱいの独立した行にする。
+	# 人のレベル（ランで失う）と職業の熟練（持ち帰る）は別物なので、
+	# 短く縮めて並べるより、行を分けて書き切るほうがよい。
+	const COL_W := 150.0
+	var wide := [
 		["じぶんの レベル", "%d" % m.level],
 		["しょくぎょうの 熟練", mastery],
+	]
+	for i in wide.size():
+		var at := origin + Vector2(0, 50 + i * 19)
+		PixelUI.draw_text(self, at, String(wide[i][0]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+		PixelUI.draw_text_right(
+			self, Vector2(origin.x + COL_W * 2.0 - 10.0, at.y - 2), String(wide[i][1]),
+			PixelUI.C_TEXT
+		)
+
+	var rows := [
 		["HP", "%d/%d" % [m.hp, m.max_hp()]],
 		["MP", "%d/%d" % [m.mp, m.max_mp()]],
 		["こうげき", "%d" % m.attack_power()],
@@ -593,19 +620,21 @@ func _draw_status() -> void:
 	]
 	for i in rows.size():
 		@warning_ignore("integer_division")
-		var col := i / 4
-		var row := i % 4
-		var at := origin + Vector2(col * 150, 50 + row * 19)
+		var col := i / 3
+		var row := i % 3
+		var at := origin + Vector2(col * COL_W, 94 + row * 19)
 		PixelUI.draw_text(self, at, String(rows[i][0]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
-		PixelUI.draw_text(self, at + Vector2(76, -2), String(rows[i][1]), PixelUI.C_TEXT)
+		PixelUI.draw_text_right(
+			self, Vector2(at.x + COL_W - 24.0, at.y - 2), String(rows[i][1]), PixelUI.C_TEXT
+		)
 
-	PixelUI.draw_text(self, origin + Vector2(0, 128), "そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	PixelUI.draw_text(self, origin + Vector2(0, 156), "そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	for i in SLOTS.size():
-		var at := origin + Vector2(0, 148 + i * 19)
+		var at := origin + Vector2(0, 176 + i * 19)
 		var gear_id := String(m.equipment.get(SLOTS[i], ""))
 		var label := String(Database.gear(gear_id).get("name", "—")) if gear_id != "" else "—"
 		PixelUI.draw_text(self, at, String(SLOT_LABELS[SLOTS[i]]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
-		PixelUI.draw_text(self, at + Vector2(76, -2), label, PixelUI.C_TEXT)
+		PixelUI.draw_text(self, at + Vector2(64, -2), label, PixelUI.C_TEXT)
 
 
 func _draw_equip() -> void:

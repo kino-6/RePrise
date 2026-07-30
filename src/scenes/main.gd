@@ -342,6 +342,14 @@ func _capture(which: String) -> void:
 					m.gain_exp(m.exp_to_next())
 			_open_menu()
 			menu.debug_open_jobs()
+		"status":
+			# つよさ の重なりを見る
+			_start_run()
+			for m in GameState.active_party():
+				while m.level < 12:
+					m.gain_exp(m.exp_to_next())
+			_open_menu()
+			menu.debug_open_status()
 		"equip":
 			_start_run()
 			GameState.add_gear("war_axe")
