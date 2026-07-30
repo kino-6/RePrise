@@ -111,6 +111,26 @@ static func gear_ids_for_floor(floor_number: int) -> Array:
 	return result
 
 
+## 出店の装備は「基本品 + 直近2段階」に絞る。
+##
+## 全装備を累積表示すると、危険度10の店が三十行以上になり、欲しい品を探す
+## だけで疲れる。宝箱の候補は `gear_ids_for_floor()` のままなので、店に無い
+## 希少品も探索報酬として残る。
+static func gear_ids_for_shop(floor_number: int) -> Array:
+	_ensure()
+	var result: Array = []
+	var recent_from := maxi(floor_number - 1, 1)
+	for id in equipment.keys():
+		var gear: Dictionary = equipment[id]
+		var floor_min := int(gear.get("floor_min", 1))
+		if floor_number < floor_min or not bool(gear.get("shop", true)):
+			continue
+		if bool(gear.get("staple", false)) or floor_min >= recent_from:
+			result.append(id)
+	result.sort()
+	return result
+
+
 ## 装備の一覧（スロット順 → ID 順）。つよさ画面と装備画面で同じ並びにする。
 static func gear_ids_in_slot(slot: String) -> Array:
 	_ensure()

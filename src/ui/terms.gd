@@ -51,6 +51,8 @@ static var EQUIP_NOW := Vocabulary.word("terms", "equip_now", "いま そうび�
 static var TO_BAG := Vocabulary.word("terms", "to_bag", "もちものへ")
 static var GOT_GEAR := Vocabulary.word("terms", "got_gear", "%s を みつけた")
 static var TAKES_OFF := Vocabulary.word("terms", "takes_off", "はずれる")
+static var CANNOT_EQUIP := Vocabulary.word("terms", "cannot_equip", "そうびできない")
+static var BATTLE_ONLY := Vocabulary.word("terms", "battle_only", "戦闘中だけ つかえる")
 static var NO_ONE_CAN := Vocabulary.word(
 	"terms", "no_one_can", "だれも そうびできない")
 ## 戦闘コマンドに添えるコスト。こちらは「この一手で何待つか」なので待ちのまま出す。

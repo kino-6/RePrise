@@ -45,6 +45,9 @@ const ROOT_ITEMS: Array[String] = [
 
 ## てんしょくの一覧は 2 列。15 職あるので 1 列だと枠から出る。
 const JOB_COLS := 2
+## BODY_RECT に説明を残したまま収まる一覧数。超えたらカーソルに追従して送る。
+const ITEM_ROWS := 10
+const GEAR_ROWS := 4
 
 var _state: State = State.ROOT
 var _root_index := 0
@@ -110,7 +113,10 @@ func _items() -> Array:
 
 
 func _gear_list() -> Array[String]:
-	return GameState.gear_stock_for_slot(SLOTS[_slot_index])
+	var member := _selected()
+	if member == null:
+		return []
+	return GameState.gear_stock_for_member_slot(member, SLOTS[_slot_index])
 
 
 # --------------------------------------------------------------------------
@@ -303,6 +309,17 @@ func _input_item(event: InputEvent) -> void:
 		return
 	_item_index = _move(_item_index, _items().size(), event)
 	if event.is_action_pressed("confirm"):
+		if _items().is_empty():
+			return
+		var item := Database.item(String(_items()[_item_index]))
+		if (
+			String(item.get("target", "")) == "one_enemy"
+			or String(item.get("effect", "")) == "haste"
+		):
+			Sound.play("cancel")
+			_notify(Terms.BATTLE_ONLY)
+			queue_redraw()
+			return
 		Sound.play("confirm")
 		_target_index = 0
 		_state = State.ITEM_TARGET
@@ -360,6 +377,25 @@ func _use_item() -> void:
 				_notify("%sは なんともない" % who.name)
 				return
 			_notify("%sの どくが 消えた" % who.name)
+		"heal_cleanse":
+			if who.hp <= 0:
+				Sound.play("cancel")
+				_notify("たおれている ものには つかえない")
+				return
+			var hp_before := who.hp
+			var cured := who.cure_poison()
+			who.hp = mini(who.hp + power, who.max_hp())
+			var healed := who.hp - hp_before
+			if healed <= 0 and not cured:
+				Sound.play("cancel")
+				_notify("%sは なんともない" % who.name)
+				return
+			if cured and healed > 0:
+				_notify("%sの 傷とどくが 癒えた" % who.name)
+			elif cured:
+				_notify("%sの どくが 消えた" % who.name)
+			else:
+				_notify("%sの きずが %d かいふくした" % [who.name, healed])
 		"revive":
 			if who.hp > 0:
 				Sound.play("cancel")
@@ -648,7 +684,8 @@ func _draw_items() -> void:
 		panel.line("なにも もっていない。", PixelUI.C_TEXT_DIM)
 		return
 	panel.skip(6.0)
-	for i in items.size():
+	var item_range := MenuList.range_of(_item_index, items.size(), ITEM_ROWS)
+	for i in range(item_range[0], item_range[1]):
 		var it := Database.item(String(items[i]))
 		var on := i == _item_index and _state in [State.ITEM, State.ITEM_TARGET]
 		if on:
@@ -660,6 +697,7 @@ func _draw_items() -> void:
 			"%d こ" % GameState.item_count(String(items[i])),
 			PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
 		)
+	MenuList.draw_position(self, area, _item_index, items.size(), ITEM_ROWS)
 
 
 func _draw_status() -> void:
@@ -698,8 +736,7 @@ func _draw_status() -> void:
 	panel.skip(6.0)
 	panel.row("じぶんの レベル", "%d" % m.level, PixelUI.C_TEXT_DIM,
 		PixelUI.C_TEXT, PixelUI.SIZE_SUB)
-	panel.row("しょくぎょうの 熟練", mastery, PixelUI.C_TEXT_DIM,
-		PixelUI.C_TEXT, PixelUI.SIZE_SUB)
+	panel.row("しょくぎょうの 熟練", mastery, PixelUI.C_TEXT_DIM, PixelUI.C_TEXT)
 
 	# 能力は 2 列 x 3 行。列ごとに幅を持つので、値が隣の列へ食い込まない。
 	panel.skip(6.0)
@@ -724,10 +761,9 @@ func _draw_status() -> void:
 	for i in SLOTS.size():
 		var gear_id := String(m.equipment.get(SLOTS[i], ""))
 		var label := String(Database.gear(gear_id).get("name", "—")) if gear_id != "" else "—"
+		# 品名は data 側で漢字を含む。**14px より下げない**（D-5）。
 		panel.row(
-			String(SLOT_LABELS[SLOTS[i]]), label,
-			PixelUI.C_TEXT_DIM, PixelUI.C_TEXT, PixelUI.SIZE_SUB
-		)
+			String(SLOT_LABELS[SLOTS[i]]), label, PixelUI.C_TEXT_DIM, PixelUI.C_TEXT)
 
 
 func _draw_equip() -> void:
@@ -783,7 +819,8 @@ func _draw_equip() -> void:
 	var entries: Array[String] = ["はずす"]
 	for id in list:
 		entries.append(String(Database.gear(id).get("name", id)))
-	for i in entries.size():
+	var gear_range := MenuList.range_of(_gear_index, entries.size(), GEAR_ROWS)
+	for i in range(gear_range[0], gear_range[1]):
 		# **入らない行は `row()` が黙って捨てる**ので、自分で打ち切らなくてよい。
 		var on := i == _gear_index
 		if on:
@@ -794,6 +831,9 @@ func _draw_equip() -> void:
 			"" if i == 0 else GearText.summary(Database.gear(list[i - 1])),
 			PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
 		)
+	MenuList.draw_position(
+		self, panel.inner(), _gear_index, entries.size(), GEAR_ROWS
+	)
 
 
 func _draw_hint() -> void:

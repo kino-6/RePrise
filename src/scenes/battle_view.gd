@@ -505,8 +505,20 @@ func _execute(target: Battler) -> void:
 			_state = State.COMMAND
 			_refresh()
 			return
+		var item := Database.item(_pending_item)
 		var item_lines := system.use_item(_actor, _pending_item, target)
-		Sound.play("heal")
+		if String(item.get("effect", "")) == "item_damage":
+			var element := String(item.get("element", ""))
+			Sound.play(
+				"fire" if element == "fire"
+				else "ice" if element == "ice"
+				else "bolt" if element == "lightning"
+				else "hit"
+			)
+		elif String(item.get("effect", "")) == "haste":
+			Sound.play("magic")
+		else:
+			Sound.play("heal")
 		_pending_item = ""
 		_show(item_lines)
 		return
@@ -1187,7 +1199,8 @@ func _draw_list() -> void:
 		desc = String(data.get("desc", ""))
 	_cell(
 		Vector2(inner.position.x + 4, inner.end.y - 18), inner.size.x - 8.0
-	).line(desc, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	# **説明は 14px。** 品名も技名も data 側にあり漢字を含む。12px では潰れる（D-5）。
+	).line(desc, PixelUI.C_TEXT_DIM)
 
 
 ## 一覧の行の名前（道具と技で引く先が違うだけ）。

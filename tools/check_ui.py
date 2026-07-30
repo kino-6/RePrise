@@ -85,6 +85,13 @@ def _check_one(name: str) -> tuple[str, list[str]]:
             for line in out.splitlines()
             if "詰めた:" in line
         ]
+        # **14px 未満の漢字も違反**（D-5）。SFC の 12px で漢字は潰れる。
+        # 文字列を grep するだけでは足りない ―― 品名も技名も data 側にある。
+        hits += [
+            "小さすぎる漢字 " + line.split("小さすぎる漢字:", 1)[1].strip()
+            for line in out.splitlines()
+            if "小さすぎる漢字:" in line
+        ]
         if "撮影:" in out:
             return name, hits
         if attempt == 0:

@@ -74,7 +74,15 @@ static func apply_to_run(state: Node) -> Array[String]:
 			if ids.is_empty():
 				continue
 			for i in party.size():
-				var gear_id := String(ids[i % ids.size()])
+				# 適性導入後も開発用装備が空振りしないよう、その者が着けられる
+				# 候補の中から決定的に 1 つ選ぶ。
+				var usable: Array[String] = []
+				for id in ids:
+					if party[i].can_equip(String(id)):
+						usable.append(String(id))
+				if usable.is_empty():
+					continue
+				var gear_id := usable[i % usable.size()]
 				state.add_gear(gear_id, false)
 				state.equip_gear(party[i], gear_id)
 		applied.append("装備一式")

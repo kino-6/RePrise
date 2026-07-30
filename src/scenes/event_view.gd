@@ -285,32 +285,26 @@ func _draw_detail() -> void:
 	var risks := _tokens(c.get("risks", []), "risk")
 	# 左半分に「はらう」、右半分に「あぶない」。**列として幅を渡す**ので、
 	# 手で 218 や 470 と書いていた数字が要らなくなる（窓を変えると古くなる数字）。
-	_detail(origin, 0, DETAIL_HALF_W).line(
+	# **左右に割らず、行で分ける。** 半分の幅（242px）だと 14px の漢字が入らず、
+	# 12px へ下げると潰れる（D-5）。縦に 1 行使うほうが読める。
+	_detail(origin, 0).row(
 		"はらう: %s" % [
 			_tokens(c.get("costs", []), "cost")
 			if not c.get("costs", []).is_empty() else "なし"
 		],
-		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
-	_detail(origin, 18).line(
-		"もらう: %s" % [_tokens(c.get("rewards", []), "reward")],
-		PixelUI.C_TEXT, PixelUI.SIZE_SUB
-	)
-	UiPanel.inside(self, Rect2(
-		origin + Vector2(DETAIL_HALF_W + 8.0, 0),
-		Vector2(PixelUI.content(DETAIL_RECT).end.x - origin.x - DETAIL_HALF_W - 16.0,
-			PixelUI.LINE)
-	)).line(
 		"あぶない: %s" % [risks if risks != "" else "なし"],
-		PixelUI.C_HP_LOW if risks != "" else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		PixelUI.C_TEXT_DIM,
+		PixelUI.C_HP_LOW if risks != "" else PixelUI.C_TEXT_DIM
 	)
+	# 代価と報酬は data 側の語（漢字を含む）。**14px より下げない**（D-5）。
+	_detail(origin, 18).line(
+		"もらう: %s" % [_tokens(c.get("rewards", []), "reward")], PixelUI.C_TEXT)
 	# 払えないときは、その理由を最優先で出す。
 	if not _blocked.is_empty():
 		_detail(origin, 38).line(
 			"たりない: %s" % "・".join(_blocked), PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
 		return
-	_detail(origin, 38).line(
-		"Ｚで きめる　Ｘで 見送る", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	_detail(origin, 38).line("Ｚで きめる　Ｘで 見送る", PixelUI.C_TEXT_DIM)
 
 
 ## 払えない理由を外から入れる（GameState を知らないので自分では調べない）。

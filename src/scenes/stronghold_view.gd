@@ -621,8 +621,7 @@ func _draw_party_note() -> void:
 	UiPanel.inside(self, Rect2(origin + Vector2(6, 2), Vector2(width, PixelUI.LINE))).line(
 		Terms.PARTY, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	UiPanel.inside(self, Rect2(origin + Vector2(6, 26), Vector2(width, PixelUI.LINE))).line(
-		"%d 人まで 連れて行ける。" % GameState.PARTY_SIZE,
-		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+		"%d 人まで 連れて行ける。" % GameState.PARTY_SIZE, PixelUI.C_TEXT_DIM)
 
 	var all_members := GameState.all_members()
 	var rows := all_members.size() + 1
@@ -638,7 +637,7 @@ func _draw_party_note() -> void:
 			if not GameState.can_recruit():
 				label = "これで 全員"
 			UiPanel.inside(self, Rect2(at, Vector2(width, PixelUI.LINE))).line(
-				label, PixelUI.C_ACTIVE if on else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+				label, PixelUI.C_ACTIVE if on else PixelUI.C_TEXT_DIM)
 			continue
 		var m := all_members[row]
 		var mark := "●" if GameState.is_active(row) else "○"

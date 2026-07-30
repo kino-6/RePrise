@@ -32,7 +32,11 @@ var _index := 0
 func open(id: String, members: Array) -> void:
 	gear_id = id
 	_members = members
-	_index = 0
+	_index = _bag_row()
+	for i in _members.size():
+		if _can_member(i):
+			_index = i
+			break
 	visible = true
 	set_process_unhandled_input(true)
 	queue_redraw()
@@ -48,18 +52,38 @@ func _bag_row() -> int:
 	return _members.size()
 
 
+func _can_member(index: int) -> bool:
+	return (
+		index >= 0
+		and index < _members.size()
+		and (_members[index] as PartyMember).can_equip(gear_id)
+	)
+
+
+func _is_selectable(index: int) -> bool:
+	return index == _bag_row() or _can_member(index)
+
+
+## 適性の無い仲間は表示には残すが、カーソルは止めない。
+func _move_selection(direction: int) -> void:
+	var rows := _members.size() + 1
+	for _try in rows:
+		_index = (_index + direction + rows) % rows
+		if _is_selectable(_index):
+			return
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("cancel"):
 		Sound.play("cancel")
 		chosen.emit(-1)
 		return
-	var rows := _members.size() + 1
 	if event.is_action_pressed("ui_down"):
-		_index = (_index + 1) % rows
+		_move_selection(1)
 		Sound.play("cursor")
 		queue_redraw()
 	elif event.is_action_pressed("ui_up"):
-		_index = (_index - 1 + rows) % rows
+		_move_selection(-1)
 		Sound.play("cursor")
 		queue_redraw()
 	elif event.is_action_pressed("confirm"):
@@ -71,6 +95,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ##
 ## 装備が持つ能力だけを見る（持っていない能力を 0 と並べても読みづらい）。
 func delta_text(member: PartyMember) -> String:
+	if not member.can_equip(gear_id):
+		return Terms.CANNOT_EQUIP
 	var gear := Database.gear(gear_id)
 	var slot := String(gear.get("slot", ""))
 	var worn := String(member.equipment.get(slot, ""))
@@ -107,7 +133,8 @@ func _draw() -> void:
 	var panel := UiPanel.begin(self, RECT, WINDOW_TEX, Terms.GOT_GEAR % name)
 	var desc := String(Database.gear(gear_id).get("desc", ""))
 	if desc != "":
-		panel.line(desc, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+		# 装備の説明は data 側（漢字を含む）。**14px より下げない**（D-5）。
+		panel.line(desc, PixelUI.C_TEXT_DIM)
 	panel.skip(4.0)
 
 	var top := panel.cursor_y()
@@ -116,20 +143,28 @@ func _draw() -> void:
 		var at := Vector2(panel.inner().position.x + 14, top + float(i) * ROW)
 		if _index == i:
 			MenuList.draw_cursor(self, CURSOR_TEX, at)
-		var tint := PixelUI.C_TEXT if _index == i else PixelUI.C_TEXT_DIM
+		var can_wear := member.can_equip(gear_id)
+		var tint := (
+			PixelUI.C_TEXT if _index == i
+			else PixelUI.C_TEXT_DIM if can_wear
+			else PixelUI.C_SHADOW
+		)
 		var width := panel.inner().end.x - at.x
 		# **名前と差分を同じ行に並べない。** 能力が 3 つ動く装備だと差分だけで
 		# 幅を食い切って、名前が「ア…」に詰まった（関門が拾った）。
 		# 1 行目は名前と外れるもの、2 行目に差分を下ろす。
-		var off := removed_name(member)
+		var off := removed_name(member) if can_wear else ""
 		UiPanel.inside(self, Rect2(at, Vector2(width, PixelUI.LINE))).row(
 			member.name,
-			"" if off == "" else "（%s が %s）" % [off, Terms.TAKES_OFF],
-			tint, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+			Terms.CANNOT_EQUIP if not can_wear
+			else "" if off == ""
+			else "（%s が %s）" % [off, Terms.TAKES_OFF],
+			tint, PixelUI.C_TEXT_DIM
 		)
 		UiPanel.inside(self, Rect2(
 			at + Vector2(12, 12), Vector2(width - 12.0, PixelUI.LINE)
-		)).line(delta_text(member), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+		# 能力の呼び名は漢字を含む（速さ・体力）。**14px より下げない**（D-5）。
+		)).line(delta_text(member), PixelUI.C_TEXT_DIM)
 
 	var bag_at := Vector2(
 		panel.inner().position.x + 14, top + float(_members.size()) * ROW)

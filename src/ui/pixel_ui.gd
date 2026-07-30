@@ -104,6 +104,7 @@ static func ui_frame() -> void:
 
 
 static func ui_check_reset() -> void:
+	_small_kanji.clear()
 	_clipped.clear()
 	_windows.clear()
 	_violations.clear()
@@ -230,6 +231,28 @@ static func clipped() -> Array[String]:
 	return _clipped
 
 
+## 14px 未満で描いた漢字（D-5）。
+##
+## `SIZE_SUB`（12px）は**かなと数字のみ**と決めてある。SFC の 12px で漢字は潰れて
+## 読めない。文字列を grep するだけでは足りない ―― 品名も技名も職業名も
+## `data/*.json` 側にあり、`Terms` の差し替えでも入ってくる。
+## **描いた瞬間に見る**のがいちばん確実。
+static var _small_kanji: Array[String] = []
+
+
+static func small_kanji() -> Array[String]:
+	return _small_kanji
+
+
+## 漢字（CJK 統合漢字）を含むか。
+static func has_kanji(text: String) -> bool:
+	for i in text.length():
+		var code := text.unicode_at(i)
+		if code >= 0x4E00 and code <= 0x9FFF:
+			return true
+	return false
+
+
 ## 詰めたことを控える。`UiPanel` が列の幅で詰めたときにも通る。
 static func note_clipped(text: String) -> void:
 	var note := "「%s」を詰めた" % text.substr(0, 18)
@@ -252,6 +275,10 @@ static func draw_text(
 	color: Color = C_TEXT, size: int = SIZE_TEXT
 ) -> void:
 	text = _fit(top_left, text, size)
+	if size < SIZE_TEXT and has_kanji(text):
+		var note := "「%s」を %dpx で描いた" % [text.substr(0, 18), size]
+		if note not in _small_kanji:
+			_small_kanji.append(note)
 	_note_text(top_left, text, size)
 	var at := Vector2(top_left.x, top_left.y + font().get_ascent(size)).floor()
 	canvas.draw_string(font(), at + Vector2.ONE, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, C_SHADOW)

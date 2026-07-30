@@ -49,7 +49,7 @@ func open(stock: Dictionary, floor_number: int) -> void:
 	_floor = floor_number
 	# 消耗品と装備を同じ品書きに並べる。店を 2 つに分けるほどの品数ではない。
 	_ids = Database.item_ids_for_floor(floor_number)
-	_ids.append_array(Database.gear_ids_for_floor(floor_number))
+	_ids.append_array(Database.gear_ids_for_shop(floor_number))
 	# 在庫はこのフロアで一度だけ用意する。出入りしても戻らない。
 	if _stock.is_empty():
 		# 「商いの伝手」を買っているぶんだけ品が多く並ぶ。

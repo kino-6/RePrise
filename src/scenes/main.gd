@@ -756,6 +756,9 @@ func _capture(which: String) -> void:
 		# するので遊ぶ側には見えないが、詰まっていること自体が割り付けの誤り。
 		for note in PixelUI.clipped():
 			print("  詰めた: %s" % note)
+		# **12px の漢字は潰れて読めない**（D-5）。かなと数字だけにする。
+		for note in PixelUI.small_kanji():
+			print("  小さすぎる漢字: %s" % note)
 	get_tree().quit()
 
 

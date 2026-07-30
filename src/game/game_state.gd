@@ -789,8 +789,23 @@ func gear_stock_for_slot(slot: String) -> Array[String]:
 	return result
 
 
+## その者が実際に着けられる手持ちだけを返す。
+## 装備画面が不適合品を選ばせ、決定後にだけ拒否する状態を避ける。
+func gear_stock_for_member_slot(member: PartyMember, slot: String) -> Array[String]:
+	var result: Array[String] = []
+	for id in gear_stock:
+		if String(Database.gear(id).get("slot", "")) != slot:
+			continue
+		if member.can_equip(id):
+			result.append(id)
+	result.sort()
+	return result
+
+
 ## 装備を付け替える。外れたものは手持ちへ戻る。
 func equip_gear(member: PartyMember, gear_id: String) -> bool:
+	if not member.can_equip(gear_id):
+		return false
 	if not remove_gear(gear_id):
 		return false
 	var removed := member.equip(gear_id)

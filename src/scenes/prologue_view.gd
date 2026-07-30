@@ -305,4 +305,5 @@ func _draw_text_window() -> void:
 	var prompt := String(_entry().get("prompt", ""))
 	UiPanel.inside(self, Rect2(
 		origin + Vector2(8, 76), Vector2(inner.size.x - 16.0, PixelUI.LINE)
-	)).row("", prompt, PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	# 序章の文は `Lore` 側（漢字を含む）。**14px より下げない**（D-5）。
+	)).row("", prompt, PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM)

@@ -536,11 +536,71 @@ func use_item(actor: Battler, item_id: String, target: Battler) -> Array[String]
 				lines.append("%sの ぐあいが よくなった" % who.name)
 			else:
 				lines.append("しかし　なにも おこらなかった")
+		"heal_cleanse":
+			if not who.is_alive():
+				lines.append("しかし　なにも おこらなかった")
+			else:
+				var healed := who.heal(power)
+				var cured := who.has_status()
+				who.clear_status()
+				if healed > 0:
+					lines.append("%sの きずが %d かいふくした" % [who.name, healed])
+				if cured:
+					lines.append("%sの ぐあいが よくなった" % who.name)
+				if healed <= 0 and not cured:
+					lines.append("しかし　なにも おこらなかった")
+		"item_damage":
+			lines.append_array(_use_damage_item(actor, who, it))
+		"haste":
+			if not who.is_alive():
+				lines.append("しかし　なにも おこらなかった")
+			else:
+				who.agi_scale = 150
+				who.agi_scale_turns = BUFF_TURNS
+				lines.append("%sの　すばやさが あがった！" % who.name)
 		_:
 			lines.append("しかし　なにも おこらなかった")
 
 	scheduler.consume(actor, actor.scaled_cost(int(it.get("cost", CtbScheduler.STANDARD_COST))))
 	_check_finished()
+	return lines
+
+
+## 攻撃道具は使い手の能力に依存しない。
+##
+## 魔法職が弱い通常攻撃を補う、MPを温存して弱点だけ突く、という別の資源軸に
+## するため。乱数は戦闘の DetRng だけを使い、同じシードの結果を保つ。
+func _use_damage_item(actor: Battler, target: Battler, item: Dictionary) -> Array[String]:
+	var lines: Array[String] = []
+	if target == null or not target.is_alive():
+		lines.append("しかし　なにも おこらなかった")
+		return lines
+
+	var receiver := target
+	if (
+		target.protected_by != null
+		and target.protected_by.is_alive()
+		and target.protected_by != actor
+	):
+		receiver = target.protected_by
+		lines.append("%sが　%sを かばった！" % [receiver.name, target.name])
+
+	var damage := maxi(int(item.get("power", 0)), 1)
+	var element := String(item.get("element", ""))
+	if element in receiver.weak:
+		damage = damage * ELEMENT_WEAK / 100
+	elif element in receiver.resist:
+		damage = damage * ELEMENT_RESIST / 100
+	damage = damage * rng.range_i(VARIANCE_LOW, VARIANCE_HIGH) / 100
+	if receiver.guarding:
+		damage = damage / 2
+	damage = maxi(damage, 1)
+	receiver.apply_damage(damage)
+	lines.append("%sに　%d の ダメージ！%s" % [
+		receiver.name, damage, _element_tag(receiver, element)
+	])
+	if not receiver.is_alive():
+		lines.append("%sを　たおした！" % receiver.name)
 	return lines
 
 
