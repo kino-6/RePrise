@@ -152,36 +152,29 @@ func _draw() -> void:
 ## 代償・危険・報酬・後続戦闘が重なると4行を越えるため、画面の大半を結果へ使う。
 func _draw_outcome() -> void:
 	PixelUI.draw_window(self, OUTCOME_RECT, WINDOW_TEX)
-	var origin := PixelUI.content(OUTCOME_RECT).position
-	PixelUI.draw_text(
-		self, origin + Vector2(6, 0), _skin("title"), PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
-	)
-	var lines := PixelUI.wrap(_skin("cause"), 470.0, PixelUI.SIZE_TEXT)
-	for i in mini(lines.size(), 8):
-		PixelUI.draw_text(
-			self, origin + Vector2(6, 28 + i * 20), lines[i], PixelUI.C_TEXT
-		)
+	# **折り返し幅を手で書かない。** 470 という数字は窓の寸法を変えると
+	# ただちに古くなる（枠を縮めても文字はそのまま溢れる）。
+	# `paragraph()` は窓の内側から幅を取り、入らない行は捨てて数える。
+	var panel := UiPanel.inside(self, PixelUI.content(OUTCOME_RECT).grow(-6.0))
+	panel.line(_skin("title"), PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	panel.skip(6.0)
+	panel.paragraph(_skin("cause"))
 	PixelUI.draw_window(self, DETAIL_RECT, WINDOW_TEX)
-	PixelUI.draw_text(
-		self, PixelUI.content(DETAIL_RECT).position + Vector2(8, 0),
-		Terms.EVENT_CLOSE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
+	UiPanel.inside(self, PixelUI.content(DETAIL_RECT).grow(-4.0)).line(
+		Terms.EVENT_CLOSE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 
 func _draw_head() -> void:
 	PixelUI.draw_window(self, HEAD_RECT, WINDOW_TEX)
-	var origin := PixelUI.content(HEAD_RECT).position
-	PixelUI.draw_text(self, origin + Vector2(6, 0), _skin("title"), PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
-	var who := _skin("actor")
-	if who != "":
-		PixelUI.draw_text_right(
-			self, Vector2(PixelUI.content(HEAD_RECT).end.x - 4, origin.y + 4), who,
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
-	# 何が起きているか。原因と情景を 2 行で。
-	var lines := PixelUI.wrap(_skin("cause") + " " + _skin("flavor"), 470.0, PixelUI.SIZE_TEXT)
-	for i in mini(lines.size(), 4 if bool(event.get("outcome", false)) else 3):
-		PixelUI.draw_text(self, origin + Vector2(6, 26 + i * 20), lines[i], PixelUI.C_TEXT)
+	var panel := UiPanel.inside(self, PixelUI.content(HEAD_RECT).grow(-6.0))
+	# 題と語り手を 1 行に。**ぶつかったら題を詰める**（語り手は名前なので短い）。
+	panel.row(
+		_skin("title"), _skin("actor"),
+		PixelUI.C_ACTIVE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_HEAD
+	)
+	panel.skip(4.0)
+	# 何が起きているか。原因と情景。**入らない行は捨てて数える。**
+	panel.paragraph(_skin("cause") + " " + _skin("flavor"))
 
 
 func _draw_list() -> void:
@@ -193,13 +186,13 @@ func _draw_list() -> void:
 		var on := i == _index
 		if on:
 			MenuList.draw_cursor(self, CURSOR_TEX, at)
-		PixelUI.draw_text(
-			self, at, String(c.get("label", "")),
-			PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
-		)
 		# 払うものと得るものを、その行に添える。**選ぶ前に見える位置に置く。**
-		PixelUI.draw_text(
-			self, at + Vector2(180, 2), _summary(c), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		# 右（代価）を守り、詰まるのは選択肢の文のほう。
+		UiPanel.inside(self, Rect2(
+			at, Vector2(PixelUI.content(LIST_RECT).end.x - 6.0 - at.x, PixelUI.LINE)
+		)).row(
+			String(c.get("label", "")), _summary(c),
+			PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
 		)
 
 

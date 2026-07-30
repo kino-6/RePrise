@@ -93,6 +93,38 @@ static var SAVE_ERASE_TITLE_ONLY := Vocabulary.word(
 	"terms", "save_erase_title_only", "タイトルから"
 )
 
+# --- ランの放棄 ---
+static var RUN_ABANDON := Vocabulary.word("terms", "run_abandon", "ランを あきらめる")
+static var RUN_ABANDON_FIRST_QUESTION := Vocabulary.word(
+	"terms", "run_abandon_first_question", "このランを あきらめますか？"
+)
+static var RUN_ABANDON_FIRST_WARNING := Vocabulary.word(
+	"terms", "run_abandon_first_warning", "レベル・そうび・ゴールドは うしなう"
+)
+static var RUN_ABANDON_FINAL_QUESTION := Vocabulary.word(
+	"terms", "run_abandon_final_question", "ほんとうに 砦へ 戻りますか？"
+)
+static var RUN_ABANDON_FINAL_WARNING := Vocabulary.word(
+	"terms", "run_abandon_final_warning", "この世界には 二度と もどれない"
+)
+static var RUN_ABANDON_CANCEL := Vocabulary.word("terms", "run_abandon_cancel", "もどる")
+static var RUN_ABANDON_NEXT := Vocabulary.word(
+	"terms", "run_abandon_next", "あきらめる"
+)
+static var RUN_ABANDON_EXECUTE := Vocabulary.word(
+	"terms", "run_abandon_execute", "ランを終えて 砦へ"
+)
+static var RUN_ABANDON_HINT := Vocabulary.word(
+	"terms", "run_abandon_hint", "2回の確認が必要　Ｘで もどる"
+)
+static var RUN_ABANDON_IN_RUN := Vocabulary.word(
+	"terms", "run_abandon_in_run", "ラン中のみ"
+)
+static var RUN_ABANDON_RESULT := Vocabulary.word("terms", "run_abandon_result", "帰還")
+static var RUN_ABANDON_CHRONICLE := Vocabulary.word(
+	"terms", "run_abandon_chronicle", "一行は 危険度 %d の 地から 帰還を選んだ。"
+)
+
 # --- 任意イベント ---
 static var EVENT_CLOSE := Vocabulary.word("terms", "event_close", "Ｚで とじる")
 static var EVENT_DEFER_SUMMARY := Vocabulary.word(

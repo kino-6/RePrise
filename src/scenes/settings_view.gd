@@ -287,10 +287,9 @@ func _draw_root(origin: Vector2) -> void:
 			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		var enabled := i != Row.ERASE_SAVE or (_allow_save_erase and _has_save_data)
 		var tint := PixelUI.C_TEXT if i == _index and enabled else PixelUI.C_TEXT_DIM
-		PixelUI.draw_text(self, at, String(rows[i][0]), tint)
-		PixelUI.draw_text_right(
-			self, Vector2(origin.x + 340, at.y), String(rows[i][1]), PixelUI.C_TEXT_DIM
-		)
+		# 項目と値を 1 行に。**値は消えては困る**ので、詰まるのは項目名のほう。
+		UiPanel.inside(self, Rect2(at, Vector2(340.0, PixelUI.LINE))).row(
+			String(rows[i][0]), String(rows[i][1]), tint, PixelUI.C_TEXT_DIM)
 
 
 func _draw_erase(origin: Vector2) -> void:
@@ -318,8 +317,8 @@ func _draw_keys(origin: Vector2) -> void:
 		if i == _key_index:
 			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		var tint := PixelUI.C_TEXT if i == _key_index else PixelUI.C_TEXT_DIM
-		PixelUI.draw_text(self, at, String(Settings.ACTION_LABELS[action]), tint, PixelUI.SIZE_SUB)
 		var label := "…" if (_awaiting and i == _key_index) else Settings.key_label(action)
-		PixelUI.draw_text_right(
-			self, Vector2(origin.x + 340, at.y), label, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+		# 操作名と割り当てを 1 行に。**割り当ては消えては困る**（何を押すか分からなくなる）。
+		UiPanel.inside(self, Rect2(at, Vector2(340.0, PixelUI.LINE))).row(
+			String(Settings.ACTION_LABELS[action]), label,
+			tint, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
