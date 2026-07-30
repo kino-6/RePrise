@@ -1325,12 +1325,39 @@ NPC_ROLES = [
 ]
 
 
-## 職業どうしが見分けられる最小の差。
+## 職業どうしのシルエットが重なりすぎている、とみなす基準。
 ##
-## タイルの床と壁で使った基準（RGB 距離 40）と同じ考え方。
-## **色だけ変えて同じ人に見える**のが一度あった（差し色で描き分けようとした）ので、
-## いまはシルエットで分ける方針。ここは「取り込んだ絵が似すぎていないか」を測る。
-MIN_HERO_DISTANCE = 26.0
+## **前はここで平均色を測っていた。名前と中身が食い違っていた。**
+## 「いまはシルエットで分ける方針」と書きながら、実際に計算していたのは
+## 平均色の距離と塗り面積の差で、輪郭は一度も見ていなかった。
+## そのせいで tasks.md には「ninja–thief が最悪（2.6）」と載っていたが、
+## それは色の距離で、輪郭で測ると 105 組中 13 番目でしかない。
+## 逆に paladin–spellblade と alchemist–summoner を見逃していた。
+## **間違った組を描き直させる指標は、無いより悪い。**
+##
+## 生の重なり具合（IoU）では駄目だった ―― 15 職すべて人型なので
+## 0.64〜0.85 に固まって差が出ない。**共通の胴体を差し引いて、
+## 帽子・武器・外套といった「出っ張り」だけを比べる。**
+## そうすると 0.16〜0.51 に広がり、順位が意味を持つ。
+##
+## 基準はその中央値（0.31）の約 1.4 倍。ここを超えると、
+## 並べたときに輪郭の特徴が半分近く同じ場所にある。
+MAX_HERO_FEATURE_IOU = 0.44
+
+## 何割の職に塗られていれば「共通の胴体」とみなすか。
+COMMON_BODY_SHARE = 0.8
+
+
+def _silhouette(c: Canvas) -> list[bool]:
+    """最初の 1 コマ（下向き・立ち）の輪郭。塗ってあるかどうかだけを見る。
+
+    **色は見ない。** 並んだ 2 人を見分けているのは、まず輪郭だから。
+    """
+    return [
+        c.get(x, y) != TRANSPARENT
+        for y in range(CHAR_H)
+        for x in range(CHAR_W)
+    ]
 
 
 def _report_hero_similarity(sheets: dict) -> None:
@@ -1342,23 +1369,53 @@ def _report_hero_similarity(sheets: dict) -> None:
     ほぼ同じ絵のまま通っていた。
     """
     names = sorted(sheets)
+    if len(names) < 2:
+        return
+    marks = {name: _silhouette(sheets[name]) for name in names}
+    size = CHAR_W * CHAR_H
+
+    # 共通の胴体。ほとんどの職で塗られている画素は、描き分けに寄与しない。
+    need = COMMON_BODY_SHARE * len(names)
+    core = [
+        sum(marks[name][i] for name in names) >= need
+        for i in range(size)
+    ]
+    feature = {
+        name: [marks[name][i] and not core[i] for i in range(size)]
+        for name in names
+    }
+
     pairs = []
     for i, a in enumerate(names):
         for b in names[i + 1:]:
-            gap = math.dist(_mean_rgb(sheets[a]), _mean_rgb(sheets[b]))
-            ink = abs(_ink_ratio(sheets[a]) - _ink_ratio(sheets[b])) * 100.0
-            # 平均色と「塗られている面積」の両方が近いと、並べて見分けが付かない
-            if gap < MIN_HERO_DISTANCE and ink < 6.0:
-                pairs.append((gap, ink, a, b))
-    if not pairs:
-        print("  職業の描き分け: OK（似すぎている組は無い）")
-        return
-    pairs.sort()
-    for gap, ink, a, b in pairs:
+            fa, fb = feature[a], feature[b]
+            both = sum(1 for x, y in zip(fa, fb) if x and y)
+            either = sum(1 for x, y in zip(fa, fb) if x or y)
+            iou = both / float(max(either, 1))
+            if iou >= MAX_HERO_FEATURE_IOU:
+                # 色も添える。**判定には使わない**が、輪郭が近いうえに色まで
+                # 近ければ、並べたときの見分けにくさは桁が違う。
+                gap = math.dist(_mean_rgb(sheets[a]), _mean_rgb(sheets[b]))
+                pairs.append((iou, gap, a, b))
+
+    thin = [n for n in names if sum(feature[n]) < size * 0.06]
+    if thin:
+        # 出っ張りが無い職は、どの相手とも見分けにくい。組では出てこない。
         print(
-            "  職業の描き分け: 近い %s と %s（色の距離 %.1f / 面積差 %.1f%%、基準 %.0f）"
-            % (a, b, gap, ink, MIN_HERO_DISTANCE)
+            "  職業の描き分け: 特徴の少ない職 %s（胴体だけで、帽子や得物の輪郭が無い）"
+            % "、".join(sorted(thin))
         )
+
+    if not pairs:
+        print("  職業の描き分け: OK（輪郭が重なりすぎている組は無い）")
+        return
+    pairs.sort(reverse=True)
+    print(
+        "  職業の描き分け: 輪郭が近い %d 組（共通の胴体を除いた重なり、基準 %.2f 未満）"
+        % (len(pairs), MAX_HERO_FEATURE_IOU)
+    )
+    for iou, gap, a, b in pairs:
+        print("    %-13s %-13s 重なり %.3f（色の距離 %.1f）" % (a, b, iou, gap))
 
 
 def _ink_ratio(c: Canvas) -> float:

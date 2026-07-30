@@ -39,13 +39,25 @@
 ## 次にやる（効き目の大きい順）
 
 
-- [ ] **職業の絵が似すぎている組が残っている（描く側の作業）。**
-      `gen_assets.py` が測って出す。いまの実測（基準 26）:
-      **ninja–thief 2.6**、ranger–soldier 4.9、chronomancer–jester 6.3、
-      paladin–spellblade 6.9、ほか。Codex が 6 職を描き直したが
-      **ninja–thief は変わっていない**（chronomancer–jester が新たに近づいた）。
-      原本は `docs/chara_image/candidate_hero_*.png`。**色ではなくシルエットで**
-      分ける（`docs/character_art_direction.md` の基準に沿う）。
+- [ ] **職業の絵が似すぎている組が残っている（描く側の作業 ／ Codex へ依頼）。**
+      **指標を直したので、下の一覧は前と別物になっている。** 前の指標は
+      「シルエットで分ける方針」と書きながら実際には平均色を測っていて、
+      間違った組を名指ししていた（`ninja–thief 2.6` は色の距離で、輪郭では
+      105 組中 13 番目）。いまは**共通の胴体を差し引いた輪郭の重なり**で測る。
+
+      `python tools/gen_assets.py` が出す現在の 7 組（重なり／色の距離）:
+
+          chronomancer  jester        0.509（色 6.3）  ← 輪郭も色も最悪
+          beastmaster   sage          0.486（色 51.1）
+          jester        ninja         0.482（色 53.9）
+          beastmaster   gunner        0.475（色 20.6）
+          chronomancer  spellblade    0.468（色 16.6）
+          sage          soldier       0.468（色 21.1）
+          jester        thief         0.461（色 53.4）
+
+      **jester が 3 組に出てくる**ので、まず jester の輪郭（帽子・得物）を
+      他と違う位置に付けるのが効く。原本は `docs/chara_image/candidate_hero_*.png`。
+      **色ではなくシルエットで**分ける（`docs/character_art_direction.md` の基準）。
 
 ### Codex の新規素材（独立して着手できる単位に分けた）
 
