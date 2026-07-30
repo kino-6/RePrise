@@ -8,7 +8,7 @@ extends Node2D
 ## 輪が拠点に戻るのが要点。失ったレベルと残った熟練度を並べて見せる場が無いと、
 ## メタ進行が数字の裏側だけで進んでしまう。
 
-enum Mode { TITLE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, RESULT }
+enum Mode { TITLE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS, RESULT }
 
 var title: TitleView
 var stronghold: StrongholdView
@@ -17,6 +17,7 @@ var explore: ExploreView
 var hud: ExploreHud
 var battle: BattleView
 var menu: FieldMenu
+var settings: SettingsView
 var result: ResultScreen
 
 var _mode: Mode = Mode.EXPLORE
@@ -39,6 +40,8 @@ func _ready() -> void:
 	# 前者はルート Window があとから自分の title を流し込むときに上書きされ、
 	# 既定の「RePrise (DEBUG)」に戻ってしまう。
 	get_window().title = GameVersion.window_title()
+	# 音量とキーの割り当てを先に効かせる（最初の効果音が鳴る前に）。
+	Settings.ensure_loaded()
 
 	title = TitleView.new()
 	title.visible = false
@@ -66,6 +69,10 @@ func _ready() -> void:
 	menu.visible = false
 	add_child(menu)
 
+	settings = SettingsView.new()
+	settings.visible = false
+	add_child(settings)
+
 	result = ResultScreen.new()
 	result.visible = false
 	add_child(result)
@@ -81,7 +88,11 @@ func _ready() -> void:
 	battle.battle_finished.connect(_on_battle_finished)
 	explore.menu_requested.connect(_open_menu)
 	explore.door_nearby.connect(_on_door_nearby)
+	explore.poison_ticked.connect(_on_poison_tick)
 	menu.closed.connect(_close_menu)
+	menu.settings_requested.connect(_open_settings)
+	title.settings_requested.connect(_open_settings)
+	settings.closed.connect(_close_settings)
 	result.dismissed.connect(_enter_stronghold)
 
 	_make_curtain()
@@ -222,6 +233,9 @@ func _capture(which: String) -> void:
 			_enter_stronghold()
 			GameState.echo = 90
 			stronghold.debug_open_party()
+		"settings":
+			settings.open()
+			_set_mode(Mode.SETTINGS)
 		"upgrade":
 			_enter_stronghold()
 			GameState.echo = 42
@@ -351,6 +365,12 @@ func _make_curtain() -> void:
 ## 暗転を挟んで画面を切り替える。
 ## 撮影（--shot）や自動プレイでも同じ経路を通るので、待ち時間は短く保つ。
 func _fade_to(mode: Mode) -> void:
+	# 幕が下りるのを待たずに歩みを止める。
+	#
+	# 暗転を入れるまでは「切り替え＝即座」だったので気づかなかったが、
+	# 幕の裏で切り替える形にすると、その 0.3 秒のあいだ入力が生きたままになる。
+	# 実際に「遭遇したのに歩けて、そのまま階段へ降りられる」状態だった。
+	explore.set_active(false)
 	if _curtain == null:
 		_set_mode(mode)
 		return
@@ -368,6 +388,8 @@ func _fade_to(mode: Mode) -> void:
 ## 暗転だけだと「画面が切り替わった」で終わってしまう。SFC 期の遭遇は
 ## 必ず画面全体に一撃入れてから戦闘に入っていて、それが緊張の合図になっていた。
 func _flash_into_battle() -> void:
+	# 遭遇の瞬間に歩みを止める（理由は _fade_to と同じ）。
+	explore.set_active(false)
 	if _curtain == null:
 		_set_mode(Mode.BATTLE)
 		return
@@ -410,6 +432,7 @@ func _apply_mode(mode: Mode) -> void:
 	stronghold.visible = mode == Mode.STRONGHOLD
 	shop.visible = mode == Mode.SHOP
 	menu.visible = mode == Mode.MENU
+	settings.visible = mode == Mode.SETTINGS
 	# メニュー中も探索の絵は出したままにする（メニューを半透明にしてあるので、
 	# 下にダンジョンが見える）。HUD は二重になるので隠す。
 	explore.visible = mode == Mode.EXPLORE or mode == Mode.MENU
@@ -425,7 +448,18 @@ func _apply_mode(mode: Mode) -> void:
 		shop.close()
 	if mode != Mode.MENU:
 		menu.close()
+	if mode != Mode.SETTINGS:
+		settings.close()
 	if mode == Mode.EXPLORE:
+		_refresh_hud()
+
+
+## 歩いたぶんの毒。倒れはしないが、削られながら出店へ急ぐことになる。
+func _on_poison_tick() -> void:
+	var hurt := 0
+	for m in GameState.active_party():
+		hurt += m.step_poison()
+	if hurt > 0:
 		_refresh_hud()
 
 
@@ -449,6 +483,28 @@ func _open_menu() -> void:
 
 func _close_menu() -> void:
 	_set_mode(Mode.EXPLORE)
+
+
+## 設定はどの画面からでも開ける。閉じたら開く前の画面へ戻す。
+var _mode_before_settings: Mode = Mode.TITLE
+
+
+func _open_settings() -> void:
+	_mode_before_settings = _mode
+	settings.open()
+	# 下の画面は残したまま重ねる（設定は場面ではなく、上に開く窓）。
+	_set_mode(Mode.SETTINGS)
+	title.visible = _mode_before_settings == Mode.TITLE
+	menu.visible = _mode_before_settings == Mode.MENU
+	explore.visible = _mode_before_settings in [Mode.EXPLORE, Mode.MENU]
+
+
+func _close_settings() -> void:
+	if _mode_before_settings == Mode.MENU:
+		menu.open()
+	elif _mode_before_settings == Mode.TITLE:
+		title.open()
+	_set_mode(_mode_before_settings)
 
 
 func _refresh_hud() -> void:
@@ -535,8 +591,11 @@ func _on_chest(amount: int) -> void:
 	Sound.play("chest")
 	var roll := _battle_rng.range_i(0, 99)
 
-	# 深い階ほど装備が出やすい。1 階で 15%、10 階で 33% ほど。
-	if roll < 12 + GameState.floor_number * 2:
+	# 深い階ほど装備が出やすい。1 階で 22%、10 階で 40% ほど。
+	#
+	# 最初は 12% から始めていたが、実際に遊ぶと「宝箱は金しか出ない」と感じる。
+	# 3 回開けて 3 回とも金なら、中身の種類は無いのと同じ。
+	if roll < 20 + GameState.floor_number * 2:
 		var pool := Database.gear_ids_for_floor(GameState.floor_number)
 		if not pool.is_empty():
 			var gear_id := String(_battle_rng.pick(pool))
@@ -545,7 +604,7 @@ func _on_chest(amount: int) -> void:
 			_refresh_hud()
 			return
 
-	if roll < 45:
+	if roll < 68:
 		var items := Database.item_ids_for_floor(GameState.floor_number)
 		if not items.is_empty():
 			var item_id := String(_battle_rng.pick(items))

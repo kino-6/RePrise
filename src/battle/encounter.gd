@@ -1,13 +1,13 @@
-class_name Encounter
+﻿class_name Encounter
 extends RefCounted
 
-## 敵編成の組み立て。すべて渡された RNG からしか引かないので、
-## 同じシード・同じ階層・同じ歩数からは必ず同じ敵が出る。
+## 謨ｵ邱ｨ謌舌・邨・∩遶九※縲ゅ☆縺ｹ縺ｦ貂｡縺輔ｌ縺・RNG 縺九ｉ縺励°蠑輔°縺ｪ縺・・縺ｧ縲・
+## 蜷後§繧ｷ繝ｼ繝峨・蜷後§髫主ｱ､繝ｻ蜷後§豁ｩ謨ｰ縺九ｉ縺ｯ蠢・★蜷後§謨ｵ縺悟・繧九・
 
 const MAX_ENEMIES := 3
 
-## 同名が並ぶときの識別子。DQ の「スライムA / スライムB」と同じ作法。
-const SUFFIX := ["Ａ", "Ｂ", "Ｃ"]
+## 蜷悟錐縺御ｸｦ縺ｶ縺ｨ縺阪・隴伜挨蟄舌・Q 縺ｮ縲後せ繝ｩ繧､繝A / 繧ｹ繝ｩ繧､繝B縲阪→蜷後§菴懈ｳ輔・
+const SUFFIX := ["・｡", "・｢", "・｣"]
 
 
 static func build(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[Battler]:
@@ -21,7 +21,7 @@ static func build(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[
 	for _i in count:
 		chosen.append(rng.pick(pool))
 
-	# 同名が複数いる場合だけ接尾辞を付ける
+	# 蜷悟錐縺瑚､・焚縺・ｋ蝣ｴ蜷医□縺第磁蟆ｾ霎槭ｒ莉倥￠繧・
 	var tally := {}
 	for id in chosen:
 		tally[id] = int(tally.get(id, 0)) + 1
@@ -38,10 +38,10 @@ static func build(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[
 	return result
 
 
-## 主の間の編成。ボス 1 体だけを、階層補正なしの素の強さで出す。
+## 荳ｻ縺ｮ髢薙・邱ｨ謌舌ゅ・繧ｹ 1 菴薙□縺代ｒ縲・嚴螻､陬懈ｭ｣縺ｪ縺励・邏縺ｮ蠑ｷ縺輔〒蜃ｺ縺吶・
 ##
-## 通常敵は階層で線形に強化しているが、ボスは「そこに座っている 1 体」なので
-## データに書いた数値がそのまま最終試験の難度になる。調整点を 1 か所に保つ。
+## 騾壼ｸｸ謨ｵ縺ｯ髫主ｱ､縺ｧ邱壼ｽ｢縺ｫ蠑ｷ蛹悶＠縺ｦ縺・ｋ縺後√・繧ｹ縺ｯ縲後◎縺薙↓蠎ｧ縺｣縺ｦ縺・ｋ 1 菴薙阪↑縺ｮ縺ｧ
+## 繝・・繧ｿ縺ｫ譖ｸ縺・◆謨ｰ蛟､縺後◎縺ｮ縺ｾ縺ｾ譛邨りｩｦ鬨薙・髮｣蠎ｦ縺ｫ縺ｪ繧九りｪｿ謨ｴ轤ｹ繧・1 縺区園縺ｫ菫昴▽縲・
 static func build_boss(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[Battler]:
 	var pool := Database.boss_ids_for_floor(floor_number)
 	var result: Array[Battler] = []
@@ -61,9 +61,13 @@ static func _to_battler(monster_id: String, floor_number: int, battler_id: int) 
 	b.source_id = monster_id
 	b.is_ally = false
 
-	# 深い階ほど強くする。深層では新しい種族も出るので、階層補正まで 10% 刻みだと
-	# 二重に効いて味方の成長が追いつかない（測定で 200 ラン全滅した）。
-	var scale := 100 + (floor_number - 1) * 9
+	# 豺ｱ縺・嚴縺ｻ縺ｩ蠑ｷ縺上☆繧九よｷｱ螻､縺ｧ縺ｯ譁ｰ縺励＞遞ｮ譌上ｂ蜃ｺ繧九・縺ｧ縲・嚴螻､陬懈ｭ｣縺ｾ縺ｧ 10% 蛻ｻ縺ｿ縺縺ｨ
+	# 莠碁㍾縺ｫ蜉ｹ縺・※蜻ｳ譁ｹ縺ｮ謌宣聞縺瑚ｿｽ縺・▽縺九↑縺・ｼ域ｸｬ螳壹〒 200 繝ｩ繝ｳ蜈ｨ貊・＠縺滂ｼ峨・
+	# 蛻晄悄陬・ｙ繧呈髪邨ｦ縺吶ｋ繧医≧縺ｫ縺励◆繧峨∽ｸｻ縺ｫ謖代ａ縺溘Λ繝ｳ縺・31% 縺九ｉ 66% 縺ｸ邱ｩ繧薙□
+	# ・亥・蜩｡縺梧ｭｦ蝎ｨ縺ｨ骼ｧ繧呈戟縺｣縺ｦ 1 髫弱↓遶九▽縺ｮ縺ｧ縲・％荳ｭ縺ｮ蜑翫ｉ繧梧婿縺悟､峨ｏ繧具ｼ峨・
+	# 髫主ｱ､陬懈ｭ｣繧・9%/髫・縺九ｉ 12%/髫・縺ｸ荳翫￡縺ｦ謌ｻ縺吶・
+	@warning_ignore("integer_division")
+	var scale := 100 + (floor_number - 1) * 11 + (floor_number - 1) * (floor_number - 1) / 14
 	b.max_hp = maxi(int(m.get("hp", 10)) * scale / 100, 1)
 	b.hp = b.max_hp
 	b.max_mp = int(m.get("mp", 0))
@@ -76,7 +80,7 @@ static func _to_battler(monster_id: String, floor_number: int, battler_id: int) 
 
 	var raw: Array = m.get("abilities", ["attack"])
 	b.abilities.assign(raw)
-	# 属性の得手不得手。これが敵ごとに違うから「効く手」が変わる。
+	# 螻樊ｧ縺ｮ蠕玲焔荳榊ｾ玲焔縲ゅ％繧後′謨ｵ縺斐→縺ｫ驕輔≧縺九ｉ縲悟柑縺乗焔縲阪′螟峨ｏ繧九・
 	b.weak.assign(m.get("weak", []))
 	b.resist.assign(m.get("resist", []))
 	return b
@@ -95,3 +99,4 @@ static func _sum_field(enemies: Array[Battler], field: String) -> int:
 	for b in enemies:
 		total += int(Database.monster(b.source_id).get(field, 0))
 	return total
+

@@ -15,6 +15,11 @@ var name: String = ""
 var job_id: String = ""
 
 # --- ランごとに失われるもの ---
+## 毒の残り歩数。戦闘が終わっても消えない。
+##
+## 消耗戦（HP と MP を持ち越す）という前提と噛み合う。道中で毒を受けたら、
+## 道具を使うか、削られながら出店まで急ぐかの判断が生まれる。
+var poison_steps: int = 0
 var level: int = 1
 var exp_points: int = 0
 var hp: int = 0
@@ -251,6 +256,7 @@ func change_job(new_job: String) -> bool:
 func reset_for_run() -> void:
 	level = 1
 	exp_points = 0
+	poison_steps = 0
 	# 装備はラン内資源。全滅すれば裸から出直す。
 	equipment.clear()
 	hp = max_hp()
@@ -276,13 +282,46 @@ func to_battler(battler_id: int) -> Battler:
 	b.abilities = available_abilities()
 	b.attack_element = attack_element()
 	b.effects = gear_effects()
+	# 道中で受けた毒は戦闘にも持ち込む（休めば治る、では消耗戦にならない）。
+	if poison_steps > 0:
+		b.poison_turns = BattleSystem.POISON_TURNS
 	return b
 
 
-## 戦闘後、Battler 側の残 HP/MP を本体へ書き戻す。
+## 毒が抜けるまでの歩数。深いところで受けるほど長く効く。
+const POISON_STEPS := 60
+
+
+## 戦闘後、Battler 側の残 HP/MP と毒を本体へ書き戻す。
 func sync_from_battler(b: Battler) -> void:
 	hp = b.hp
 	mp = b.mp
+	# 戦闘の終わりに毒が消えると、状態異常が「その戦闘だけの飾り」になる。
+	if b.poison_turns > 0:
+		poison_steps = maxi(poison_steps, POISON_STEPS)
+	if hp <= 0:
+		poison_steps = 0  # 倒れている者は毒で減らない
+
+
+## 歩いたときの毒の進行。減った量を返す（0 なら何も起きていない）。
+##
+## **毒では死なせない。** HP 1 で止める。歩いているだけで全滅すると、
+## プレイヤーに打つ手が無いまま終わってしまう。
+func step_poison() -> int:
+	if poison_steps <= 0 or hp <= 1:
+		return 0
+	poison_steps -= 1
+	var damage := maxi(max_hp() / 40, 1)
+	var before := hp
+	hp = maxi(hp - damage, 1)
+	return before - hp
+
+
+func cure_poison() -> bool:
+	if poison_steps <= 0:
+		return false
+	poison_steps = 0
+	return true
 
 
 func to_dict() -> Dictionary:

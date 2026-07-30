@@ -107,6 +107,10 @@ func _track_mode(delta: float) -> void:
 	var mode := _status()
 	if mode != _last_mode:
 		_timeline.append("%5.1fs %s" % [_elapsed, mode])
+		# 「とじる」を押した直後にメニューから出られていれば成功と数える
+		if _close_expect and _last_mode.begins_with("MENU") and mode.begins_with("EXPLORE"):
+			_close_ok += 1
+			_close_expect = false
 		if mode.begins_with("BATTLE"):
 			_battles += 1
 		if mode.begins_with("RESULT"):
@@ -166,12 +170,29 @@ func _send_input() -> void:
 			elif _rng.chance(25):
 				_scripted = EQUIP_STEPS.duplicate()
 				_press(String(_scripted.pop_front()))
+			elif _rng.chance(30):
+				# 「とじる」で閉じられるかを試す
+				_close_tries += 1
+				_close_expect = true
+				_scripted = CLOSE_STEPS.duplicate()
+				_press(String(_scripted.pop_front()))
 			elif _rng.chance(45):
 				_press(_rng.pick(["ui_up", "ui_down"]))
 			else:
 				_press("confirm")
 		_:
 			_press("confirm")
+
+
+## メニューを「とじる」で閉じる手順。閉じられたかどうかを数える。
+## 「とじる で閉じられない」という報告を、目でなく回数で確かめるために置いた。
+## 上へ 1 つで末尾（とじる）へ回り込む。キャンセルは使わない
+## （キャンセルでも閉じてしまうので、それでは「とじる」を試したことにならない）。
+const CLOSE_STEPS: Array[String] = ["ui_up", "confirm"]
+
+var _close_tries := 0
+var _close_ok := 0
+var _close_expect := false
 
 
 ## 装備を付け替えるまでの手順。
@@ -249,4 +270,5 @@ func _report() -> void:
 	print("戦闘      : %d 回" % _battles)
 	print("ランの終了 : %d 回" % _runs)
 	print("装備      : 最大 %d 個" % _equipped)
+	print("メニューを閉じた: %d 回（とじるを試した %d 回）" % [_close_ok, _close_tries])
 	print("コマ: %s に %d 枚" % [SHOT_DIR, _shot_index])

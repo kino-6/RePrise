@@ -1,39 +1,69 @@
 {
   "_comment": "道中の出店で買う消耗品。ゴールドはランの中でしか意味を持たない資源なので、ここが唯一の使い道になる。effect: heal_hp / heal_mp / revive。target と cost は abilities.json と同じ語彙・同じ意味（cost は CTB の行動コスト）。stock はその出店に並ぶ数で、買い占めを防ぐ上限。",
-
   "herb": {
     "name": "やくそう",
     "desc": "味方ひとりの傷を そこそこ癒す。",
-    "effect": "heal_hp", "power": 60,
-    "target": "one_ally", "cost": 70,
-    "price": 18, "stock": 6,
+    "effect": "heal_hp",
+    "power": 60,
+    "target": "one_ally",
+    "cost": 70,
+    "price": 18,
+    "stock": 6,
     "floor_min": 1
   },
-
   "water": {
     "name": "まほうのみず",
     "desc": "味方ひとりの魔力を すこし戻す。",
-    "effect": "heal_mp", "power": 14,
-    "target": "one_ally", "cost": 70,
-    "price": 30, "stock": 4,
+    "effect": "heal_mp",
+    "power": 14,
+    "target": "one_ally",
+    "cost": 70,
+    "price": 30,
+    "stock": 4,
     "floor_min": 1
   },
-
   "elixir": {
     "name": "せんねんの雫",
     "desc": "味方ひとりを 完全に癒す。",
-    "effect": "heal_hp", "power": 999,
-    "target": "one_ally", "cost": 70,
-    "price": 120, "stock": 2,
+    "effect": "heal_hp",
+    "power": 999,
+    "target": "one_ally",
+    "cost": 70,
+    "price": 120,
+    "stock": 2,
     "floor_min": 4
   },
-
   "feather": {
     "name": "めざめの羽",
     "desc": "倒れた味方を 起こす。",
-    "effect": "revive", "power": 50,
-    "target": "one_ally_dead", "cost": 70,
-    "price": 90, "stock": 2,
+    "effect": "revive",
+    "power": 50,
+    "target": "one_ally_dead",
+    "cost": 70,
+    "price": 90,
+    "stock": 2,
     "floor_min": 3
+  },
+  "antidote": {
+    "name": "どくけしそう",
+    "desc": "毒を消す。歩いていても使える。",
+    "effect": "cleanse",
+    "power": 0,
+    "target": "one_ally",
+    "cost": 60,
+    "price": 24,
+    "stock": 4,
+    "floor_min": 1
+  },
+  "ether": {
+    "name": "エーテルのしずく",
+    "desc": "味方ひとりの魔力を 大きく戻す。",
+    "effect": "heal_mp",
+    "power": 40,
+    "target": "one_ally",
+    "cost": 70,
+    "price": 96,
+    "stock": 2,
+    "floor_min": 5
   }
 }

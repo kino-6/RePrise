@@ -10,6 +10,7 @@ extends Node2D
 ## ローグライトは「前回の続き」が動機なので、始める前に見せる価値がある。
 
 signal started
+signal settings_requested
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const PORTRAIT_SIZE := Vector2(24, 32)
@@ -54,6 +55,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		Sound.play("confirm")
 		close()
 		started.emit()
+	elif event.is_action_pressed("cancel"):
+		Sound.play("confirm")
+		close()
+		settings_requested.emit()
 
 
 func _draw() -> void:
@@ -108,7 +113,7 @@ func _draw_prompt() -> void:
 	# 明滅させる。止まっている画面に 1 つだけ動きがあると、入力待ちだと分かる。
 	if fmod(_time, BLINK_CYCLE) > BLINK_CYCLE * 0.78:
 		return
-	var text := "Ｚキーで はじめる"
+	var text := "Ｚキーで はじめる　　Ｘキーで せってい"
 	var width := PixelUI.text_width(text, PixelUI.SIZE_HEAD)
 	PixelUI.draw_text(
 		self, Vector2((PixelUI.SCREEN.x - width) * 0.5, 274), text, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD

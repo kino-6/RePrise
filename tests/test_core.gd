@@ -27,6 +27,8 @@ func _initialize() -> void:
 	_test_data_integrity()
 	_test_save_migration()
 	_test_roster()
+	_test_field_poison()
+	_test_settings()
 	_test_dungeon_route()
 	_test_text_wrap()
 	_test_database_loaded()
@@ -368,6 +370,68 @@ func _test_data_integrity() -> void:
 	if not no_sprite.is_empty():
 		print("    立ち絵が無い職業: " + ", ".join(no_sprite))
 	_check("すべての職業に立ち絵がある", no_sprite.is_empty())
+
+
+## 設定。ゲームの進み具合とは別のファイルに置くので、往復で壊れないことだけ見る。
+func _test_settings() -> void:
+	var volume_before: int = Settings.volume
+	var speed_before: int = Settings.text_speed
+
+	Settings.volume = 3
+	Settings.text_speed = 2
+	Settings.bindings = {"confirm": KEY_SPACE}
+	Settings.save_config()
+
+	Settings.volume = 10
+	Settings.text_speed = 0
+	Settings.bindings = {}
+	Settings.load_config()
+	_check("音量が戻る", Settings.volume == 3)
+	_check("文字の速さが戻る", Settings.text_speed == 2)
+	_check("キーの割り当てが戻る", int(Settings.bindings.get("confirm", 0)) == KEY_SPACE)
+	_check("速い設定のほうが待ち時間が短い", Settings.line_delay() < Settings.TEXT_SPEEDS[0])
+
+	# 元へ戻して後始末（テストが遊ぶ人の設定を書き換えたままにしない）
+	Settings.volume = volume_before
+	Settings.text_speed = speed_before
+	Settings.bindings = {}
+	Settings.save_config()
+
+
+## 毒の持ち越し。戦闘の外へ出ても効き続けるが、毒だけでは死なない。
+func _test_field_poison() -> void:
+	var m := PartyMember.create("どく", "soldier")
+	m.hp = m.max_hp()
+	_check("はじめは毒でない", m.poison_steps == 0)
+	_check("毒でなければ歩いても減らない", m.step_poison() == 0)
+
+	# 戦闘から毒を持ち帰る
+	var b := m.to_battler(0)
+	b.poison_turns = 3
+	b.hp = m.max_hp()
+	m.sync_from_battler(b)
+	_check("戦闘の毒を持ち帰る", m.poison_steps > 0)
+
+	var before: int = m.hp
+	_check("歩くと減る", m.step_poison() > 0)
+	_check("HP が実際に減っている", m.hp < before)
+
+	# 毒では死なない（歩いているだけで全滅すると打つ手が無い）
+	for _i in 500:
+		m.step_poison()
+	_check("毒では倒れない", m.hp >= 1)
+
+	_check("毒を消せる", m.cure_poison())
+	_check("消したら進まない", m.step_poison() == 0)
+
+	# 毒を持ったまま戦闘へ入ると、戦闘側でも毒のまま
+	m.poison_steps = 10
+	var carried := m.to_battler(0)
+	_check("毒は戦闘へも持ち込む", carried.poison_turns > 0)
+
+	# ランが終われば抜ける
+	m.reset_for_run()
+	_check("ランが終われば毒は消える", m.poison_steps == 0)
 
 
 ## 控えと編成。名簿が伸びても「連れて行くのは 4 人」が崩れないことを見る。

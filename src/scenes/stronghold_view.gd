@@ -467,7 +467,9 @@ func _draw_detail() -> void:
 
 	PixelUI.draw_text(self, origin + Vector2(6, 2), member.name, PixelUI.C_TEXT, PixelUI.SIZE_HEAD)
 	# ラン開始時の姿を出す。拠点ではレベルは常に 1 で、そこが「失ったもの」の証拠になる。
-	var head := "%s　Lv1　%s %d" % [
+	# 拠点ではレベルは常に 1（失ったことの証拠）。「じぶんの」と明記して、
+	# 右の熟練（職業ごとに積む・持ち帰る）と取り違えないようにする。
+	var head := "%s　じぶん Lv1　%s %d" % [
 		_job_name(shown_job), Terms.SPEED,
 		Terms.speed(int(Database.job(shown_job).get("cost_scale", 100))),
 	]

@@ -6,6 +6,12 @@ extends Node
 ## ローグライクは必ず壊れるので、失うものは end_run() で確実に捨てる。
 
 const SAVE_PATH := "user://save.json"
+
+## 直前のセーブの控え。書く前にここへ寄せる。
+##
+## 1 世代あれば事故の大半は防げる（書き込み中の異常終了、壊れた JSON、
+## テストが実データを踏む、など）。世代を増やすより、まず 1 つ持つことが効く。
+const SAVE_BACKUP_PATH := "user://save.bak.json"
 const PARTY_SIZE := 4
 
 ## 最終階。ここには下り階段が無く、主の間の扉だけがある。
@@ -203,7 +209,24 @@ func start_new_run(seed_value: int = -1) -> void:
 ##
 ## 能力値には触らない。レベルを失うことがランの代償なので、そこを恒久強化で
 ## 埋めると代償そのものが消える。手に入るのは「立ち上がりの楽さ」だけにする。
+## 職業ごとの初期装備を支給する。
+##
+## 裸で潜らせない、というだけのもの。毎ラン同じものが出るので積み上がらず、
+## 「恒久強化は能力値に触れない」という不変条件とも噛み合う。
+func _grant_starting_gear() -> void:
+	for m in active_party():
+		for gear_id in Database.job(m.job_id).get("starting_gear", []):
+			var id := String(gear_id)
+			if Database.gear(id).is_empty():
+				continue
+			add_gear(id)
+			equip_gear(m, id)
+		m.hp = m.max_hp()
+		m.mp = m.max_mp()
+
+
 func _apply_upgrades_to_run() -> void:
+	_grant_starting_gear()
 	gold = upgrade_value("start_gold")
 	var herbs := upgrade_value("start_herb")
 	if herbs > 0:
@@ -257,7 +280,7 @@ func end_run(victory: bool) -> Dictionary:
 			"mastery_rank": m.mastery_rank(),
 			"learned": m.learned.duplicate(),
 		})
-		# level / hp / mp はここで捨てる。job_exp と learned は触らない＝持ち帰る。
+		# level / hp / mp / 毒 はここで捨てる。job_exp と learned は触らない＝持ち帰る。
 		m.reset_for_run()
 
 	run_active = false
@@ -508,6 +531,7 @@ func load_from_dict(data: Dictionary) -> bool:
 
 func save_game() -> void:
 	var data := to_dict()
+	_backup_save()
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		push_error("セーブに失敗: %s" % SAVE_PATH)
@@ -515,14 +539,38 @@ func save_game() -> void:
 	file.store_string(JSON.stringify(data, "  "))
 
 
-func load_game() -> bool:
+## 書く前に 1 つ前を控えへ寄せる。壊れた JSON を書いてしまっても、
+## 前回の状態までは戻せる。
+func _backup_save() -> void:
 	if not FileAccess.file_exists(SAVE_PATH):
+		return
+	var current := FileAccess.get_file_as_string(SAVE_PATH)
+	if current.strip_edges() == "":
+		return  # 空を控えにしても意味が無い
+	var backup := FileAccess.open(SAVE_BACKUP_PATH, FileAccess.WRITE)
+	if backup != null:
+		backup.store_string(current)
+
+
+func load_game() -> bool:
+	if _load_file(SAVE_PATH):
+		return true
+	# 本体が読めないときだけ控えを試す。黙って戻すと「進んでいない」と誤解されるので、
+	# 戻したことは警告に残す。
+	if FileAccess.file_exists(SAVE_BACKUP_PATH) and _load_file(SAVE_BACKUP_PATH):
+		push_warning("セーブが読めなかったので、1 つ前の控えから復帰した。")
+		return true
+	return false
+
+
+func _load_file(path: String) -> bool:
+	if not FileAccess.file_exists(path):
 		return false
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return false
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	if typeof(parsed) != TYPE_DICTIONARY:
-		push_warning("セーブが壊れている。初期状態で開始する。")
+		push_warning("セーブが壊れている: %s" % path)
 		return false
 	return load_from_dict(parsed)

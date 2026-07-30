@@ -168,7 +168,7 @@ func _rest() -> void:
 	var party := GameState.active_party()
 	var hurt := false
 	for m in party:
-		if m.hp < m.max_hp() or m.mp < m.max_mp():
+		if m.hp < m.max_hp() or m.mp < m.max_mp() or m.poison_steps > 0:
 			hurt = true
 	if not hurt:
 		Sound.play("cancel")
@@ -181,6 +181,7 @@ func _rest() -> void:
 	for m in party:
 		m.hp = m.max_hp()
 		m.mp = m.max_mp()
+		m.cure_poison()
 	Sound.play("heal")
 	_notify("すっかり 元気になった")
 

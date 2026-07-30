@@ -12,6 +12,7 @@ extends Node2D
 ##   下  : 説明と操作の案内
 
 signal closed
+signal settings_requested
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
@@ -29,7 +30,7 @@ const SLOT_LABELS := {"weapon": "ぶき", "armor": "よろい", "accessory": "�
 
 enum State { ROOT, MEMBER, ITEM, ITEM_TARGET, STATUS, SLOT, GEAR }
 
-const ROOT_ITEMS: Array[String] = ["どうぐ", "つよさ", "そうび", "とじる"]
+const ROOT_ITEMS: Array[String] = ["どうぐ", "つよさ", "そうび", "せってい", "とじる"]
 
 var _state: State = State.ROOT
 var _root_index := 0
@@ -165,6 +166,10 @@ func _input_root(event: InputEvent) -> void:
 				_after_member = State.SLOT
 				_state = State.MEMBER
 			3:
+				close()
+				settings_requested.emit()
+				return
+			4:
 				_leave()
 				return
 	queue_redraw()
@@ -243,6 +248,12 @@ func _use_item() -> void:
 			var mp_before := who.mp
 			who.mp = mini(who.mp + power, who.max_mp())
 			_notify("%sの まりょくが %d もどった" % [who.name, who.mp - mp_before])
+		"cleanse":
+			if not who.cure_poison():
+				Sound.play("cancel")
+				_notify("%sは なんともない" % who.name)
+				return
+			_notify("%sの どくが 消えた" % who.name)
 		"revive":
 			if who.hp > 0:
 				Sound.play("cancel")
@@ -417,16 +428,27 @@ func _draw_status() -> void:
 		return
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(16, 4)
 	PixelUI.draw_text(self, origin, m.name, PixelUI.C_TEXT, PixelUI.SIZE_HEAD)
+	# 「Lv」だけだと、この人のレベルなのか職業の熟練なのか読めない。
+	# 人のレベル（ランで失う）と職業の熟練（持ち帰る）は別物なので、必ず並べて書く。
 	PixelUI.draw_text(
 		self, origin + Vector2(0, 26),
-		"%s　Lv%d　%s %d" % [
-			Database.job(m.job_id).get("name", m.job_id), m.level,
+		"%s　%s %d" % [
+			Database.job(m.job_id).get("name", m.job_id),
 			Terms.SPEED, Terms.speed(m.cost_scale())
 		],
 		PixelUI.C_TEXT_DIM
 	)
 
+	if m.poison_steps > 0:
+		PixelUI.draw_text(
+			self, origin + Vector2(232, 30), "どく", PixelUI.C_HP_LOW, PixelUI.SIZE_SUB
+		)
+	var mastery := "★".repeat(m.mastery_rank()) + "☆".repeat(
+		maxi(Database.job(m.job_id).get("mastery", []).size() - m.mastery_rank(), 0)
+	)
 	var rows := [
+		["じぶんの レベル", "%d" % m.level],
+		["しょくぎょうの 熟練", mastery],
 		["HP", "%d/%d" % [m.hp, m.max_hp()]],
 		["MP", "%d/%d" % [m.mp, m.max_mp()]],
 		["こうげき", "%d" % m.attack_power()],
@@ -436,15 +458,15 @@ func _draw_status() -> void:
 	]
 	for i in rows.size():
 		@warning_ignore("integer_division")
-		var col := i / 3
-		var row := i % 3
-		var at := origin + Vector2(col * 150, 54 + row * 20)
+		var col := i / 4
+		var row := i % 4
+		var at := origin + Vector2(col * 150, 50 + row * 19)
 		PixelUI.draw_text(self, at, String(rows[i][0]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 		PixelUI.draw_text(self, at + Vector2(76, -2), String(rows[i][1]), PixelUI.C_TEXT)
 
-	PixelUI.draw_text(self, origin + Vector2(0, 122), "そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	PixelUI.draw_text(self, origin + Vector2(0, 128), "そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	for i in SLOTS.size():
-		var at := origin + Vector2(0, 142 + i * 20)
+		var at := origin + Vector2(0, 148 + i * 19)
 		var gear_id := String(m.equipment.get(SLOTS[i], ""))
 		var label := String(Database.gear(gear_id).get("name", "—")) if gear_id != "" else "—"
 		PixelUI.draw_text(self, at, String(SLOT_LABELS[SLOTS[i]]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)

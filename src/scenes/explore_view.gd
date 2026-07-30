@@ -11,6 +11,8 @@ signal chest_opened(amount: int)
 signal menu_requested
 ## 主の間の扉が隣にある。踏む前に知らせるためのもの。
 signal door_nearby
+## 1 歩あるいた。毒の進行はここで解決する（歩数で削るのが DQ の作法）。
+signal poison_ticked
 
 const TILE := 16
 const MOVE_DELAY := 0.10
@@ -66,20 +68,34 @@ func setup(dungeon: DungeonMap, encounter_rng: DetRng, leader_job: String = "sol
 	queue_redraw()
 
 
+## 探索へ戻った直後に決定キーを拾わないための待ち時間。
+##
+## メニューを「とじる」で閉じると、その同じキーを探索側が拾って
+## メニューを開き直していた。**閉じられない**ように見えるが、実際は
+## 閉じて即座に開いている。UI をまたぐ入力は必ず一拍おく。
+const RESUME_LOCK := 0.18
+
+var _resume_lock := 0.0
+
+
 func set_active(value: bool) -> void:
 	_active = value
 	set_process(value)
+	if value:
+		_resume_lock = RESUME_LOCK
 
 
 func _process(delta: float) -> void:
 	if not _active or map == null:
 		return
 	_move_cd -= delta
+	if _resume_lock > 0.0:
+		_resume_lock -= delta
 	if _move_cd > 0.0:
 		return
 
 	# 決定キーでメニュー。DQ と同じ作法で、道具・つよさ・そうびはここから触る。
-	if Input.is_action_just_pressed("confirm"):
+	if _resume_lock <= 0.0 and Input.is_action_just_pressed("confirm"):
 		Sound.play("confirm")
 		menu_requested.emit()
 		return
@@ -171,6 +187,8 @@ func _try_move(target: Vector2i) -> void:
 	if tile == DungeonMap.T_SHOP:
 		shop_entered.emit()
 		return
+
+	poison_ticked.emit()
 
 	if _should_encounter():
 		_steps_since_encounter = 0

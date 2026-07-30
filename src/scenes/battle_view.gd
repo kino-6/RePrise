@@ -542,7 +542,8 @@ func _advance_message() -> void:
 	# 窓は 3 行ぶん。溢れたら古い行から捨てる。
 	while _shown.size() > 3:
 		_shown.pop_front()
-	_timer = AUTO_LINE_DELAY if _auto != AutoTactic.Mode.OFF else LINE_DELAY
+	# 文字の速さは設定から取る。オート中は手で押さないので短く固定。
+	_timer = AUTO_LINE_DELAY if _auto != AutoTactic.Mode.OFF else Settings.line_delay()
 	_refresh()
 
 
@@ -628,13 +629,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		State.TARGET:
 			_input_target(event)
 		State.MESSAGE:
-			if event.is_action_pressed("confirm") or event.is_action_pressed("cancel"):
+			# キャンセルはオートの解除を優先する（送りは決定キーでできる）。
+			if _auto != AutoTactic.Mode.OFF and event.is_action_pressed("cancel"):
+				_auto = AutoTactic.Mode.OFF
+				Sound.play("cancel")
+				_refresh()
+			elif event.is_action_pressed("confirm") or event.is_action_pressed("cancel"):
 				# 押すたびに 1 行進む。待たされないことが連打の手応えになる。
 				_timer = 0.0
 				_advance_message()
-			# オート中はどのキーでも解除できる
-			elif _auto != AutoTactic.Mode.OFF:
-				_auto = AutoTactic.Mode.OFF
 		_:
 			pass
 
@@ -756,6 +759,19 @@ func _draw_message_or_command() -> void:
 	for i in _shown.size():
 		PixelUI.draw_text(self, origin + Vector2(0, i * 19), _shown[i], PixelUI.C_TEXT)
 
+	# オート中は止め方を出す。始め方だけ見えていて止め方が見えないのは不親切で、
+	# 「戻れなくなった」と思われる。
+	if _auto != AutoTactic.Mode.OFF:
+		PixelUI.draw_text_right(
+			self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.position.y + 6),
+			"%s　Ｘで かいじょ" % AutoTactic.label(_auto), PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
+		)
+		# 何を基準に動いているかを出す。基準が見えないと「連打しているだけ」に見える。
+		PixelUI.draw_text_right(
+			self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.end.y - 22),
+			AutoTactic.description(_auto), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
+
 
 func _draw_root_menu(origin: Vector2) -> void:
 	for i in _roots.size():
@@ -769,6 +785,14 @@ func _draw_root_menu(origin: Vector2) -> void:
 		var label := String(ROOT_LABELS[_roots[i]])
 		if _roots[i] == Root.AUTO:
 			label = AutoTactic.label(_auto)
+			# カーソルが乗っているときは、押すと何になるかとその基準を出す。
+			if on:
+				var next_auto := AutoTactic.next_mode(_auto)
+				PixelUI.draw_text_right(
+					self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.end.y - 22),
+					"→ %s：%s" % [AutoTactic.label(next_auto), AutoTactic.description(next_auto)],
+					PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+				)
 		# 逃げられる見込みを添える。0% は主（逃げられない相手）。
 		if _roots[i] == Root.ESCAPE:
 			var odds := escape_odds()

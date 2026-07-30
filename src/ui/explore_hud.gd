@@ -64,9 +64,17 @@ func _draw() -> void:
 		var base := inner.position + Vector2(6 + i * 122, 0)
 		var ratio := float(m.hp) / maxf(float(m.max_hp()), 1.0)
 		var name_color := PixelUI.C_TEXT if m.hp > 0 else PixelUI.C_HP_LOW
+		# 毒は歩くたびに削るので、探索中こそ見えていないといけない。
+		if m.poison_steps > 0 and m.hp > 0:
+			name_color = PixelUI.C_MP
 		PixelUI.draw_text(self, base, m.name, name_color)
+		if m.poison_steps > 0 and m.hp > 0:
+			PixelUI.draw_text(
+				self, base + Vector2(62, 2), "どく", PixelUI.C_HP_LOW, PixelUI.SIZE_SUB
+			)
+		var hp_at := Vector2(62, 2) if m.poison_steps <= 0 or m.hp <= 0 else Vector2(96, 2)
 		PixelUI.draw_text(
-			self, base + Vector2(62, 2), "%d/%d" % [m.hp, m.max_hp()],
+			self, base + hp_at, "%d/%d" % [m.hp, m.max_hp()],
 			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 		)
 		PixelUI.draw_gauge(self, Rect2(base.x, base.y + 19, 112, 5), ratio, PixelUI.hp_color(ratio))

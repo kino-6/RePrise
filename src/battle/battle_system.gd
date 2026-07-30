@@ -439,7 +439,7 @@ func _steal_from(actor: Battler, target: Battler) -> Array[String]:
 	var bonus := 20 if actor.has_effect("steal_up") else 0
 
 	var rare_id := String(table.get("rare", ""))
-	if rare_id != "" and rng.chance(12 + bonus / 2):
+	if rare_id != "" and rng.chance(18 + bonus / 2):
 		stolen_items.append(rare_id)
 		lines.append("%sから　%s を ぬすんだ！" % [
 			target.name, Database.item(rare_id).get("name", rare_id)
@@ -447,7 +447,8 @@ func _steal_from(actor: Battler, target: Battler) -> Array[String]:
 		return lines
 
 	var common_id := String(table.get("common", ""))
-	var odds := 45 + bonus + maxi(actor.effective_agi() - target.effective_agi(), 0)
+	# 手番を 1 つ使う技なので、空振りが続くと選ばれなくなる。
+	var odds := 60 + bonus + maxi(actor.effective_agi() - target.effective_agi(), 0)
 	if common_id != "" and rng.chance(mini(odds, 90)):
 		stolen_items.append(common_id)
 		lines.append("%sから　%s を ぬすんだ！" % [

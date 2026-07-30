@@ -36,10 +36,18 @@ func _initialize() -> void:
 	var wins := 0
 	var boss_attempts := 0
 	var level_sum := 0
+	# 稼ぎも測る。出店で何が買えるかはここで決まるのに、測っていなかった
+	# （「3 階まで来たのに何も買えない」という指摘で気づいた）。
+	var gold_at := {3: 0, 5: 0, 10: 0}
+	var gold_runs := {3: 0, 5: 0, 10: 0}
 
 	for i in RUNS:
 		var result := _simulate_run(i * 7919 + 13, final_floor)
 		level_sum += int(result["level"])
+		for milestone in [3, 5, 10]:
+			if int(result["gold_at_%d" % milestone]) >= 0 and int(result["floor"]) >= milestone:
+				gold_at[milestone] += int(result["gold_at_%d" % milestone])
+				gold_runs[milestone] += 1
 		if bool(result["victory"]):
 			wins += 1
 		var reached := int(result["floor"])
@@ -58,6 +66,15 @@ func _initialize() -> void:
 	print("主に挑めた   : %d / %d (%d%%)" % [boss_attempts, RUNS, boss_attempts * 100 / RUNS])
 	print("主を倒した   : %d / %d (%d%%)" % [wins, RUNS, wins * 100 / RUNS])
 	print("平均レベル   : %.1f" % (float(level_sum) / float(RUNS)))
+	print("---")
+	print("その階までの稼ぎ（累計・出店に使える額）")
+	for milestone in [3, 5, 10]:
+		var runs := int(gold_runs[milestone])
+		if runs == 0:
+			continue
+		print("  地下 %2d 階まで  %4d ゴールド（%d ラン）" % [
+			milestone, int(gold_at[milestone]) / runs, runs
+		])
 	print("---")
 	print(_verdict(wins * 100 / RUNS, boss_attempts * 100 / RUNS))
 	quit(0)
@@ -80,9 +97,18 @@ func _verdict(win_rate: int, boss_rate: int) -> String:
 func _simulate_run(seed_value: int, final_floor: int) -> Dictionary:
 	var members: Array[PartyMember] = []
 	for entry in PARTY:
-		members.append(PartyMember.create(String(entry["name"]), String(entry["job"])))
+		var m := PartyMember.create(String(entry["name"]), String(entry["job"]))
+		# 実際のランと同じく初期装備を着せる。着せずに測ると、
+		# ここで出る数字が遊んでいる状態と食い違う。
+		for gear_id in Database.job(m.job_id).get("starting_gear", []):
+			m.equip(String(gear_id))
+		m.hp = m.max_hp()
+		m.mp = m.max_mp()
+		members.append(m)
 
 	var floor_number := 1
+	var gold_total := 0
+	var gold_marks := {3: -1, 5: -1, 10: -1}
 	while floor_number <= final_floor:
 		var rng := DetRng.new(seed_value).fork("battle:%d" % floor_number)
 
@@ -90,22 +116,30 @@ func _simulate_run(seed_value: int, final_floor: int) -> Dictionary:
 			var foes := Encounter.build(rng, floor_number)
 			if foes.is_empty():
 				continue
-			if not _fight(members, foes, rng, floor_number):
-				return _result(members, floor_number, false, false)
+			var earned := _fight_gold(members, foes, rng, floor_number)
+			if earned < 0:
+				return _result(members, floor_number, false, false, gold_marks)
+			gold_total += earned
+
+		if gold_marks.has(floor_number):
+			gold_marks[floor_number] = gold_total
 
 		if floor_number == final_floor:
 			var boss := Encounter.build_boss(rng, floor_number)
 			if boss.is_empty():
-				return _result(members, floor_number, false, false)
+				return _result(members, floor_number, false, false, gold_marks)
 			var won := _fight(members, boss, rng, floor_number)
-			return _result(members, floor_number, won, true)
+			return _result(members, floor_number, won, true, gold_marks)
 
 		floor_number += 1
 
-	return _result(members, final_floor, false, false)
+	return _result(members, final_floor, false, false, gold_marks)
 
 
-func _result(members: Array[PartyMember], floor_number: int, victory: bool, reached_boss: bool) -> Dictionary:
+func _result(
+	members: Array[PartyMember], floor_number: int, victory: bool, reached_boss: bool,
+	gold_marks: Dictionary = {}
+) -> Dictionary:
 	var level := 0
 	for m in members:
 		level = maxi(level, m.level)
@@ -114,12 +148,29 @@ func _result(members: Array[PartyMember], floor_number: int, victory: bool, reac
 		"victory": victory,
 		"reached_boss": reached_boss,
 		"level": level,
+		"gold_at_3": int(gold_marks.get(3, -1)),
+		"gold_at_5": int(gold_marks.get(5, -1)),
+		"gold_at_10": int(gold_marks.get(10, -1)),
 	}
+
+
+## 1 戦ぶん回して、稼いだゴールドを返す。負けたら -1。
+func _fight_gold(
+	members: Array[PartyMember], foes: Array[Battler], rng: DetRng, floor_number: int
+) -> int:
+	# GDScript のラムダは値で捕まえるので、int を代入しても外へ返らない。
+	# 参照型（辞書）に入れて受け取る。
+	var box := {"gold": 0}
+	var won := _fight(members, foes, rng, floor_number, func(reward: Dictionary) -> void:
+		box["gold"] = int(reward["gold"])
+	)
+	return int(box["gold"]) if won else -1
 
 
 ## 1 戦ぶん回して、勝ったかどうかを返す。勝てば経験と熟練が入る。
 func _fight(
-	members: Array[PartyMember], foes: Array[Battler], rng: DetRng, floor_number: int
+	members: Array[PartyMember], foes: Array[Battler], rng: DetRng, floor_number: int,
+	on_reward: Callable = Callable()
 ) -> bool:
 	var party: Array[Battler] = []
 	for i in members.size():
@@ -152,6 +203,8 @@ func _fight(
 		return false
 
 	var reward := system.rewards()
+	if on_reward.is_valid():
+		on_reward.call(reward)
 	for m in members:
 		if m.hp <= 0:
 			continue

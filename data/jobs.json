@@ -1,5 +1,5 @@
 {
-  "_comment": "職業。cost_scale が CTB 上のテンポの個性（100 が標準、低いほど手数型）。mastery は熟練度ランクごとに覚える技で、覚えた技は転職しても失われない。unlock は解放条件（職業 ID -> 必要な熟練ランク）で、その本人が満たしていないと就けない。ダーマ神殿と同じく、誰かが極めたから全員が就ける、にはしない。技は職業をまたいで共有してよい（DQ6 も複数の職がホイミを覚える）。新しい技を足す前に、既存の技で役割が作れないかを見ること。",
+  "_comment": "職業。cost_scale が CTB 上のテンポの個性（100 が標準、低いほど手数型）。mastery は熟練度ランクごとに覚える技で、覚えた技は転職しても失われない。unlock は解放条件（職業 ID -> 必要な熟練ランク）で、その本人が満たしていないと就けない。ダーマ神殿と同じく、誰かが極めたから全員が就ける、にはしない。技は職業をまたいで共有してよい（DQ6 も複数の職がホイミを覚える）。新しい技を足す前に、既存の技で役割が作れないかを見ること。starting_gear はランのたびに支給される初期装備で、持ち帰る資産ではない（裸で潜らせないためのもの）。",
   "soldier": {
     "name": "せんし",
     "desc": "重い一撃。次の手番は遅れる。",
@@ -32,6 +32,10 @@
         "need": 280,
         "ability": "double_slash"
       }
+    ],
+    "starting_gear": [
+      "short_sword",
+      "leather_vest"
     ]
   },
   "priest": {
@@ -66,6 +70,10 @@
         "need": 280,
         "ability": "cure_all"
       }
+    ],
+    "starting_gear": [
+      "oak_staff",
+      "leather_vest"
     ]
   },
   "mage": {
@@ -100,6 +108,9 @@
         "need": 280,
         "ability": "frost"
       }
+    ],
+    "starting_gear": [
+      "oak_staff"
     ]
   },
   "thief": {
@@ -134,6 +145,9 @@
         "need": 280,
         "ability": "poison_blade"
       }
+    ],
+    "starting_gear": [
+      "short_sword"
     ]
   },
   "paladin": {
@@ -172,6 +186,10 @@
         "need": 340,
         "ability": "cure_all"
       }
+    ],
+    "starting_gear": [
+      "short_sword",
+      "leather_vest"
     ]
   },
   "ninja": {
@@ -210,6 +228,9 @@
         "need": 340,
         "ability": "lull"
       }
+    ],
+    "starting_gear": [
+      "short_sword"
     ]
   },
   "ranger": {
@@ -248,6 +269,10 @@
         "need": 340,
         "ability": "rapid_shot"
       }
+    ],
+    "starting_gear": [
+      "short_sword",
+      "leather_vest"
     ]
   },
   "spellblade": {
@@ -286,6 +311,10 @@
         "need": 340,
         "ability": "double_slash"
       }
+    ],
+    "starting_gear": [
+      "short_sword",
+      "leather_vest"
     ]
   },
   "summoner": {
@@ -324,6 +353,9 @@
         "need": 340,
         "ability": "blast"
       }
+    ],
+    "starting_gear": [
+      "oak_staff"
     ]
   },
   "gunner": {
@@ -362,6 +394,9 @@
         "need": 360,
         "ability": "assassinate"
       }
+    ],
+    "starting_gear": [
+      "short_sword"
     ]
   },
   "alchemist": {
@@ -400,6 +435,9 @@
         "need": 360,
         "ability": "cure_all"
       }
+    ],
+    "starting_gear": [
+      "oak_staff"
     ]
   },
   "sage": {
@@ -438,6 +476,10 @@
         "need": 400,
         "ability": "sage_strike"
       }
+    ],
+    "starting_gear": [
+      "oak_staff",
+      "leather_vest"
     ]
   },
   "chronomancer": {
@@ -476,6 +518,9 @@
         "need": 400,
         "ability": "time_stop"
       }
+    ],
+    "starting_gear": [
+      "oak_staff"
     ]
   },
   "beastmaster": {
@@ -514,6 +559,10 @@
         "need": 360,
         "ability": "beast_roar"
       }
+    ],
+    "starting_gear": [
+      "short_sword",
+      "leather_vest"
     ]
   },
   "jester": {
@@ -548,6 +597,9 @@
         "need": 280,
         "ability": "wild_card"
       }
+    ],
+    "starting_gear": [
+      "short_sword"
     ]
   }
 }
