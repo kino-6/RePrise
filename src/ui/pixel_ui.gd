@@ -233,15 +233,37 @@ static func draw_notice(
 
 
 ## HP / MP のゲージ。数値だけより残量が一目で分かる。
+## ゲージ。**単色の帯にしない。**
+##
+## 後期 SFC のバーは、上端に明線・下端に暗線が入った円柱状の階調だった。
+## 5px しかない帯でも、上 1px を明るく・下 1px を暗くするだけで管に見える。
+##
+## `previous` に前の割合を渡すと、減ったぶんを暗い色で残す（残像）。
+## 数字を読まなくても「いま何点減ったか」が幅で分かる。
 static func draw_gauge(
-	canvas: CanvasItem, rect: Rect2, ratio: float, fill: Color
+	canvas: CanvasItem, rect: Rect2, ratio: float, fill: Color, previous: float = -1.0
 ) -> void:
 	canvas.draw_rect(rect, C_SHADOW, true)
 	var inner := Rect2(rect.position + Vector2.ONE, rect.size - Vector2(2, 2))
-	canvas.draw_rect(inner, Color8(0x18, 0x30, 0x70), true)
-	inner.size.x = maxi(int(inner.size.x * clampf(ratio, 0.0, 1.0)), 0)
-	if inner.size.x > 0:
-		canvas.draw_rect(inner, fill, true)
+	canvas.draw_rect(inner, Color8(0x14, 0x24, 0x58), true)
+
+	var now := clampf(ratio, 0.0, 1.0)
+	# 減ったぶんの残像。いまの値より広いときだけ描く。
+	if previous > now:
+		var ghost := Rect2(inner.position, Vector2(inner.size.x * clampf(previous, 0.0, 1.0), inner.size.y))
+		canvas.draw_rect(ghost, Color(fill.darkened(0.55), 0.85), true)
+
+	var width := inner.size.x * now
+	if width <= 0.0:
+		return
+	var bar := Rect2(inner.position, Vector2(width, inner.size.y))
+	canvas.draw_rect(bar, fill, true)
+	# 上に明線、下に暗線。これで平らな帯が管になる。
+	canvas.draw_rect(Rect2(bar.position, Vector2(bar.size.x, 1)), fill.lightened(0.45), true)
+	if bar.size.y >= 3.0:
+		canvas.draw_rect(
+			Rect2(bar.position.x, bar.end.y - 1, bar.size.x, 1), fill.darkened(0.4), true
+		)
 
 
 ## 窓を開くときの拡大。t は 0..1。

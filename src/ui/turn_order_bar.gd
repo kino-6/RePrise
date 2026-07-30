@@ -45,8 +45,15 @@ func _draw() -> void:
 
 		# 先頭＝今から動く者だけを金枠で立てる
 		var is_current := i == 0
+		# 札も単色の箱にしない。上を明るく下を沈ませ、内側に面取りを入れる。
+		# 10 枚並ぶので、ここが平らだと画面の上端がそのままファミコンに見える。
 		draw_rect(plate, PixelUI.C_SHADOW, true)
-		draw_rect(Rect2(plate.position + Vector2.ONE, plate.size - Vector2(2, 2)), base, true)
+		var face := Rect2(plate.position + Vector2.ONE, plate.size - Vector2(2, 2))
+		PixelUI.draw_gradient(self, face, base.lightened(0.28), base.darkened(0.35), 6)
+		draw_rect(Rect2(face.position, Vector2(face.size.x, 1)), base.lightened(0.55), true)
+		draw_rect(
+			Rect2(face.position.x, face.end.y - 1, face.size.x, 1), base.darkened(0.55), true
+		)
 		if is_current:
 			draw_rect(plate, PixelUI.C_ACTIVE, false, 1.0)
 
