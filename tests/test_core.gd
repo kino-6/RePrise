@@ -280,18 +280,30 @@ func _test_dungeon_reachable() -> void:
 ## 積んだ「やること」が読める量に収まっているか。
 ##
 ## 長い一覧は読まれない。読まれない一覧は棚卸しされず、
-## 終わった項目と生きている項目が混ざって、結局どれも進まなくなる。
-## 超えたら済んだものを docs/tasks_archive.md へ移す。
-const TASKS_LIMIT := 200
 
 
+## tasks.md の衛生。
+##
+## **行数の上限は外した。** 200 行に抑える決まりを置いていたが、指摘が多い時期は
+## 上限のほうが足枷になり、「積むより先に消す」圧力が働く。実際、要望を実装せずに
+## 消す事故を 2 度起こした。数えるのは行数ではなく**済んだ行が残っていないか**。
+##
+## 済んだ項目は `[x]` を付けて `docs/tasks_archive.md` へ移す（消さない）。
 func _test_docs_hygiene() -> void:
 	var text := FileAccess.get_file_as_string("res://tasks.md")
 	_check("tasks.md がある", text != "")
-	var count := text.split("\n").size()
-	if count > TASKS_LIMIT:
-		print("    tasks.md が %d 行。済んだものを docs/tasks_archive.md へ移すこと" % count)
-	_check("tasks.md が %d 行以内（いま %d 行）" % [TASKS_LIMIT, count], count <= TASKS_LIMIT)
+
+	# **済んだ印が残っていないこと。** `[x]` は控えへ移した合図なので、
+	# tasks.md に残っているのは「移し忘れ」を意味する。
+	var stale := 0
+	for line in text.split("
+"):
+		if line.strip_edges().begins_with("- [x]"):
+			stale += 1
+	_check(
+		"済んだ項目が tasks.md に残っていない（%d 件）" % stale, stale == 0,
+		"([x] の行は docs/tasks_archive.md へ移す)"
+	)
 
 	# 控えのほうは伸びてよいが、存在は要る（移す先が無いと棚卸しできない）
 	_check(
