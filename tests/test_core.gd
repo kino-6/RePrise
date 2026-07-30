@@ -1050,6 +1050,20 @@ func _test_guardian_and_escape() -> void:
 	state.world.seals[0]["broken"] = true
 	_check("封を解いた洞からは脱出できる", state.can_escape_site())
 
+	# **番人を倒したら封が解けること。**
+	#
+	# 「番人を倒した」印を立て忘れていて、階段を踏むたびに番人が出続けて封が
+	# 永久に解けなかった。フラグ 1 つの抜けは目で追えないので、
+	# **解除まで通ることをここで固定する。**
+	state.enter_site(seal_pos)
+	state.world.seals[0]["broken"] = false
+	var before: int = state.world.seals_remaining()
+	_check("倒す前は封が残っている", not state.seal_here().is_empty()
+		and not bool(state.seal_here().get("broken", false)))
+	_check("倒したら封が解ける", state.break_seal())
+	_equal("残りが 1 つ減る", state.world.seals_remaining(), before - 1)
+	_check("二度は解けない", not state.break_seal())
+
 	# 封の無い洞（寄り道）はいつでも出られる
 	var plain_cave := Vector2i(-1, -1)
 	for pos in state.world.sites:

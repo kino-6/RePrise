@@ -1280,10 +1280,22 @@ func _on_battle_finished(victory: bool) -> void:
 		Sound.play_bgm("chronicle")
 		_finish_run(true)
 		return
+	if victory and _guardian_battle:
+		# 封の番人を倒した。**ここで印を立てないと、階段を踏むたびに
+		# 番人が出続けて封が永久に解けない**（実際そうなっていた）。
+		# 城の主とは別扱いで、勝ってもランは終わらない。
+		_guardian_battle = false
+		_guardian_beaten = true
+		_play_field_bgm()
+		hud.toast("番人は しずまった。もう一度 おくへ。")
+		_set_mode(Mode.EXPLORE)
+		return
 	if victory:
+		_guardian_battle = false
 		_play_field_bgm()
 		_set_mode(Mode.EXPLORE)
 		return
+	_guardian_battle = false
 	# 全滅。**「命の綱」があれば 1 度だけ肩代わりする。**
 	# 恒久強化が能力値に触れないという前提を崩さずに、拠点の投資を
 	# 「勝てるようになる」ではなく「もう一度立てる」へ効かせる軸。
