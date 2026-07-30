@@ -15,7 +15,10 @@ extends Node2D
 
 const DIR := "res://assets/effects/"
 const FRAMES := 4
+## コマの大きさ。場面の演出は 48、戦闘のエフェクトは 32。
+## `play()` で渡す（アトラスごとに違う）。
 const FRAME_SIZE := Vector2(48, 48)
+const FX_FRAME_SIZE := Vector2(32, 32)
 
 ## 1 コマの長さ。4 コマで 0.4 秒（場面の切り替えを待たせない長さ）。
 const FRAME_TIME := 0.10
@@ -26,6 +29,7 @@ const SCALE := 2.0
 var _tex: Texture2D = null
 var _time := 0.0
 var _at := Vector2.ZERO
+var _cell := FRAME_SIZE
 
 static var _cache: Dictionary = {}
 
@@ -36,10 +40,15 @@ func _ready() -> void:
 	visible = false
 
 
+## 名前の頭で置き場を分ける。`fx_` は戦闘、それ以外は場面の節目。
 static func texture_of(name: String) -> Texture2D:
 	if _cache.has(name):
 		return _cache[name]
-	var path := "%sevent_%s.png" % [DIR, name]
+	var path := ""
+	if name.begins_with("fx_"):
+		path = "%s%s.png" % [DIR, name]
+	else:
+		path = "%sevent_%s.png" % [DIR, name]
 	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
 	_cache[name] = tex
 	return tex
@@ -53,6 +62,7 @@ func play(name: String, at: Vector2 = Vector2.ZERO) -> void:
 	if tex == null:
 		return
 	_tex = tex
+	_cell = FX_FRAME_SIZE if name.begins_with("fx_") else FRAME_SIZE
 	_time = 0.0
 	_at = at if at != Vector2.ZERO else Vector2(PixelUI.SCREEN) * 0.5
 	visible = true
@@ -73,12 +83,12 @@ func _draw() -> void:
 	if _tex == null:
 		return
 	var index := clampi(int(_time / FRAME_TIME), 0, FRAMES - 1)
-	var size := FRAME_SIZE * SCALE
+	var size := _cell * SCALE
 	# 終わりぎわだけ薄くする。ぷつりと消えると「絵が抜けた」ように見える。
 	var fade := clampf((FRAME_TIME * FRAMES - _time) / FRAME_TIME, 0.0, 1.0)
 	draw_texture_rect_region(
 		_tex,
 		Rect2((_at - size * 0.5).floor(), size),
-		Rect2(index * FRAME_SIZE.x, 0, FRAME_SIZE.x, FRAME_SIZE.y),
+		Rect2(index * _cell.x, 0, _cell.x, _cell.y),
 		Color(1, 1, 1, fade)
 	)

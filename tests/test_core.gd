@@ -39,6 +39,7 @@ func _initialize() -> void:
 	_test_vocabulary()
 	_test_version()
 	_test_event_effects()
+	_test_battle_fx()
 	_test_cross_world_catalog()
 	_test_cross_world_progress()
 	_test_text_wrap()
@@ -1073,6 +1074,45 @@ func _test_guardian_and_escape() -> void:
 		state.enter_site(plain_cave)
 		_check("封の無い洞はいつでも出られる", state.can_escape_site())
 	state.free()
+
+
+## 技から出す絵の対応（B-2）。
+##
+## **属性が最優先**（炎の技は炎に見えるべき）。対応が無ければ空を返し、
+## 従来の点滅と数字だけになる ―― 絵が無くても遊べることが前提。
+func _test_battle_fx() -> void:
+	Database.reload()
+	# 属性が系統より優先されること
+	var fire_ids := []
+	for id in Database.all_abilities():
+		if String(Database.ability(String(id)).get("element", "")) == "fire":
+			fire_ids.append(String(id))
+	if not fire_ids.is_empty():
+		_equal("炎の技は炎の絵", BattleFx.for_ability(String(fire_ids[0])), "fx_fire")
+
+	_equal("通常攻撃は斬", BattleFx.for_ability("attack"), "fx_slash")
+	_equal("知らない技は空（点滅だけになる）", BattleFx.for_ability("nope"), "")
+
+	# 全部の技に絵が付くか（付かないものがあってもよいが、数は見ておく）
+	var covered := 0
+	var total := 0
+	for id in Database.all_abilities():
+		total += 1
+		if BattleFx.for_ability(String(id)) != "":
+			covered += 1
+	_check("大半の技に絵が付く（%d/%d）" % [covered, total], covered * 100 / maxi(total, 1) >= 80)
+
+	# 割り当て先の絵が実在すること。**名前を書き間違えても動いてしまう**ので、
+	# ここで存在を見る（無ければ黙って何も出ない）。
+	var missing := []
+	for id in Database.all_abilities():
+		var name := BattleFx.for_ability(String(id))
+		if name == "":
+			continue
+		if not FileAccess.file_exists("res://assets/effects/%s.png" % name):
+			if name not in missing:
+				missing.append(name)
+	_check("割り当てた絵がすべて実在する", missing.is_empty(), "(無い: %s)" % str(missing))
 
 
 ## またぐ物語のカタログ（A-1）。

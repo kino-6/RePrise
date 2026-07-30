@@ -104,6 +104,7 @@ func _ready() -> void:
 	# 成否を気にしなくてよい（進行にも乱数にもセーブにも触らない）。
 	effect = EventEffect.new()
 	add_child(effect)
+	battle.effect = effect
 
 	event_view = EventView.new()
 	event_view.visible = false
@@ -359,6 +360,18 @@ func _capture(which: String) -> void:
 			GameState.runs_attempted = 99
 			var last: Dictionary = (arc["beats"] as Array).back()
 			_open_cross_world_choice(last)
+		"hitfx":
+			# 技の絵が敵の上に出るところを撮る。
+			_start_run()
+			GameState.world.story_beat = 99
+			_on_encounter()
+			for _i in 60:
+				await get_tree().create_timer(0.1).timeout
+				if battle.is_awaiting_command():
+					break
+			await get_tree().create_timer(0.4).timeout
+			# 描画そのものを確かめる（技→絵の対応は単体テストで見る）。
+			effect.play("fx_fire", Vector2(256, 120))
 		"effect":
 			# 演出の見え方を撮る。演出は 0.4 秒で終わるので、
 			# **世界を立ててから最後に流す**（下の待ちも短くしてある）。
@@ -536,7 +549,7 @@ func _capture(which: String) -> void:
 	var wait := 0.7
 	if which == "chronicle":
 		wait = 9.0
-	elif which == "effect":
+	elif which == "effect" or which == "hitfx":
 		wait = 0.15
 	await get_tree().create_timer(wait).timeout
 	await RenderingServer.frame_post_draw

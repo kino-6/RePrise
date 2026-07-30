@@ -118,6 +118,9 @@ var _auto: AutoTactic.Mode = AutoTactic.Mode.OFF
 ## 被弾の点滅の残り時間。
 var _blink := 0.0
 
+## 技の絵を出す先（main.gd が渡す）。無くても動く。
+var effect: EventEffect = null
+
 ## 画面フラッシュの強さ（強い魔法が当たった瞬間）。
 var _flash := 0.0
 
@@ -549,6 +552,9 @@ func _show(lines: Array[String]) -> void:
 	# 点滅もオート中は短く。ここが 0.3 のままだと、待ちを詰めても 1 手番が縮まない。
 	var blink_time := AUTO_BLINK if _auto != AutoTactic.Mode.OFF else BLINK
 	_blink = blink_time if not system.last_hit_ids.is_empty() else 0.0
+	# 当たった相手の上に技の絵を出す。**属性が見えると弱点の話が伝わる。**
+	# 絵が無ければ何も出ず、従来の点滅と数字だけになる。
+	_play_hit_fx()
 	# 大技の閃光もオート中は短く。**待ちと点滅だけ詰めても、ここが 0.55 のままだと
 	# 大技が出た手番だけ長い。** 詰めるところは 3 つ（待ち・点滅・閃光）。
 	if not system.last_hit_ids.is_empty() and _is_big_hit(system.last_ability_id):
@@ -927,6 +933,53 @@ func _draw_enemies() -> void:
 				Vector2(rect.get_center().x - PixelUI.text_width(b.name) * 0.5, rect.position.y - 30),
 				b.name, PixelUI.C_ACTIVE
 			)
+
+
+## 被弾した相手の位置に技の絵を出す。
+##
+## 位置は `_draw_enemies()` と同じ式から取る ―― 別に計算すると、
+## 並びを変えたときに絵だけ元の場所に残る。
+## 開発用。いま選べる相手へ通常攻撃を撃つ（技の絵を撮るため）。
+func debug_force_attack() -> void:
+	if _actor == null or system.living_enemies().is_empty():
+		return
+	system.perform(_actor, "fire", system.living_enemies()[0])
+	_begin_turn()
+
+
+func _play_hit_fx() -> void:
+	if effect == null or system.last_hit_ids.is_empty():
+		return
+	var name := BattleFx.for_ability(String(system.last_ability_id))
+	if name == "":
+		return
+	var target := _enemy_center(int(system.last_hit_ids[0]))
+	effect.play(name, target)
+
+
+## 敵の表示位置の中心（見つからなければ画面の中ほど）。
+func _enemy_center(battler_id: int) -> Vector2:
+	var foes := system.enemies
+	var widest := 0.0
+	for b in foes:
+		widest = maxf(widest, sprite_of(b.sprite).get_width() * ENEMY_SCALE)
+	var fit := maxi(int(PixelUI.SCREEN.x / maxf(widest + 8.0, 1.0)), 1)
+	var per_row := mini(foes.size(), maxi(fit, 1))
+	if foes.size() > fit:
+		per_row = int(ceil(foes.size() / 2.0))
+	var spacing := float(PixelUI.SCREEN.x) / (per_row + 1)
+	for i in foes.size():
+		if foes[i].id != battler_id:
+			continue
+		var size := sprite_of(foes[i].sprite).get_size() * ENEMY_SCALE
+		@warning_ignore("integer_division")
+		var tier := i / per_row
+		var slot := i % per_row
+		return Vector2(
+			spacing * (slot + 1) + tier * BACK_ROW_SHIFT,
+			ENEMY_BASELINE - size.y * 0.5 - tier * BACK_ROW_LIFT
+		)
+	return Vector2(PixelUI.SCREEN.x * 0.5, ENEMY_BASELINE - 40.0)
 
 
 ## いま狙っている相手。グループ技なら同じ種族をまとめて光らせる。

@@ -1377,6 +1377,27 @@ BATTLE_BACKGROUNDS = [
 BATTLE_BG_SIZE = (512, 176)
 
 
+## 戦闘エフェクト。32x32 の 4 コマを横に並べた 128x32。
+##
+## 技の系統（斬・突・魔法）と属性（炎・氷・雷・毒）で選ぶ。
+## **欠けていても落ちない** ―― 無ければ従来の点滅と数字だけになる。
+BATTLE_FX = [
+    "slash", "thrust", "fire", "ice", "bolt", "poison",
+    "sleep", "buff", "debuff", "explosion", "gunshot", "heal",
+]
+
+FX_SIZE = (128, 32)
+
+
+def build_battle_fx() -> None:
+    for name in BATTLE_FX:
+        sheet = _load_sheet(f"candidate_fx_{name}", FX_SIZE)
+        if sheet is None:
+            continue
+        sheet.to_png(ASSETS / "effects" / f"fx_{name}.png")
+    print(f"  取り込み: 戦闘エフェクト {len(BATTLE_FX)} 種")
+
+
 def build_battle_backgrounds() -> None:
     for name in BATTLE_BACKGROUNDS:
         sheet = _load_sheet(f"candidate_battle_bg_{name}", BATTLE_BG_SIZE)
@@ -2015,6 +2036,7 @@ def main() -> None:
     build_tileset()
     build_world_tileset()
     build_biomes()
+    build_battle_fx()
     build_battle_backgrounds()
     build_npcs()
     build_event_effects()
