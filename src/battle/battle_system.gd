@@ -651,8 +651,8 @@ func victory() -> bool:
 ## 「深く潜るほど職業が育つ」が自然に成立する。
 func rewards() -> Dictionary:
 	return {
-		"exp": Encounter.total_exp(enemies),
-		"gold": Encounter.total_gold(enemies) + stolen_gold,
+		"exp": Encounter.total_exp_at(enemies, floor_number),
+		"gold": Encounter.total_gold_at(enemies, floor_number) + stolen_gold,
 		"mastery": 4 + floor_number,
 		"items": stolen_items,
 	}

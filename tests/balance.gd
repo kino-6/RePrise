@@ -1,20 +1,35 @@
 extends SceneTree
 
-## バランス測定 — ランを最後まで自動で回して、どこで死ぬかを数える。
+## 世界のシミュレータ。
 ##
 ##   godot --headless --script res://tests/balance.gd
+##   godot --headless --script res://tests/balance.gd -- --runs=500 --detail
 ##
-## 戦闘が描画も入力も持たない設計にしてある最大の実利がこれ。数値をいじる
-## たびに何千回でも回せるので、勘で調整せずに済む。
+## **測る側と遊ぶ側で同じコードを通す。** ここが今回いちばん大事な作り。
 ##
-## 前提（変えるとここを直す）
-##   * 1 階につき 4 戦。実際の遭遇率は歩数依存なので、平均的な回数を置いている
-##   * 味方の判断は素朴な自動操縦。人が操作すればこれより強くなるので、
-##     ここで出る勝率は「下限」として読む
-##   * 道具は使わない。出店の効果は測っていない
+## 旧版は「バランス測定」という名前で、中身は `1 階につき 4 戦` という
+## 書き写した模型だった。通るし数字も出るが、ゲームには存在しない構造を
+## 測っていた。**壊れているより悪い（健全に見える）。**
+##
+## そこで今の版は、実際のランと同じ部品だけを呼ぶ。
+##
+##   * 世界 …… `WorldGenerator.generate()`（遊ぶときと同じ生成器）
+##   * 経路 …… `FieldMap.route()`（自動移動と同じ幅優先）
+##   * 地形の重み …… `WorldMap.encounter_weight()`
+##   * 遭遇の判定 …… `Encounter.should_meet()`（`ExploreView` と共有）
+##   * 敵編成 …… `Encounter.build()` / `build_boss()`
+##   * 戦闘 …… `BattleSystem`（本物。ダメージ式も CTB もそのまま）
+##   * 味方の判断 …… `AutoTactic`（画面のオートと同じ）
+##
+## 数値をここに書き写したら負け。**定数を持たないこと**を規約にする。
+##
+## 出すのは 1 つの数字ではなく分布。「主に挑めた 31%」だけでは、
+## 遠くて届かないのか、道中で削られて死ぬのかが分からない。
 
-const RUNS := 200
-const ENCOUNTERS_PER_FLOOR := 4
+## 何ラン回すか（`--runs=` で上書きできる）。
+const DEFAULT_RUNS := 200
+
+## 1 戦の打ち切り。無限ループ（互いに削れない編成）から抜けるための保険。
 const MAX_TURNS := 400
 
 const PARTY := [
@@ -24,77 +39,200 @@ const PARTY := [
 	{ "name": "キリ", "job": "thief" },
 ]
 
+## 歩き方。**世界が広いので「どう進むか」で結果が変わる。**
+## 直行と寄り道を並べて測らないと、洞に入る価値が数字にならない。
+enum Policy { STRAIGHT, DETOUR, TOUR }
+
+const POLICY_NAMES := {
+	Policy.STRAIGHT: "直行（城へ最短）",
+	Policy.DETOUR: "寄り道（洞を 2 つ経由）",
+	Policy.TOUR: "全周（洞を全部まわってから城）",
+}
+
+var _runs := DEFAULT_RUNS
+var _detail := false
+
 
 func _initialize() -> void:
 	Database.reload()
-	var final_floor: int = load("res://src/game/game_state.gd").get_script_constant_map()["FINAL_FLOOR"]
+	_read_args()
 
-	print("=== バランス測定 ===")
-	print("%d ラン / 1 階あたり %d 戦 / 最終階 %d" % [RUNS, ENCOUNTERS_PER_FLOOR, final_floor])
+	print("=== 世界シミュレータ ===")
+	print("%d ラン × %d 方針" % [_runs, POLICY_NAMES.size()])
 
-	var died_on := {}
-	var wins := 0
-	var boss_attempts := 0
-	var level_sum := 0
-	# 稼ぎも測る。出店で何が買えるかはここで決まるのに、測っていなかった
-	# （「3 階まで来たのに何も買えない」という指摘で気づいた）。
-	var gold_at := {3: 0, 5: 0, 10: 0}
-	var gold_runs := {3: 0, 5: 0, 10: 0}
+	var reports := {}
+	for policy in [Policy.STRAIGHT, Policy.DETOUR, Policy.TOUR]:
+		reports[policy] = _run_policy(policy)
 
-	for i in RUNS:
-		var result := _simulate_run(i * 7919 + 13, final_floor)
-		level_sum += int(result["level"])
-		for milestone in [3, 5, 10]:
-			if int(result["gold_at_%d" % milestone]) >= 0 and int(result["floor"]) >= milestone:
-				gold_at[milestone] += int(result["gold_at_%d" % milestone])
-				gold_runs[milestone] += 1
-		if bool(result["victory"]):
-			wins += 1
-		var reached := int(result["floor"])
-		died_on[reached] = int(died_on.get(reached, 0)) + 1
-		if bool(result["reached_boss"]):
-			boss_attempts += 1
+	for policy in reports:
+		_print_report(String(POLICY_NAMES[policy]), reports[policy])
 
 	print("---")
-	print("到達階の分布（そこで終わったラン数）")
-	for f in range(1, final_floor + 1):
-		var count := int(died_on.get(f, 0))
-		var bar := "#".repeat(count * 40 / maxi(RUNS, 1))
-		print("  地下 %2d 階  %3d  %s" % [f, count, bar])
-
-	print("---")
-	print("主に挑めた   : %d / %d (%d%%)" % [boss_attempts, RUNS, boss_attempts * 100 / RUNS])
-	print("主を倒した   : %d / %d (%d%%)" % [wins, RUNS, wins * 100 / RUNS])
-	print("平均レベル   : %.1f" % (float(level_sum) / float(RUNS)))
-	print("---")
-	print("その階までの稼ぎ（累計・出店に使える額）")
-	for milestone in [3, 5, 10]:
-		var runs := int(gold_runs[milestone])
-		if runs == 0:
-			continue
-		print("  地下 %2d 階まで  %4d ゴールド（%d ラン）" % [
-			milestone, int(gold_at[milestone]) / runs, runs
-		])
-	print("---")
-	print(_verdict(wins * 100 / RUNS, boss_attempts * 100 / RUNS))
-	quit(0)
+	_print_verdict(reports)
+	quit()
 
 
-## 測定結果の読みかた。数字だけ出しても判断が要るので、目安を添える。
-func _verdict(win_rate: int, boss_rate: int) -> String:
-	if boss_rate < 15:
-		return "所見: 道中が重い。主にすら届かないランが多すぎる。"
-	if win_rate > 60:
-		return "所見: 易しい。自動操縦でこれだけ勝てるなら人が操作すると素通りになる。"
-	if win_rate < 5:
-		return "所見: 主が硬い。届いても勝てないので、最後の壁として機能していない。"
-	return "所見: 妥当。自動操縦での勝率がこの帯なら、人が操作して手応えのある難度になる。"
+func _read_args() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--runs="):
+			_runs = maxi(int(arg.trim_prefix("--runs=")), 1)
+		elif arg == "--detail":
+			_detail = true
 
 
 # --------------------------------------------------------------------------
+# 集計
+# --------------------------------------------------------------------------
 
 
-func _simulate_run(seed_value: int, final_floor: int) -> Dictionary:
+func _run_policy(policy: Policy) -> Dictionary:
+	var report := {
+		"reached": 0, "won": 0, "died": 0,
+		"died_at": {}, "steps": 0, "battles": 0,
+		"level_sum": 0, "level_runs": 0,
+		"death_level_sum": 0, "death_danger_sum": 0,
+		"gold_sum": 0, "gold_runs": 0,
+		"world_span": 0,
+	}
+	for i in _runs:
+		# 種はランごとに散らす。連番にすると隣のランと似た世界が並ぶ。
+		var result := _simulate(i * 7919 + 13, policy)
+		report["steps"] = int(report["steps"]) + int(result["steps"])
+		report["battles"] = int(report["battles"]) + int(result["battles"])
+		report["world_span"] = int(report["world_span"]) + int(result["span"])
+		if bool(result["reached"]):
+			report["reached"] = int(report["reached"]) + 1
+			report["level_sum"] = int(report["level_sum"]) + int(result["level"])
+			report["level_runs"] = int(report["level_runs"]) + 1
+			report["gold_sum"] = int(report["gold_sum"]) + int(result["gold"])
+			report["gold_runs"] = int(report["gold_runs"]) + 1
+		if bool(result["won"]):
+			report["won"] = int(report["won"]) + 1
+		if bool(result["died"]):
+			report["died"] = int(report["died"]) + 1
+			report["death_level_sum"] = int(report["death_level_sum"]) + int(result["level"])
+			report["death_danger_sum"] = int(report["death_danger_sum"]) + int(result["danger"])
+			var band := int(result["danger"])
+			report["died_at"][band] = int(report["died_at"].get(band, 0)) + 1
+	return report
+
+
+func _print_report(title: String, r: Dictionary) -> void:
+	print("---")
+	print("【%s】" % title)
+	var runs := float(_runs)
+	print("  城に着けた : %d / %d (%d%%)" % [
+		int(r["reached"]), _runs, int(r["reached"]) * 100 / _runs])
+	print("  主を倒した : %d / %d (%d%%)" % [
+		int(r["won"]), _runs, int(r["won"]) * 100 / _runs])
+	print("  1 ランの歩数 : 平均 %.0f 歩（門から城まで %.0f 歩）" % [
+		int(r["steps"]) / runs, int(r["world_span"]) / runs])
+	print("  1 ランの戦闘 : 平均 %.1f 回" % [int(r["battles"]) / runs])
+	if int(r["level_runs"]) > 0:
+		print("  城に着いた時 : 平均 Lv %.1f / ゴールド %d" % [
+			int(r["level_sum"]) / float(r["level_runs"]),
+			int(r["gold_sum"]) / int(r["gold_runs"]),
+		])
+	if int(r["died"]) > 0:
+		# レベルと危険度の差が、そのまま「間に合っていない量」になる。
+		print("  倒れた時     : 平均 Lv %.1f / 危険度 %.1f" % [
+			int(r["death_level_sum"]) / float(r["died"]),
+			int(r["death_danger_sum"]) / float(r["died"]),
+		])
+	# どこで死ぬかの分布。**ここが一番効く情報。**
+	# 「届かない」のと「届いても勝てない」のは、直し方がまるで違う。
+	print("  倒れた危険度 :")
+	var bands: Array = r["died_at"].keys()
+	bands.sort()
+	for band in bands:
+		var count := int(r["died_at"][band])
+		print("    危険度 %2d  %4d  %s" % [band, count, "#".repeat(maxi(count * 40 / _runs, 1))])
+
+
+func _print_verdict(reports: Dictionary) -> void:
+	var straight: Dictionary = reports[Policy.STRAIGHT]
+	var detour: Dictionary = reports[Policy.DETOUR]
+	var s_win := int(straight["won"]) * 100 / _runs
+	var d_win := int(detour["won"]) * 100 / _runs
+	var s_reach := int(straight["reached"]) * 100 / _runs
+
+	# **判定はいちばん強い方針（全周）で行う。**
+	# 直行が勝てないのは設計どおり（急げば着くが勝てない）なので、
+	# そこを基準に「主が硬い」と言うと、毎回誤診する。
+	var tour: Dictionary = reports[Policy.TOUR]
+	var t_win := int(tour["won"]) * 100 / _runs
+
+	if s_reach < 5:
+		print("所見: 城が遠すぎる。直行でも %d%% しか着かない。" % s_reach)
+		print("      遭遇率（Encounter.MIN_SAFE_STEPS）か世界の広さ（WorldGenerator.MAP_W）を疑う。")
+	elif t_win > 45:
+		print("所見: 易しい。全周で %d%% 勝てるなら人が操作すると素通りになる。" % t_win)
+		print("      Encounter.EXP_GAIN を下げる。")
+	elif t_win < 8:
+		print("所見: 辛い。全周しても %d%% しか勝てないので、勝ち筋が無い。" % t_win)
+		print("      Encounter.EXP_GAIN を上げる。")
+	else:
+		print("所見: 妥当な帯（全周 %d%%）。自動操縦は道具も買い物も使わないので、" % t_win)
+		print("      これは人が操作したときの下限。")
+	if s_win > 15:
+		print("警告: 直行で %d%% 勝てている。急ぐ判断と寄る判断が同値になっていて、" % s_win)
+		print("      「寄るか急ぐか」が判断として成立していない。")
+
+	if d_win > s_win + 3:
+		print("寄り道: 効いている（勝率 %d%% → %d%%）。洞に入る理由が数字として在る。" % [s_win, d_win])
+	elif d_win < s_win - 3:
+		print("寄り道: 損。洞で削られるぶんが得るものを上回っている（%d%% → %d%%）。" % [s_win, d_win])
+	else:
+		print("寄り道: ほぼ無意味（%d%% → %d%%）。**封を置く理由がここにある。**" % [s_win, d_win])
+		print("      いま洞の見返りは宝箱だけで、寄る動機が弱い（docs/quest_design.md）。")
+
+
+# --------------------------------------------------------------------------
+# 1 ラン
+# --------------------------------------------------------------------------
+
+
+func _simulate(seed_value: int, policy: Policy) -> Dictionary:
+	var members := _fresh_party()
+	# 遊ぶときとまったく同じ手順で世界を作る。
+	var world := WorldGenerator.generate(DetRng.new(seed_value).fork("world"))
+	var rng := DetRng.new(seed_value).fork("sim")
+
+	var span := world.route(world.start_pos, world.castle_pos).size()
+	var state := {
+		"steps": 0, "battles": 0, "gold": 0, "danger": 1, "dead": false,
+	}
+
+	# 行き先の列。寄り道の方針では洞を挟んでから城へ向かう。
+	var waypoints: Array[Vector2i] = []
+	if policy == Policy.DETOUR:
+		waypoints.append_array(_pick_caves(world, 2))
+	elif policy == Policy.TOUR:
+		# 世界を何周も歩く形（封を 3 つ集める構造の近似）。
+		# 直行が成立しないなら、**周回の回数が難度の主軸**ということになる。
+		waypoints.append_array(_pick_caves(world, 99))
+	waypoints.append(world.castle_pos)
+
+	var at := world.start_pos
+	for goal in waypoints:
+		at = _walk(world, members, rng, state, at, goal)
+		if bool(state["dead"]):
+			return _result(members, state, false, false, span)
+		# 洞に着いたら中を 1 往復ぶん歩く（宝箱と戦闘のぶん）。
+		if goal != world.castle_pos:
+			_delve(world, members, rng, state, goal)
+			if bool(state["dead"]):
+				return _result(members, state, false, false, span)
+
+	# 城に着いた。ここからが主戦。
+	var boss := Encounter.build_boss(rng, WorldMap.MAX_DANGER)
+	if boss.is_empty():
+		return _result(members, state, true, false, span)
+	var won := _fight(members, boss, rng, WorldMap.MAX_DANGER, state)
+	return _result(members, state, true, won, span)
+
+
+func _fresh_party() -> Array[PartyMember]:
 	var members: Array[PartyMember] = []
 	for entry in PARTY:
 		var m := PartyMember.create(String(entry["name"]), String(entry["job"]))
@@ -105,79 +243,115 @@ func _simulate_run(seed_value: int, final_floor: int) -> Dictionary:
 		m.hp = m.max_hp()
 		m.mp = m.max_mp()
 		members.append(m)
+	return members
 
-	var floor_number := 1
-	var gold_total := 0
-	var gold_marks := {3: -1, 5: -1, 10: -1}
-	while floor_number <= final_floor:
-		var rng := DetRng.new(seed_value).fork("battle:%d" % floor_number)
 
-		for _e in ENCOUNTERS_PER_FLOOR:
-			var foes := Encounter.build(rng, floor_number)
+## 目的地まで歩く。1 歩ごとに地形の重みを足し、遭遇したら戦う。
+## **歩き方も遭遇の式も遊ぶときと同じ関数を通す。**
+func _walk(
+	world: WorldMap, members: Array[PartyMember], rng: DetRng, state: Dictionary,
+	from: Vector2i, to: Vector2i
+) -> Vector2i:
+	var path := world.route(from, to)
+	var weighted := 0
+	var at := from
+	for step in path:
+		at = step
+		state["steps"] = int(state["steps"]) + 1
+		state["danger"] = world.danger_at(at.x, at.y)
+		if world.sites.has(at):
+			weighted = 0  # 拠点地の上は安全（ExploreView と同じ扱い）
+			continue
+		weighted += world.encounter_weight(at.x, at.y)
+		if not Encounter.should_meet(rng, weighted):
+			continue
+		weighted = 0
+		var foes := Encounter.build(rng, int(state["danger"]))
+		if foes.is_empty():
+			continue
+		if not _fight(members, foes, rng, int(state["danger"]), state):
+			state["dead"] = true
+			return at
+	return at
+
+
+## 洞の中。階数は世界と同じ規則で決め、各階を歩いた想定で戦う。
+##
+## 地形は生成するが歩数までは追わない（洞の中の経路は世界の判断に影響しない）。
+## 代わりに階段までの距離を測って、その歩数ぶんの遭遇を回す。
+func _delve(
+	world: WorldMap, members: Array[PartyMember], rng: DetRng, state: Dictionary, at: Vector2i
+) -> void:
+	var site: Dictionary = world.site_at(at)
+	var danger := int(site.get("danger", 1))
+	var depth: int = clampi(1 + danger / 3, 1, 3)
+	for floor_number in range(1, depth + 1):
+		var here: int = mini(danger + floor_number - 1, WorldMap.MAX_DANGER)
+		state["danger"] = here
+		var map := DungeonGenerator.generate(rng.fork("cave:%d" % floor_number), here, false)
+		var steps := map.route(map.start_pos, map.stairs_pos).size()
+		var weighted := 0
+		for _s in steps:
+			state["steps"] = int(state["steps"]) + 1
+			weighted += 1  # 洞の中は 1 歩 1（ExploreView の _try_move_dungeon と同じ）
+			if not Encounter.should_meet(rng, weighted):
+				continue
+			weighted = 0
+			var foes := Encounter.build(rng, here)
 			if foes.is_empty():
 				continue
-			var earned := _fight_gold(members, foes, rng, floor_number)
-			if earned < 0:
-				return _result(members, floor_number, false, false, gold_marks)
-			gold_total += earned
-
-		if gold_marks.has(floor_number):
-			gold_marks[floor_number] = gold_total
-
-		if floor_number == final_floor:
-			var boss := Encounter.build_boss(rng, floor_number)
-			if boss.is_empty():
-				return _result(members, floor_number, false, false, gold_marks)
-			var won := _fight(members, boss, rng, floor_number)
-			return _result(members, floor_number, won, true, gold_marks)
-
-		floor_number += 1
-
-	return _result(members, final_floor, false, false, gold_marks)
+			if not _fight(members, foes, rng, here, state):
+				state["dead"] = true
+				return
 
 
 func _result(
-	members: Array[PartyMember], floor_number: int, victory: bool, reached_boss: bool,
-	gold_marks: Dictionary = {}
+	members: Array[PartyMember], state: Dictionary, reached: bool, won: bool, span: int
 ) -> Dictionary:
 	var level := 0
 	for m in members:
 		level = maxi(level, m.level)
 	return {
-		"floor": floor_number,
-		"victory": victory,
-		"reached_boss": reached_boss,
+		"reached": reached,
+		"won": won,
+		"died": bool(state["dead"]),
+		"danger": int(state["danger"]),
+		"steps": int(state["steps"]),
+		"battles": int(state["battles"]),
+		"gold": int(state["gold"]),
 		"level": level,
-		"gold_at_3": int(gold_marks.get(3, -1)),
-		"gold_at_5": int(gold_marks.get(5, -1)),
-		"gold_at_10": int(gold_marks.get(10, -1)),
+		"span": span,
 	}
 
 
-## 1 戦ぶん回して、稼いだゴールドを返す。負けたら -1。
-func _fight_gold(
-	members: Array[PartyMember], foes: Array[Battler], rng: DetRng, floor_number: int
-) -> int:
-	# GDScript のラムダは値で捕まえるので、int を代入しても外へ返らない。
-	# 参照型（辞書）に入れて受け取る。
-	var box := {"gold": 0}
-	var won := _fight(members, foes, rng, floor_number, func(reward: Dictionary) -> void:
-		box["gold"] = int(reward["gold"])
-	)
-	return int(box["gold"]) if won else -1
+## 洞をいくつか拾う。門に近い順（実際に寄れる順）で選ぶ。
+func _pick_caves(world: WorldMap, count: int) -> Array[Vector2i]:
+	var from_gate := world.distance_field(world.start_pos)
+	var caves: Array[Vector2i] = []
+	for pos in world.sites:
+		if String(world.sites[pos].get("kind", "")) == "cave":
+			caves.append(pos)
+	caves.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return from_gate[a.y * world.width + a.x] < from_gate[b.y * world.width + b.x])
+	return caves.slice(0, count)
 
 
-## 1 戦ぶん回して、勝ったかどうかを返す。勝てば経験と熟練が入る。
+# --------------------------------------------------------------------------
+# 戦闘（本物の BattleSystem をそのまま回す）
+# --------------------------------------------------------------------------
+
+
 func _fight(
-	members: Array[PartyMember], foes: Array[Battler], rng: DetRng, floor_number: int,
-	on_reward: Callable = Callable()
+	members: Array[PartyMember], foes: Array[Battler], rng: DetRng, danger: int,
+	state: Dictionary
 ) -> bool:
+	state["battles"] = int(state["battles"]) + 1
 	var party: Array[Battler] = []
 	for i in members.size():
 		party.append(members[i].to_battler(i))
 
 	var system := BattleSystem.new()
-	system.start(party, foes, rng, floor_number)
+	system.start(party, foes, rng, danger)
 
 	var turns := 0
 	while not system.is_over and turns < MAX_TURNS:
@@ -190,7 +364,9 @@ func _fight(
 		if bool(head["skipped"]):
 			continue
 		if actor.is_ally:
-			var plan := _plan(system, actor)
+			# **画面のオートと同じ判断を使う。** ここに素朴な AI を書くと、
+			# 測っている強さと遊べる強さが別物になる。
+			var plan := AutoTactic.decide(system, actor, AutoTactic.Mode.AGGRESSIVE)
 			system.perform(actor, String(plan["ability"]), plan["target"])
 		else:
 			system.perform_enemy(actor)
@@ -203,58 +379,10 @@ func _fight(
 		return false
 
 	var reward := system.rewards()
-	if on_reward.is_valid():
-		on_reward.call(reward)
+	state["gold"] = int(state["gold"]) + int(reward["gold"])
 	for m in members:
 		if m.hp <= 0:
 			continue
 		m.gain_exp(int(reward["exp"]))
 		m.gain_mastery(int(reward["mastery"]))
 	return true
-
-
-## 味方の自動操縦。素朴だが、人がやることの下限にはなっている。
-##
-##   1. 誰かが半分を切っていて、回復手段があるなら回復する
-##   2. そうでなければ、撃てるうちで最も威力の高い技を、
-##      いちばん削れている敵へ撃つ
-func _plan(system: BattleSystem, actor: Battler) -> Dictionary:
-	var usable := system.usable_abilities(actor)
-	var allies := system.living_allies()
-	var enemies := system.living_enemies()
-
-	# --- 回復 ---
-	var weakest: Battler = null
-	for b in allies:
-		if weakest == null or b.hp * weakest.max_hp < weakest.hp * b.max_hp:
-			weakest = b
-	if weakest != null and weakest.hp * 2 < weakest.max_hp:
-		for id in usable:
-			var ab := Database.ability(id)
-			if String(ab.get("kind", "")) == "heal" and String(ab.get("target", "")) == "one_ally":
-				return { "ability": id, "target": weakest }
-
-	# --- 攻撃 ---
-	var best := "attack"
-	var best_power := -1
-	for id in usable:
-		var ab := Database.ability(id)
-		var kind := String(ab.get("kind", ""))
-		if kind != "physical" and kind != "magical":
-			continue
-		# 範囲技は敵が複数いるときだけ価値がある、と素朴に見積もる
-		var power := int(ab.get("power", 0)) * maxi(int(ab.get("hits", 1)), 1)
-		var scope := String(ab.get("target", ""))
-		if scope == "all_enemies":
-			power = power * enemies.size()
-		elif scope == "group_enemy" and not enemies.is_empty():
-			power = power * maxi(system.group_of(enemies[0]).size(), 1)
-		if power > best_power:
-			best_power = power
-			best = id
-
-	var target: Battler = null
-	for b in enemies:
-		if target == null or b.hp < target.hp:
-			target = b
-	return { "ability": best, "target": target }
