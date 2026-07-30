@@ -129,13 +129,25 @@ static func content(rect: Rect2, pad := 3.0) -> Rect2:
 
 const WINDOW_MARGIN := 8.0
 
+## 窓の不透明度。
+##
+## 後期 SFC の画面が richer に見えた理由のひとつが、PPU のカラーマス
+## （加算・減算合成）による半透明の窓。不透明な板を置くのはファミコンの作法で、
+## 下の絵が透けるだけで一気に世代が変わる。
+##
+## 0.7 を下回ると文字の影が背景に負けて読みにくくなるので、そこが下限。
+const WINDOW_ALPHA := 0.72
+
 
 ## 青い窓を 9-slice で描く。
 ##
 ## 単純な draw_texture_rect だと枠ごと引き伸ばされ、角の 1px 線が太くなって
 ## 一気に「ドット絵でないもの」に見える。角は等倍、辺は 1 方向だけ、
 ## 中央は両方向へ伸ばす。
-static func draw_window(canvas: CanvasItem, rect: Rect2, texture: Texture2D) -> void:
+static func draw_window(
+	canvas: CanvasItem, rect: Rect2, texture: Texture2D, alpha: float = WINDOW_ALPHA
+) -> void:
+	var tint := Color(1.0, 1.0, 1.0, alpha)
 	var tex := texture.get_size()
 	var m := WINDOW_MARGIN
 	var src_x := [0.0, m, tex.x - m, tex.x]
@@ -148,7 +160,7 @@ static func draw_window(canvas: CanvasItem, rect: Rect2, texture: Texture2D) -> 
 			var src := Rect2(src_x[i], src_y[j], src_x[i + 1] - src_x[i], src_y[j + 1] - src_y[j])
 			var dst := Rect2(dst_x[i], dst_y[j], dst_x[i + 1] - dst_x[i], dst_y[j + 1] - dst_y[j])
 			if dst.size.x > 0.0 and dst.size.y > 0.0:
-				canvas.draw_texture_rect_region(texture, dst, src)
+				canvas.draw_texture_rect_region(texture, dst, src, tint)
 
 
 ## 画面の中央に出す一言（買った / たりない / おぼえた など）。
@@ -177,6 +189,22 @@ static func draw_gauge(
 	inner.size.x = maxi(int(inner.size.x * clampf(ratio, 0.0, 1.0)), 0)
 	if inner.size.x > 0:
 		canvas.draw_rect(inner, fill, true)
+
+
+## 縦のグラデーション。
+##
+## 一色で塗った背景は「絵が置かれていない」ように見える。SFC 期は背景に
+## 必ず階調が入っていて、それだけで奥行きが出る。帯で塗るので負荷はゼロ。
+static func draw_gradient(
+	canvas: CanvasItem, rect: Rect2, top: Color, bottom: Color, bands: int = 16
+) -> void:
+	var step := rect.size.y / float(maxi(bands, 1))
+	for i in bands:
+		var t := float(i) / float(maxi(bands - 1, 1))
+		canvas.draw_rect(
+			Rect2(rect.position.x, rect.position.y + i * step, rect.size.x, ceil(step)),
+			top.lerp(bottom, t), true
+		)
 
 
 static func hp_color(ratio: float) -> Color:

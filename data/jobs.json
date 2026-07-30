@@ -1,5 +1,5 @@
 {
-  "_comment": "職業。cost_scale が CTB 上のテンポの個性（100 が標準、低いほど手数型）。mastery は熟練度ランクごとに覚える技で、覚えた技は転職しても失われない。unlock は上級職の解放条件（職業 ID -> 必要な熟練ランク）で、その本人が満たしていないと就けない。ダーマ神殿と同じく、誰かが極めたから全員が就ける、にはしない。",
+  "_comment": "職業。cost_scale が CTB 上のテンポの個性（100 が標準、低いほど手数型）。mastery は熟練度ランクごとに覚える技で、覚えた技は転職しても失われない。unlock は解放条件（職業 ID -> 必要な熟練ランク）で、その本人が満たしていないと就けない。ダーマ神殿と同じく、誰かが極めたから全員が就ける、にはしない。技は職業をまたいで共有してよい（DQ6 も複数の職がホイミを覚える）。新しい技を足す前に、既存の技で役割が作れないかを見ること。",
   "soldier": {
     "name": "せんし",
     "desc": "重い一撃。次の手番は遅れる。",
@@ -209,6 +209,344 @@
         "rank": 4,
         "need": 340,
         "ability": "lull"
+      }
+    ]
+  },
+  "ranger": {
+    "name": "かりびと",
+    "desc": "遠くから射る。手数が軽い。",
+    "cost_scale": 85,
+    "unlock": {
+      "thief": 2,
+      "soldier": 2
+    },
+    "growth": {
+      "hp": 7,
+      "mp": 2,
+      "atk": 3,
+      "def": 2,
+      "agi": 4
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 32,
+        "ability": "arrow"
+      },
+      {
+        "rank": 2,
+        "need": 96,
+        "ability": "poison_blade"
+      },
+      {
+        "rank": 3,
+        "need": 200,
+        "ability": "arrow_storm"
+      },
+      {
+        "rank": 4,
+        "need": 340,
+        "ability": "rapid_shot"
+      }
+    ]
+  },
+  "spellblade": {
+    "name": "まけんし",
+    "desc": "刃に魔を乗せる。攻めに寄る。",
+    "cost_scale": 115,
+    "unlock": {
+      "soldier": 2,
+      "mage": 2
+    },
+    "growth": {
+      "hp": 7,
+      "mp": 4,
+      "atk": 3,
+      "def": 3,
+      "agi": 3
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 32,
+        "ability": "magic_blade"
+      },
+      {
+        "rank": 2,
+        "need": 96,
+        "ability": "fire"
+      },
+      {
+        "rank": 3,
+        "need": 200,
+        "ability": "frost"
+      },
+      {
+        "rank": 4,
+        "need": 340,
+        "ability": "double_slash"
+      }
+    ]
+  },
+  "summoner": {
+    "name": "しょうかんし",
+    "desc": "広く巻き込む。とても重い。",
+    "cost_scale": 150,
+    "unlock": {
+      "mage": 2,
+      "priest": 2
+    },
+    "growth": {
+      "hp": 4,
+      "mp": 7,
+      "atk": 1,
+      "def": 2,
+      "agi": 2
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 32,
+        "ability": "frost"
+      },
+      {
+        "rank": 2,
+        "need": 96,
+        "ability": "beast_fang"
+      },
+      {
+        "rank": 3,
+        "need": 200,
+        "ability": "bolt_all"
+      },
+      {
+        "rank": 4,
+        "need": 340,
+        "ability": "blast"
+      }
+    ]
+  },
+  "gunner": {
+    "name": "じゅうし",
+    "desc": "連射で削る。守りは薄い。",
+    "cost_scale": 95,
+    "unlock": {
+      "ranger": 2,
+      "thief": 2
+    },
+    "growth": {
+      "hp": 6,
+      "mp": 2,
+      "atk": 4,
+      "def": 1,
+      "agi": 4
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 40,
+        "ability": "arrow"
+      },
+      {
+        "rank": 2,
+        "need": 112,
+        "ability": "rapid_shot"
+      },
+      {
+        "rank": 3,
+        "need": 220,
+        "ability": "smoke"
+      },
+      {
+        "rank": 4,
+        "need": 360,
+        "ability": "assassinate"
+      }
+    ]
+  },
+  "alchemist": {
+    "name": "れんきんし",
+    "desc": "薬と煙で場を支える。",
+    "cost_scale": 105,
+    "unlock": {
+      "mage": 2,
+      "thief": 2
+    },
+    "growth": {
+      "hp": 6,
+      "mp": 5,
+      "atk": 2,
+      "def": 2,
+      "agi": 3
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 40,
+        "ability": "herb_smoke"
+      },
+      {
+        "rank": 2,
+        "need": 112,
+        "ability": "steal"
+      },
+      {
+        "rank": 3,
+        "need": 220,
+        "ability": "poison_blade"
+      },
+      {
+        "rank": 4,
+        "need": 360,
+        "ability": "cure_all"
+      }
+    ]
+  },
+  "sage": {
+    "name": "けんじゃ",
+    "desc": "癒しと魔を兼ねる。極めるのに時間がかかる。",
+    "cost_scale": 135,
+    "unlock": {
+      "priest": 3,
+      "mage": 3
+    },
+    "growth": {
+      "hp": 6,
+      "mp": 7,
+      "atk": 2,
+      "def": 3,
+      "agi": 3
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 48,
+        "ability": "mass_heal"
+      },
+      {
+        "rank": 2,
+        "need": 128,
+        "ability": "blast"
+      },
+      {
+        "rank": 3,
+        "need": 240,
+        "ability": "revive"
+      },
+      {
+        "rank": 4,
+        "need": 400,
+        "ability": "bolt_all"
+      }
+    ]
+  },
+  "chronomancer": {
+    "name": "じじゅつし",
+    "desc": "行動順そのものを歪める。",
+    "cost_scale": 125,
+    "unlock": {
+      "mage": 3,
+      "ninja": 2
+    },
+    "growth": {
+      "hp": 5,
+      "mp": 6,
+      "atk": 2,
+      "def": 2,
+      "agi": 4
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 48,
+        "ability": "haste"
+      },
+      {
+        "rank": 2,
+        "need": 128,
+        "ability": "slow"
+      },
+      {
+        "rank": 3,
+        "need": 240,
+        "ability": "lull"
+      },
+      {
+        "rank": 4,
+        "need": 400,
+        "ability": "haste_all"
+      }
+    ]
+  },
+  "beastmaster": {
+    "name": "まじゅうつかい",
+    "desc": "獣を放つ。ひと振りが重い。",
+    "cost_scale": 110,
+    "unlock": {
+      "ranger": 2,
+      "soldier": 2
+    },
+    "growth": {
+      "hp": 8,
+      "mp": 3,
+      "atk": 4,
+      "def": 3,
+      "agi": 3
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 40,
+        "ability": "beast_fang"
+      },
+      {
+        "rank": 2,
+        "need": 112,
+        "ability": "whirlwind"
+      },
+      {
+        "rank": 3,
+        "need": 220,
+        "ability": "bulwark"
+      },
+      {
+        "rank": 4,
+        "need": 360,
+        "ability": "power_slash"
+      }
+    ]
+  },
+  "jester": {
+    "name": "あそびびと",
+    "desc": "何をするか読めない。とても軽い。",
+    "cost_scale": 75,
+    "growth": {
+      "hp": 6,
+      "mp": 3,
+      "atk": 2,
+      "def": 2,
+      "agi": 4
+    },
+    "mastery": [
+      {
+        "rank": 1,
+        "need": 24,
+        "ability": "play"
+      },
+      {
+        "rank": 2,
+        "need": 72,
+        "ability": "quick_stab"
+      },
+      {
+        "rank": 3,
+        "need": 160,
+        "ability": "smoke"
+      },
+      {
+        "rank": 4,
+        "need": 280,
+        "ability": "shadow_step"
       }
     ]
   }

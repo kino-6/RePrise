@@ -35,14 +35,21 @@ const NOTICE_TIME := 2.0
 const INPUT_LOCK := 0.15
 
 ## 立ち絵は explore_view と同じ 24x32 のシートから正面 1 コマだけ抜く。
-## _draw() の中で load() すると読み込み中の白い板が描かれるので、必ず preload する。
+##
+## 職業が 15 まで増えたので preload の列挙はやめ、開いたときに 1 度だけ読んで
+## 覚えておく。_draw() の中で読むと、読み込み中の白い板が描かれてしまう。
 const PORTRAIT_SIZE := Vector2(24, 32)
-const PORTRAITS := {
-	"soldier": preload("res://assets/sprites/hero_soldier.png"),
-	"priest": preload("res://assets/sprites/hero_priest.png"),
-	"mage": preload("res://assets/sprites/hero_mage.png"),
-	"thief": preload("res://assets/sprites/hero_thief.png"),
-}
+
+static var _portraits: Dictionary = {}
+
+
+static func portrait_of(job_id: String) -> Texture2D:
+	if _portraits.has(job_id):
+		return _portraits[job_id]
+	var path := "res://assets/sprites/hero_%s.png" % job_id
+	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+	_portraits[job_id] = tex
+	return tex
 
 ## 覚えた技の一覧は 4 列 x 3 段。職業 4 x ランク 3 = 12 個で必ず収まる。
 const ABILITY_COLUMNS := 4
@@ -211,8 +218,28 @@ func _input_job(event: InputEvent) -> void:
 		_apply_job()
 
 
+## 熟練一覧に入る行数。枠の高さから決まる。
+const MASTERY_ROWS := 7
+
+
+## 表示する熟練の行（職業の添字）。選んでいる職業が必ず入るように窓をずらす。
+func _mastery_window(shown_job: String) -> Array[int]:
+	var current := maxi(_job_ids.find(shown_job), 0)
+	@warning_ignore("integer_division")
+	var top := clampi(current - MASTERY_ROWS / 2, 0, maxi(_job_ids.size() - MASTERY_ROWS, 0))
+	var rows: Array[int] = []
+	for i in range(top, mini(top + MASTERY_ROWS, _job_ids.size())):
+		rows.append(i)
+	return rows
+
+
+## 職業えらびの列数。15 職を 4 列 x 4 行で並べる。
+## 3 列 x 5 行だと 5 行目が枠から出た（窓の内側は 78px しかない）。
+const JOB_COLS := 4
+
+
 func _job_rows() -> int:
-	return int(ceil(_job_ids.size() / 2.0))
+	return int(ceil(_job_ids.size() / float(JOB_COLS)))
 
 
 func _input_upgrade(event: InputEvent) -> void:
@@ -297,7 +324,7 @@ func _mastery_text(member: PartyMember, job_id: String) -> String:
 
 
 func _portrait_of(job_id: String) -> Texture2D:
-	return PORTRAITS.get(job_id, null)
+	return portrait_of(job_id)
 
 
 # --------------------------------------------------------------------------
@@ -387,13 +414,20 @@ func _draw_detail() -> void:
 		Terms.speed(int(Database.job(shown_job).get("cost_scale", 100))),
 	]
 	PixelUI.draw_text(self, origin + Vector2(6, 24), head, PixelUI.C_TEXT_DIM)
-	# 見出しは名前の右へ逃がす。1 行ぶん空けると 6 職が枠に収まらない。
+	# 見出しは名前の右へ逃がす。1 行ぶん空けると職業が枠に収まらない。
 	PixelUI.draw_text(self, origin + Vector2(148, 6), Terms.MASTERY, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	PixelUI.draw_text(
+		self, origin + Vector2(212, 6), "%d/%d" % [_job_ids.find(shown_job) + 1, _job_ids.size()],
+		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+	)
 
-	# 上級職ぶん行が増えたので行間を詰める。6 職で枠に収まる高さにしてある。
-	for i in _job_ids.size():
+	# 職業が 15 まで増えたので、全部並べると枠から溢れる。
+	# 選んでいる職業を中心に、入る行数だけ切り出して見せる。
+	var window := _mastery_window(shown_job)
+	for slot in window.size():
+		var i: int = window[slot]
 		var job_id := String(_job_ids[i])
-		var row := origin + Vector2(6, 46 + i * 16)
+		var row := origin + Vector2(6, 46 + slot * 16)
 		var current := job_id == shown_job
 		var tint := PixelUI.C_ACTIVE if current else PixelUI.C_TEXT_DIM
 		if not member.can_take_job(job_id):
@@ -550,7 +584,7 @@ func _draw_job_menu() -> void:
 		@warning_ignore("integer_division")
 		var col := i / rows
 		var row := i % rows
-		var at := origin + Vector2(18 + col * 240, 22 + row * 18)
+		var at := origin + Vector2(18 + col * 118, 20 + row * 14)
 		var on := i == _job_index
 		var locked := not member.can_take_job(job_id)
 		if on:
@@ -560,19 +594,10 @@ func _draw_job_menu() -> void:
 			tint = PixelUI.C_ACTIVE
 		elif locked:
 			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
-		PixelUI.draw_text(self, at, _job_name(job_id), tint)
-		PixelUI.draw_text(
-			self, at + Vector2(96, 2),
-			_stars(member.mastery_rank(job_id), _max_rank(job_id)), PixelUI.C_TEXT_DIM,
-			PixelUI.SIZE_SUB
-		)
-		PixelUI.draw_text(
-			self, at + Vector2(148, 2),
-			"—" if locked else "%s %d" % [
-				Terms.SPEED, Terms.speed(int(Database.job(job_id).get("cost_scale", 100)))
-			],
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+		# 4 列に詰めたので、ここは名前だけ。★ と速さと説明は上の詳細窓に出ている。
+		# 名前の隣に ★ を置くと「まじゅうつかい」のような長い名前とぶつかった。
+		var label := _job_name(job_id) if not locked else _job_name(job_id) + "×"
+		PixelUI.draw_text(self, at, label, tint, PixelUI.SIZE_SUB)
 
 
 func _draw_notice() -> void:

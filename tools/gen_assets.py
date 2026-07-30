@@ -16,7 +16,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from sfc_art import Canvas, Palette, dither, from_ascii, load_png, mirrored, snes  # noqa: E402
+from sfc_art import (  # noqa: E402
+    TRANSPARENT,
+    Canvas,
+    Palette,
+    dither,
+    from_ascii,
+    load_png,
+    mirrored,
+    snes,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
@@ -77,6 +86,15 @@ HERO_ACCENTS = {
     # 上級職。基本職 2 つを混ぜた中間色にして、出自が見えるようにする。
     "paladin": ("#F8E070", "#B08018"),  # 金（蒼 x 翠 の格上げ）
     "ninja": ("#A878F8", "#5820B0"),    # 紫（紅 x 桃）
+    "ranger": ("#98E070", "#40801C"),   # 若草（紅 x 蒼）
+    "spellblade": ("#78B0F8", "#2048A8"),  # 群青（蒼 x 桃）
+    "summoner": ("#F8B058", "#B05818"),    # 橙（桃 x 翠）
+    "sage": ("#F8F0C0", "#A89020"),        # 生成り（翠 x 桃 の極み）
+    "gunner": ("#C0C8D8", "#5A6478"),      # 鋼（紅 x 若草）
+    "alchemist": ("#68E0D8", "#188078"),   # 青緑（桃 x 紅）
+    "chronomancer": ("#C098F8", "#6030B0"),  # 藤（桃 x 紫）
+    "beastmaster": ("#E09858", "#8A4818"),   # 鳶（若草 x 蒼）
+    "jester": ("#F878A0", "#B02050"),        # 撫子（初期職の変わり種）
 }
 
 
@@ -344,16 +362,21 @@ TILE_SHOP = [
 ## タイルシートの寸法（16x16 を 9 枚、横一列）。取り込みの検算に使う。
 TILESET_SIZE = (TILE * 9, TILE)
 
-## 床と壁の明度差の下限。
+## 床と壁の色の隔たりの下限（RGB 空間の距離）。
 ##
 ## この 2 枚は「通れる／通れない」を伝える唯一の手がかりなので、
-## 質感の良さより先に**離れて見えること**が要る。実際に、取り込んだ候補が
-## 床 46.3 / 壁 43.3（差 3.0、色相も同じ紺）で、どこを歩けるのか読めなかった。
-MIN_FLOOR_WALL_LUMA = 12.0
+## 質感の良さより先に**離れて見えること**が要る。明度だけで測ると、
+## 色相が違って明度が同じ組（草原の草と木立ちなど）を落としてしまうので距離で測る。
+##
+## 実測（この値を決めた根拠）:
+##   いまの ASCII タイル  距離 65.9 … 読めている
+##   雪原の候補           距離 138.4 … 読める
+##   地下 / 草原 / 火山 / 湿地の候補  距離 3.3〜9.3 … どこを歩けるのか読めない
+MIN_FLOOR_WALL_DISTANCE = 40.0
 
 
-def _mean_luma(sheet: Canvas, index: int) -> float:
-    """タイル 1 枚の平均明度。透明は数えない。"""
+def _tile_mean(sheet: Canvas, index: int) -> tuple[float, float, float]:
+    """タイル 1 枚の平均色。透明は数えない。"""
     px = [
         sheet.get(index * TILE + x, y)
         for y in range(TILE)
@@ -361,20 +384,26 @@ def _mean_luma(sheet: Canvas, index: int) -> float:
         if sheet.get(index * TILE + x, y)[3]
     ]
     if not px:
-        return 0.0
-    return sum(0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2] for p in px) / len(px)
+        return (0.0, 0.0, 0.0)
+    n = len(px)
+    return (
+        sum(p[0] for p in px) / n,
+        sum(p[1] for p in px) / n,
+        sum(p[2] for p in px) / n,
+    )
 
 
 def _tileset_readable(sheet: Canvas) -> tuple[bool, str]:
     """床と壁が見分けられるか。見分けられない絵は、綺麗でも採用しない。"""
-    floor = _mean_luma(sheet, 0)
-    wall = _mean_luma(sheet, 2)
-    gap = abs(floor - wall)
-    if gap >= MIN_FLOOR_WALL_LUMA:
+    floor = _tile_mean(sheet, 0)
+    wall = _tile_mean(sheet, 2)
+    gap = math.dist(floor, wall)
+    if gap >= MIN_FLOOR_WALL_DISTANCE:
         return True, ""
     return False, (
-        "床と壁の明度差が %.1f しかない（%.1f 以上必要）。床 %.1f / 壁 %.1f。"
-        % (gap, MIN_FLOOR_WALL_LUMA, floor, wall)
+        "床と壁の色が近すぎる（距離 %.1f、%.1f 以上必要）。"
+        "床 (%.0f,%.0f,%.0f) / 壁 (%.0f,%.0f,%.0f)。"
+        % (gap, MIN_FLOOR_WALL_DISTANCE, floor[0], floor[1], floor[2], wall[0], wall[1], wall[2])
     )
 
 
@@ -781,7 +810,9 @@ def _cut_hair(rows: list[str], last_row: int) -> list[str]:
 
 
 def _hero_frames(job: str) -> tuple[list[str], list[str], list[str]]:
-    look = HERO_LOOKS[job]
+    # 差分を書いていない職業は、素の姿で起こす（外で描いた絵がある職業は
+    # そちらが優先されるので、ここに届くのは素材が無いときだけ）。
+    look = HERO_LOOKS.get(job, {"hair": 20, "skirt": SKIRT_WIDE})
     head = look.get("head", [])
     body = look.get("body", [])
     skirt = look.get("skirt", SKIRT_WIDE)
@@ -833,12 +864,25 @@ def _verify_sheet(label: str, sheet: Canvas, size: tuple[int, int]) -> None:
             "%s: 透明を除いて %d 色まで（%d 色あった）" % (label, MAX_COLORS, len(colors))
         )
 
-    off = [c for c in colors if snes("#%02X%02X%02X" % c) != c]
-    if off:
-        raise ValueError(
-            "%s: BGR555 に乗っていない色が %d 個ある（例 #%02X%02X%02X）"
-            % (label, len(off), off[0][0], off[0][1], off[0][2])
-        )
+
+def _quantize(sheet: Canvas) -> tuple[Canvas, int]:
+    """すべての色を BGR555 へ丸める。丸めた色数を返す。
+
+    ここは弾かずに直す。実機に無い色は「間違い」ではなく「まだ丸めていない」
+    だけで、丸めても各チャンネル 8 段階ぶんしか動かない（目には分からない）。
+    寸法・アルファ・色数のように**直せない違反**だけを例外にする。
+    """
+    moved: set = set()
+    out = Canvas(sheet.w, sheet.h)
+    for i, p in enumerate(sheet.px):
+        if p[3] == 0:
+            out.px[i] = TRANSPARENT
+            continue
+        rgb = snes("#%02X%02X%02X" % (p[0], p[1], p[2]))
+        if rgb != p[:3]:
+            moved.add(p[:3])
+        out.px[i] = (rgb[0], rgb[1], rgb[2], 255)
+    return out, len(moved)
 
 
 def _load_sheet(stem: str, size: tuple[int, int]) -> Canvas | None:
@@ -847,7 +891,10 @@ def _load_sheet(stem: str, size: tuple[int, int]) -> Canvas | None:
     if not path.exists():
         return None
     sheet = load_png(path)
+    sheet, moved = _quantize(sheet)
     _verify_sheet(stem, sheet, size)
+    if moved:
+        print(f"    {stem}: {moved} 色を BGR555 へ丸めた")
     return sheet
 
 

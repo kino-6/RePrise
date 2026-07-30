@@ -23,6 +23,7 @@ func _initialize() -> void:
 	_test_cover_and_buff_expiry()
 	_test_dungeon_determinism()
 	_test_dungeon_reachable()
+	_test_data_integrity()
 	_test_dungeon_route()
 	_test_text_wrap()
 	_test_database_loaded()
@@ -257,6 +258,69 @@ func _test_dungeon_reachable() -> void:
 			all_ok = false
 			print("    シード %d で階段に到達できない" % seed_value)
 	_check("%d 個のシードすべてで階段に到達できる" % checked, all_ok)
+
+
+## データの整合。職業が 15 まで増えたので、手で並べた JSON の取りこぼしを機械で見る。
+## 「熟練で覚える技が存在しない」「解放条件が存在しない職業を指している」は
+## 遊んでいて初めて気づくと原因が遠い。
+func _test_data_integrity() -> void:
+	var missing_ability: Array[String] = []
+	var missing_unlock: Array[String] = []
+	var no_mastery: Array[String] = []
+	for job_id in Database.job_ids():
+		var job := Database.job(String(job_id))
+		var mastery: Array = job.get("mastery", [])
+		if mastery.is_empty():
+			no_mastery.append(String(job_id))
+		for entry in mastery:
+			var ability_id := String(entry.get("ability", ""))
+			if Database.ability(ability_id).is_empty():
+				missing_ability.append("%s -> %s" % [job_id, ability_id])
+		for required in job.get("unlock", {}).keys():
+			if Database.job(String(required)).is_empty():
+				missing_unlock.append("%s -> %s" % [job_id, required])
+
+	if not missing_ability.is_empty():
+		print("    存在しない技: " + ", ".join(missing_ability))
+	if not missing_unlock.is_empty():
+		print("    存在しない解放条件: " + ", ".join(missing_unlock))
+	_check("すべての熟練が実在する技を指す", missing_ability.is_empty())
+	_check("すべての解放条件が実在する職業を指す", missing_unlock.is_empty())
+	_check("すべての職業に熟練表がある", no_mastery.is_empty())
+
+	# 解放条件が循環していないか（互いを条件にすると永久に就けない）
+	var cyclic: Array[String] = []
+	for job_id in Database.job_ids():
+		for required in Database.job(String(job_id)).get("unlock", {}).keys():
+			if Database.job(String(required)).get("unlock", {}).has(job_id):
+				cyclic.append("%s <-> %s" % [job_id, required])
+	_check("解放条件が循環していない", cyclic.is_empty())
+
+	# 技の対象と系統が語彙の中にあるか
+	var bad_target: Array[String] = []
+	const TARGETS := [
+		"one_enemy", "group_enemy", "all_enemies",
+		"one_ally", "all_allies", "one_ally_dead", "self",
+	]
+	const KINDS := ["physical", "magical", "heal", "buff", "debuff", "special"]
+	for id in Database.all_abilities().keys():
+		var ab := Database.ability(String(id))
+		if String(ab.get("target", "one_enemy")) not in TARGETS:
+			bad_target.append("%s target=%s" % [id, ab.get("target", "")])
+		if String(ab.get("kind", "physical")) not in KINDS:
+			bad_target.append("%s kind=%s" % [id, ab.get("kind", "")])
+	if not bad_target.is_empty():
+		print("    語彙の外: " + ", ".join(bad_target))
+	_check("技の対象と系統が語彙の中にある", bad_target.is_empty())
+
+	# 立ち絵がある（職業を足して絵を忘れると、拠点で欠けたまま気づかない）
+	var no_sprite: Array[String] = []
+	for job_id in Database.job_ids():
+		if not ResourceLoader.exists("res://assets/sprites/hero_%s.png" % job_id):
+			no_sprite.append(String(job_id))
+	if not no_sprite.is_empty():
+		print("    立ち絵が無い職業: " + ", ".join(no_sprite))
+	_check("すべての職業に立ち絵がある", no_sprite.is_empty())
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。

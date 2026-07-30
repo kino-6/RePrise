@@ -46,6 +46,10 @@ var stolen_items: Array[String] = []
 ## 直近に実行された技。演出側が効果音を選ぶのに使う。
 var last_ability_id: String = ""
 
+## 直近の行動でダメージを受けた者の id。演出（被弾の点滅）に使う。
+## 表示側がログの文字列を読んで判断すると、文言を変えた瞬間に演出が消える。
+var last_hit_ids: Array[int] = []
+
 
 func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_no: int = 1) -> void:
 	allies = party
@@ -176,6 +180,7 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 		return []
 
 	last_ability_id = ability_id
+	last_hit_ids.clear()
 	var lines: Array[String] = []
 	actor.mp = maxi(actor.mp - int(ab.get("mp", 0)), 0)
 	lines.append("%sの　%s！" % [actor.name, ab.get("name", ability_id)])
@@ -363,8 +368,40 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 					lines.append("%sが　%sを かばう たいせいに はいった" % [actor.name, t.name])
 			"steal":
 				lines.append_array(_steal_from(actor, t))
+			"random":
+				lines.append_array(_play_around(actor, t))
 			_:
 				lines.append("しかし　なにも おこらなかった")
+	return lines
+
+
+## あそぶ。何が起きるか読めないが、コストがとても軽い。
+##
+## 「読めない」を乱数で作るときは、外れも当たりも同じ確率で並べないこと。
+## 半分は何も起きないくらいで丁度よく、当たったときだけ強い手になる。
+func _play_around(actor: Battler, target: Battler) -> Array[String]:
+	var lines: Array[String] = []
+	match rng.range_i(0, 5):
+		0, 1:
+			lines.append("%sは おどけてみせた。なにも おこらない" % actor.name)
+		2:
+			var dmg := _damage(actor, target, 180, false, "")
+			target.apply_damage(dmg)
+			lines.append("%sの ふいうち！ %sに %d の ダメージ！" % [actor.name, target.name, dmg])
+			if not target.is_alive():
+				lines.append("%sを　たおした！" % target.name)
+		3:
+			target.agi_scale = 70
+			target.agi_scale_turns = BUFF_TURNS
+			target.next_at += CtbScheduler.wait_for(target.effective_agi(), 40)
+			lines.append("%sは つられて笑った。すばやさが さがった！" % target.name)
+		4:
+			var healed := actor.heal(actor.max_hp / 4)
+			lines.append("%sは 大笑いして %d 元気になった" % [actor.name, healed])
+		_:
+			actor.agi_scale = 150
+			actor.agi_scale_turns = BUFF_TURNS
+			lines.append("%sは 調子に乗った！ すばやさが あがった！" % actor.name)
 	return lines
 
 

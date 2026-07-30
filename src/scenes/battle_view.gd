@@ -92,6 +92,9 @@ var _escaped := false
 ## 中身は「傷が深い者がいれば回復、いなければ一番効く攻撃」の 1 本だけ。
 var _auto := false
 
+## 被弾の点滅の残り時間。
+var _blink := 0.0
+
 
 func _ready() -> void:
 	_order_bar = TurnOrderBar.new()
@@ -129,6 +132,9 @@ func _process(delta: float) -> void:
 			_timer -= delta
 			if _timer <= 0.0:
 				_advance_message()
+			if _blink > 0.0:
+				_blink = maxf(_blink - delta, 0.0)
+				queue_redraw()
 		_:
 			pass
 
@@ -495,6 +501,9 @@ func _best_attack() -> String:
 
 
 func _show(lines: Array[String]) -> void:
+	# 誰かに当たった行動なら点滅させる。当たった相手は BattleSystem が持っている
+	# （文字列を見て判断すると、文言を変えた瞬間に演出が消える）。
+	_blink = 0.3 if not system.last_hit_ids.is_empty() else 0.0
 	_queue = lines.duplicate()
 	_shown.clear()
 	_state = State.MESSAGE
@@ -642,7 +651,11 @@ func _telegraph() -> String:
 func _draw() -> void:
 	if system == null:
 		return
-	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color8(0x0E, 0x12, 0x20), true)
+	# 一色で塗ると背景が「無い」ように見える。上を暗く、床の高さを明るく。
+	PixelUI.draw_gradient(
+		self, Rect2(Vector2.ZERO, PixelUI.SCREEN),
+		Color8(0x06, 0x08, 0x12), Color8(0x1C, 0x22, 0x3C)
+	)
 	_draw_enemies()
 	_draw_message_or_command()
 	_draw_party_status()
@@ -660,6 +673,10 @@ func _draw_enemies() -> void:
 	for i in foes.size():
 		var b := foes[i]
 		if not b.is_alive():
+			continue
+		# 当たった相手は一瞬だけ消して点滅させる。SFC 期の被弾表現で、
+		# ダメージの数字が出るより先に「どこに効いたか」が分かる。
+		if _blink > 0.0 and b.id in system.last_hit_ids and fmod(_blink, 0.12) > 0.06:
 			continue
 		var tex: Texture2D = SPRITES.get(b.sprite, SPRITES["gel"])
 		var pos := Vector2(spacing * (i + 1) - tex.get_width() * 0.5, ENEMY_BASELINE - tex.get_height())
