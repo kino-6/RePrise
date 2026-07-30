@@ -723,6 +723,174 @@
         "flavor": ["鳥が砲身の中へ巣を作っている。", "胸の炉だけがかすかに温かい。", "近づくと古い命令を繰り返す。"]
       },
       "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "ruined_aqueduct",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [2, 9],
+      "tags": ["water", "town", "route"],
+      "premise": "崩れた水路の水を町・旅路・回収品のどれへ使うか選ぶ。",
+      "trigger": "discover_landmark",
+      "choices": [
+        {"id": "restore", "label": "町への水路を直す", "costs": ["item", "steps"], "risks": ["normal_fight"], "rewards": ["town_service", "route_safe"]},
+        {"id": "divert", "label": "旅路へ水を引く", "costs": ["mp"], "risks": ["route_loss"], "rewards": ["heal", "item"]},
+        {"id": "salvage", "label": "水門を解体する", "costs": ["normal_fight"], "risks": ["encounter_up"], "rewards": ["equipment", "gold"]}
+      ],
+      "skin": {
+        "title": ["途切れた水路", "空を渡る水門", "ひび割れた導水橋"],
+        "actor": ["水路を守る老人", "乾いた町の使者", "水門に住む魔物"],
+        "cause": ["地鳴りで橋脚がずれた", "帝国が上流をせき止めた", "根を張る魔樹が石を割った"],
+        "flavor": ["乾いた樋に魚の鱗だけが残る。", "水音はするのに流れが見えない。", "対岸で空の水瓶が並んでいる。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "avalanche_pass",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [3, 10],
+      "tags": ["snowfield", "hazard", "route"],
+      "premise": "雪崩で閉じた峠を掘削・誘発・登攀のどれかで越える。",
+      "trigger": "enter_route",
+      "choices": [
+        {"id": "dig", "label": "雪を掘り進む", "costs": ["hp", "steps"], "risks": ["hp"], "rewards": ["route_safe"]},
+        {"id": "trigger", "label": "先に雪を落とす", "costs": ["item"], "risks": ["route_loss"], "rewards": ["shortcut", "encounter_down"]},
+        {"id": "climb", "label": "尾根へ登る", "costs": ["steps"], "risks": ["encounter_up"], "rewards": ["map_reveal", "boss_intel"]}
+      ],
+      "skin": {
+        "title": ["白く閉じた峠", "雪鳴りの坂", "埋もれた山道"],
+        "actor": ["雪焼けした山守", "荷を失った旅人", "尾根を歩く白獣"],
+        "cause": ["遠雷が雪庇を崩した", "古い砲撃跡から雪が落ちた", "山の主が道を隠した"],
+        "flavor": ["雪の下から道標の先だけが出ている。", "声を上げるたび斜面が細かく震える。", "白い面に荷車の車輪が片方だけ残る。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "runaway_engine",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [4, 10],
+      "tags": ["machine", "imperial", "route"],
+      "premise": "暴走する機関車両を制圧・誘導・停止して被害と利益を選ぶ。",
+      "trigger": "enter_route",
+      "choices": [
+        {"id": "board", "label": "飛び乗って制圧", "costs": ["elite_fight"], "risks": ["elite_fight", "route_loss"], "rewards": ["equipment", "route_safe"]},
+        {"id": "divert", "label": "廃線へ誘導する", "costs": ["item"], "risks": ["biome_shift"], "rewards": ["town_service", "boss_weaken"]},
+        {"id": "brake", "label": "術で炉を止める", "costs": ["mp"], "risks": ["normal_fight"], "rewards": ["item", "map_reveal"]}
+      ],
+      "skin": {
+        "title": ["止まらない鉄車", "火花散る無人車", "黒煙の暴走路"],
+        "actor": ["車内に残る整備兵", "炉へ絡む雷獣", "追走する帝国兵"],
+        "cause": ["制御兵が逃げたあとも走っている", "積荷の魔石が炉と共鳴した", "破棄命令だけ届かなかった"],
+        "flavor": ["車輪の火花が街道へ線を引く。", "警笛は同じ短い音を繰り返す。", "空の客車から軍旗だけが流れている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "whispering_milestones",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [2, 10],
+      "tags": ["anomaly", "information", "route"],
+      "premise": "方角を語る道標を修復・回転・解読し、経路の性質を変える。",
+      "trigger": "discover_landmark",
+      "choices": [
+        {"id": "restore", "label": "元の向きへ戻す", "costs": ["mp"], "risks": [], "rewards": ["route_safe", "map_reveal"]},
+        {"id": "rotate", "label": "近道へ向け直す", "costs": ["item"], "risks": ["encounter_up"], "rewards": ["shortcut"]},
+        {"id": "decode", "label": "刻字を読み取る", "costs": ["steps"], "risks": [], "rewards": ["quest_reveal", "boss_intel"]}
+      ],
+      "skin": {
+        "title": ["ささやく道標", "逆さ向きの里程石", "夜だけ動く標"],
+        "actor": ["文字を写す巡礼者", "標を恐れる御者", "石から聞こえる声"],
+        "cause": ["道が変わるたび自ら向きを変える", "城の主が正しい方角を隠した", "失われた街道の記憶を宿している"],
+        "flavor": ["近づくと刻字が別の地名へ変わる。", "石の影だけが城と逆を向いている。", "耳を当てると遠い車輪の音がする。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "abandoned_camp",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [1, 9],
+      "tags": ["rescue", "resource", "route"],
+      "premise": "襲撃後の野営地で生存者・物資・防衛拠点のどれを優先する。",
+      "trigger": "discover_camp",
+      "choices": [
+        {"id": "survivor", "label": "生存者を手当て", "costs": ["item"], "risks": ["encounter_up"], "rewards": ["temporary_ally", "boss_intel"]},
+        {"id": "search", "label": "残った荷を探す", "costs": ["steps"], "risks": ["normal_fight"], "rewards": ["item", "gold"]},
+        {"id": "fortify", "label": "野営地を固める", "costs": ["item"], "risks": ["route_loss"], "rewards": ["rest", "route_safe"]}
+      ],
+      "skin": {
+        "title": ["火の消えた野営地", "空の天幕群", "帰らない探索隊"],
+        "actor": ["倒れた荷運び人", "傷を隠す斥候", "荷をあさる小魔獣"],
+        "cause": ["夜中に何かが隊を分断した", "仲間割れのあと両方が消えた", "帝国の巡回から逃げ遅れた"],
+        "flavor": ["鍋の中身だけがまだ温かい。", "天幕は外からでなく内から裂けている。", "足跡は入ってくるものしか残っていない。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "storm_observatory",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [3, 10],
+      "tags": ["landmark", "weather", "information"],
+      "premise": "壊れた観測所を修理・解体・偽信号に使い天候と敵を操る。",
+      "trigger": "discover_landmark",
+      "choices": [
+        {"id": "repair", "label": "観測器を直す", "costs": ["item", "mp"], "risks": ["encounter_up"], "rewards": ["map_reveal", "boss_intel"]},
+        {"id": "salvage", "label": "測器を解体する", "costs": ["steps"], "risks": [], "rewards": ["equipment", "item"]},
+        {"id": "false_signal", "label": "偽の嵐を告げる", "costs": ["normal_fight"], "risks": ["elite_fight"], "rewards": ["encounter_down", "shortcut"]}
+      ],
+      "skin": {
+        "title": ["風読みの廃塔", "雷を測る台", "雲見の観測所"],
+        "actor": ["嵐を待つ学士", "測器を守る自動兵", "空模様を売る商人"],
+        "cause": ["最後の観測者が針を止めた", "雷撃で方位環が焼けた", "帝国が天候記録を持ち去った"],
+        "flavor": ["止まった針が一行だけを追って動く。", "屋根の風杯は風と逆へ回っている。", "壁一面に明日の雲が描き足される。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "pilgrim_procession",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [1, 9],
+      "tags": ["escort", "social", "relic"],
+      "premise": "危険地を進む巡礼団へ護衛・供物・遺物の借用で関わる。",
+      "trigger": "meet_party",
+      "choices": [
+        {"id": "escort", "label": "次の町まで護衛", "costs": ["steps", "normal_fight"], "risks": ["normal_fight"], "rewards": ["heal", "town_service"]},
+        {"id": "offer", "label": "供物を分ける", "costs": ["item"], "risks": [], "rewards": ["temporary_resist", "quest_reveal"]},
+        {"id": "borrow", "label": "遺物を借りる", "costs": ["gold"], "risks": ["encounter_up"], "rewards": ["temporary_guard", "item"]}
+      ],
+      "skin": {
+        "title": ["鐘なき巡礼", "灰衣の行列", "遠い祠への旅"],
+        "actor": ["足を痛めた先導者", "遺物を運ぶ子ども", "列を見張る元兵士"],
+        "cause": ["故郷の祠が地図から消えた", "城の主を鎮める古礼を続けている", "災いを別の土地へ移すと信じている"],
+        "flavor": ["誰も鳴らさない鐘の音が列を追う。", "荷の中央だけ雨に濡れていない。", "一歩ごとに小石を道端へ置いていく。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "sinkhole_crossroads",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [3, 10],
+      "tags": ["cave", "route", "hazard"],
+      "premise": "街道を飲み込む陥没孔を架橋・探索・封鎖して経路を選ぶ。",
+      "trigger": "enter_route",
+      "choices": [
+        {"id": "bridge", "label": "仮橋を架ける", "costs": ["item"], "risks": ["hp"], "rewards": ["route_safe", "shortcut"]},
+        {"id": "descend", "label": "底へ降りて調べる", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["equipment", "map_reveal"]},
+        {"id": "collapse", "label": "穴をさらに崩す", "costs": ["mp"], "risks": ["route_loss"], "rewards": ["encounter_down", "boss_weaken"]}
+      ],
+      "skin": {
+        "title": ["道を食う大穴", "底なしの交差路", "沈んだ街道"],
+        "actor": ["穴を測る工兵", "底から呼ぶ旅人", "縁に巣食う穴獣"],
+        "cause": ["地下の空洞へ道が落ちた", "古い坑道を帝国が爆破した", "巨大な魔物が下を通り抜けた"],
+        "flavor": ["底に別の古い街道が見えている。", "投げた石が横から戻ってくる。", "縁の道標が少しずつ穴へ傾いている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
     }
   ]
 }
