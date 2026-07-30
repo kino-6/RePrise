@@ -20,6 +20,9 @@ const SAVE_BACKUP_PATH := "user://save.bak.json"
 ## その隙に落ちると本体が消える（実際に消えた）。
 const SAVE_TEMP_PATH := "user://save.tmp.json"
 
+## ラン途中の中断データ。本体セーブとは分ける。
+const SUSPEND_PATH := "user://suspend.json"
+
 ## 実際に読み書きする先。既定は上の 3 つ。
 ##
 ## テストから差し替えられるようにしてある。**ここを定数のまま扱うと、
@@ -28,6 +31,7 @@ const SAVE_TEMP_PATH := "user://save.tmp.json"
 var save_path := SAVE_PATH
 var backup_path := SAVE_BACKUP_PATH
 var temp_path := SAVE_TEMP_PATH
+var suspend_path := SUSPEND_PATH
 
 
 ## テスト用。読み書き先を丸ごと別名へ寄せる。
@@ -35,6 +39,7 @@ func use_save_paths(prefix: String) -> void:
 	save_path = "%s.json" % prefix
 	backup_path = "%s.bak.json" % prefix
 	temp_path = "%s.tmp.json" % prefix
+	suspend_path = "%s.suspend.json" % prefix
 
 
 const PARTY_SIZE := 4
@@ -54,6 +59,12 @@ const DEFAULT_PARTY := [
 signal run_started(seed_value: int)
 signal run_ended(victory: bool, summary: Dictionary)
 signal floor_changed(floor_number: int)
+
+## 装備が手に入った（C-9）。**宝箱・イベント・店の全経路がここを通る。**
+##
+## 入手のたびに呼び出し側で「そうびするか」を聞いていたら、経路が増えるたびに
+## 聞き忘れが出る。`add_gear()` を通れば必ず鳴るので、聞く場所は 1 つで済む。
+signal gear_gained(gear_id: String)
 
 # --- 恒久（拠点に残る） ---
 var roster: Array[PartyMember] = []
@@ -355,7 +366,7 @@ func _grant_starting_gear() -> void:
 			var id := String(gear_id)
 			if Database.gear(id).is_empty():
 				continue
-			add_gear(id)
+			add_gear(id, false)   # 支給品は聞かない
 			equip_gear(m, id)
 		m.hp = m.max_hp()
 		m.mp = m.max_mp()
@@ -743,10 +754,16 @@ func inventory_ids() -> Array:
 # --------------------------------------------------------------------------
 
 
-func add_gear(gear_id: String) -> void:
+## 手持ちに加える。
+##
+## `announce` を false にすると `gear_gained` を鳴らさない。
+## 初期装備の支給や開発用の付与で「そうびするか」を聞かれても邪魔なだけ。
+func add_gear(gear_id: String, announce: bool = true) -> void:
 	if Database.gear(gear_id).is_empty():
 		return
 	gear_stock.append(gear_id)
+	if announce:
+		gear_gained.emit(gear_id)
 
 
 func remove_gear(gear_id: String) -> bool:
@@ -897,9 +914,6 @@ const SAVE_VERSION := 4
 
 ## 恒久データを辞書にする。ファイル入出力と分けてあるので、
 ## 「書いて読み直しても壊れない」をテストから確かめられる。
-## 中断の置き場。本体セーブとは分ける（拠点の恒久データを汚さない）。
-const SUSPEND_PATH := "user://suspend.json"
-
 ## 中断の形式。
 const SUSPEND_VERSION := 1
 
@@ -964,7 +978,7 @@ func to_suspend() -> Dictionary:
 func save_suspend() -> bool:
 	if not can_suspend():
 		return false
-	var file := FileAccess.open(SUSPEND_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(suspend_path, FileAccess.WRITE)
 	if file == null:
 		return false
 	file.store_string(JSON.stringify(to_suspend(), "  "))
@@ -972,7 +986,7 @@ func save_suspend() -> bool:
 
 
 func has_suspend() -> bool:
-	return FileAccess.file_exists(SUSPEND_PATH)
+	return FileAccess.file_exists(suspend_path)
 
 
 func clear_suspend() -> void:
@@ -980,14 +994,14 @@ func clear_suspend() -> void:
 		return
 	var dir := DirAccess.open("user://")
 	if dir != null:
-		dir.remove(SUSPEND_PATH)
+		dir.remove(suspend_path)
 
 
 ## 中断から再開する。**世界は種から作り直す。**
 func resume() -> bool:
 	if not has_suspend():
 		return false
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SUSPEND_PATH))
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(suspend_path))
 	if typeof(parsed) != TYPE_DICTIONARY:
 		clear_suspend()
 		return false
@@ -1084,7 +1098,7 @@ func dev_load(name: String) -> bool:
 		push_warning("開発用の保存が無い: %s" % path)
 		return false
 	var body := FileAccess.get_file_as_string(path)
-	var out := FileAccess.open(SUSPEND_PATH, FileAccess.WRITE)
+	var out := FileAccess.open(suspend_path, FileAccess.WRITE)
 	if out == null:
 		return false
 	out.store_string(body)
@@ -1205,6 +1219,82 @@ func load_game() -> bool:
 		save_game()
 		return true
 	return false
+
+
+## 消せるプレイヤーデータが一つでもあるか。
+##
+## 壊れた本体しか残っていない場合や、中断だけが残った場合でも消去入口を出す。
+## 「読めるセーブがあるか」で判定すると、壊れたデータほど消せなくなる。
+func has_save_data() -> bool:
+	for path in [save_path, backup_path, temp_path, suspend_path]:
+		if FileAccess.file_exists(path):
+			return true
+	return false
+
+
+## プレイヤーの進行をすべて消す。
+##
+## 設定（音量・キー割り当て）と開発用スナップショットは寿命が違うため残す。
+## ラン中に消すと、終了時の自動保存で古い進行が復活して見えるので拒否する。
+func erase_save_data() -> bool:
+	if run_active:
+		return false
+	var dir := DirAccess.open("user://")
+	if dir == null:
+		push_error("user:// を開けない。セーブを消去できない。")
+		return false
+
+	# 本体を最後に消す。本体の削除に失敗した場合も、読み直せる進行は残る。
+	for path in [temp_path, suspend_path, backup_path, save_path]:
+		if FileAccess.file_exists(path) and dir.remove(path) != OK:
+			push_error("セーブを消去できない: %s" % path)
+			return false
+
+	_reset_after_save_erase()
+	return true
+
+
+## ファイルを消した直後、オートロードが古い進行を持ち続けないよう初期化する。
+func _reset_after_save_erase() -> void:
+	roster = _build_default_roster()
+	active_indices.clear()
+	_ensure_active_indices()
+	deepest_floor = 0
+	runs_attempted = 0
+	prologue_seen = false
+	echo = 0
+	upgrades = {}
+	cross_world = empty_cross_world()
+
+	run_active = false
+	run_seed = 0
+	world = null
+	world_pos = Vector2i.ZERO
+	site = {}
+	floor_number = 1
+	gold = 0
+	steps = 0
+	rng = null
+	kills = 0
+	gold_earned = 0
+	gear_stock.clear()
+	inventory = {}
+	event_encounter_bias = 0
+	event_bias_steps = 0
+	event_shop_bonus = 0
+	event_boon = ""
+	event_boons.clear()
+	event_boss_intel = 0
+	event_boss_weaken = 0
+	event_town_service = 0
+	event_inn_bonus = 0
+	event_service_loss = 0
+	event_map_reveals = 0
+	event_route_changes = 0
+	event_biome_changes = {}
+	event_done = {}
+	event_tags = {}
+	lifeline_left = 0
 
 
 func _load_file(path: String) -> bool:

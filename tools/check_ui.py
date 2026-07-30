@@ -28,8 +28,9 @@ SCREENS = [
     "stronghold", "job", "depart", "upgrade", "party",
     "world", "town", "cave", "shop", "event", "event_outcome",
     "battle", "commands", "items", "deep", "boss",
-    "menu", "status", "equip", "jobmenu", "settings",
+    "menu", "status", "equip", "jobmenu", "settings", "save_erase",
     "result", "win",
+    "gearoffer",
 ]
 
 

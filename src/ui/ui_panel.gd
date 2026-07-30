@@ -140,7 +140,11 @@ func row(
 func paragraph(
 	text: String, color: Color = PixelUI.C_TEXT, size: int = PixelUI.SIZE_TEXT
 ) -> void:
-	for row_text in PixelUI.wrap(text, _inner.size.x, size):
+	# **折り返し幅を 1 文字ぶん狭く取る。** `wrap()` は行頭に置けない字
+	# （、。）」など）を前の行へ送り返すので、指定した幅をわずかに超える行が出る。
+	# 幅どおりに頼むと、そのぶんが `line()` 側で `…` に詰まって関門が鳴った。
+	var room := _inner.size.x - PixelUI.text_width("あ", size)
+	for row_text in PixelUI.wrap(text, room, size):
 		line(row_text, color, size)
 
 

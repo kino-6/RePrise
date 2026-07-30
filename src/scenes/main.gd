@@ -16,7 +16,7 @@ const ChestReward := preload("res://src/dungeon/chest_reward.gd")
 ## 輪が拠点に戻るのが要点。失ったレベルと残った熟練度を並べて見せる場が無いと、
 ## メタ進行が数字の裏側だけで進んでしまう。
 
-enum Mode { TITLE, PROLOGUE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS, RESULT, EVENT }
+enum Mode { TITLE, PROLOGUE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS, RESULT, EVENT, GEAR }
 
 var title: TitleView
 var prologue: PrologueView
@@ -29,6 +29,7 @@ var menu: FieldMenu
 var settings: SettingsView
 var result: ResultScreen
 var event_view: EventView
+var gear_offer: GearOfferView
 var effect: EventEffect
 
 var _mode: Mode = Mode.EXPLORE
@@ -114,6 +115,13 @@ func _ready() -> void:
 	add_child(effect)
 	battle.effect = effect
 
+	# 拾った装備を着けるか聞く画面（C-9）。**入手の経路はすべてここへ集まる。**
+	gear_offer = GearOfferView.new()
+	gear_offer.visible = false
+	add_child(gear_offer)
+	gear_offer.chosen.connect(_on_gear_offer_chosen)
+	GameState.gear_gained.connect(_on_gear_gained)
+
 	event_view = EventView.new()
 	event_view.visible = false
 	add_child(event_view)
@@ -182,6 +190,7 @@ func _ready() -> void:
 	menu.escape_requested.connect(_escape_site)
 	title.settings_requested.connect(_open_settings)
 	settings.closed.connect(_close_settings)
+	settings.save_erase_requested.connect(_erase_save_data)
 	result.dismissed.connect(_enter_stronghold)
 
 	_make_curtain()
@@ -255,12 +264,25 @@ func dev_status() -> String:
 	return dev_mode_name()
 
 
+## 開発用。さいきょう装備を掛け直す。**自動プレイと装備画面で同じ処理を通す。**
+func dev_apply_best_gear() -> int:
+	var changed := BestGear.apply(GameState, GameState.active_party())
+	if changed > 0:
+		_refresh_hud()
+	return changed
+
+
 ## 開発用。パーティが身に着けている装備の数。自動プレイの集計に使う。
 func dev_equipped_count() -> int:
 	var total := 0
 	for m in GameState.active_party():
 		total += m.equipment.size()
 	return total
+
+
+## 開発用。直前の通常遭遇までに実際に歩いた歩数を一度だけ返す。
+func dev_take_encounter_gap() -> int:
+	return explore.dev_take_encounter_gap()
 
 
 ## 開発用。「先へ進む一歩」。世界では城へ、洞では階段へ向かう。
@@ -522,6 +544,10 @@ func _capture(which: String) -> void:
 		"settings":
 			settings.open()
 			_set_mode(Mode.SETTINGS)
+		"save_erase":
+			settings.open(true, true)
+			settings.debug_open_save_erase()
+			_set_mode(Mode.SETTINGS)
 		"upgrade":
 			_enter_stronghold()
 			GameState.echo = 42
@@ -564,6 +590,11 @@ func _capture(which: String) -> void:
 			_start_run()
 			await get_tree().create_timer(0.6).timeout
 			_transition.play_cover("iris_gate", func() -> void: pass)
+		"gearoffer":
+			# 拾った装備を着けるか聞く窓（C-9）。
+			_start_run()
+			await get_tree().create_timer(0.5).timeout
+			GameState.add_gear("war_axe")
 		"transition":
 			# 遭遇の演出そのものを撮る。待ちは下の `wait` で調整する
 			# （ここで待つと、そのあとの固定待ちが足されて撮り逃す）。
@@ -1144,6 +1175,35 @@ func _flash_into_battle() -> void:
 	_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
 
 
+## 装備が手に入った（C-9）。**宝箱・イベント・店のどれもここへ来る。**
+##
+## 探索中でなければ聞かない ―― 店の中や戦闘の直後に窓が割り込むと、
+## いま何をしていたか分からなくなる。手持ちには入っているので失われない。
+func _on_gear_gained(id: String) -> void:
+	if _mode != Mode.EXPLORE:
+		return
+	if GameState.active_party().is_empty():
+		return
+	gear_offer.open(id, GameState.active_party())
+	_set_mode(Mode.GEAR)
+
+
+func _on_gear_offer_chosen(member_index: int) -> void:
+	if member_index >= 0:
+		var members := GameState.active_party()
+		if member_index < members.size():
+			var member: PartyMember = members[member_index]
+			# **断っても拾ったものは失わない**ので、着けるときだけ手持ちから抜く。
+			if GameState.equip_gear(member, gear_offer.gear_id):
+				hud.toast("%sは %s を そうびした" % [
+					member.name,
+					Database.gear(gear_offer.gear_id).get("name", gear_offer.gear_id),
+				])
+	gear_offer.close()
+	_set_mode(Mode.EXPLORE)
+	_refresh_hud()
+
+
 ## 飛んでいる暗転を捨てて幕を上げる。
 func _cancel_fade() -> void:
 	if _fade_tween != null and _fade_tween.is_valid():
@@ -1184,6 +1244,13 @@ func _apply_mode(mode: Mode) -> void:
 	event_view.visible = mode == Mode.EVENT
 	if mode == Mode.EVENT:
 		explore.visible = true
+	# 装備を聞く窓も場面の上に開く。**開いているあいだは歩けない**ので、
+	# 選んでいる最中に遭遇や階段が割り込まない。
+	gear_offer.visible = mode == Mode.GEAR
+	if mode == Mode.GEAR:
+		explore.visible = true
+	else:
+		gear_offer.close()
 	explore.set_active(mode == Mode.EXPLORE)
 	if mode != Mode.TITLE:
 		title.close()
@@ -1325,8 +1392,8 @@ func _on_event_choice(choice: Dictionary) -> void:
 
 	# 戦いを含む手は、そのまま戦闘へ入る（払ったあとに逃げられない）。
 	var fight_grade := maxi(
-		_fight_grade(choice.get("costs", [])),
-		_fight_grade(fired)
+		EventEffects.fight_grade(choice.get("costs", [])),
+		EventEffects.fight_grade(fired)
 	)
 	if fight_grade > 0:
 		lines.append("身がまえる 間もなく、敵が 来た。")
@@ -1371,16 +1438,6 @@ func _close_outcome() -> void:
 		var grade := _pending_fight_grade
 		_pending_fight_grade = 0
 		_on_event_encounter(grade)
-
-
-func _fight_grade(list: Array) -> int:
-	var grade := 0
-	for token in list:
-		if String(token) == "elite_fight":
-			grade = 2
-		elif String(token) == "normal_fight":
-			grade = maxi(grade, 1)
-	return grade
 
 
 ## 見送った。**必ず立ち去れる**（踏み直せばまた開く）。
@@ -1455,7 +1512,10 @@ var _mode_before_settings: Mode = Mode.TITLE
 
 func _open_settings() -> void:
 	_mode_before_settings = _mode
-	settings.open()
+	settings.open(
+		_mode_before_settings == Mode.TITLE,
+		GameState.has_save_data()
+	)
 	# 下の画面は残したまま重ねる（設定は場面ではなく、上に開く窓）。
 	_set_mode(Mode.SETTINGS)
 	title.visible = _mode_before_settings == Mode.TITLE
@@ -1469,6 +1529,14 @@ func _close_settings() -> void:
 	elif _mode_before_settings == Mode.TITLE:
 		title.open()
 	_set_mode(_mode_before_settings)
+
+
+func _erase_save_data() -> void:
+	var erased := GameState.erase_save_data()
+	settings.finish_save_erase(erased)
+	if erased:
+		# 記録行と「つづきから」をその場で消す。
+		title.queue_redraw()
 
 
 func _refresh_hud() -> void:

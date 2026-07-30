@@ -60,8 +60,13 @@ var _battles := 0
 ## 1 手番あたりの行数で決まるので、ここは画面側で測るしかない。
 var _battle_started := -1.0
 var _battle_seconds: Array[float] = []
+## 通常遭遇どうしの実歩数。イベント戦・番人・主戦は0なので含めない。
+var _encounter_gaps: Array[int] = []
 var _runs := 0
 var _equipped := 0
+
+## さいきょう装備を掛け直したいか。開始時と、装備を拾った直後に立てる。
+var _best_gear_due := true
 
 
 func start(main_node: Node, seconds: float, seed_value: int = 12345) -> void:
@@ -89,6 +94,12 @@ func _process(delta: float) -> void:
 
 	_elapsed += delta
 	_track_mode(delta)
+	# **さいきょう装備は人と同じ処理を呼ぶ。** 自動プレイが独自に着せると、
+	# 測っている強さと遊べる強さが別物になる（毒で手番が消えていたのと同じ事故）。
+	if _best_gear_due and _main != null and _main.has_method("dev_apply_best_gear"):
+		if String(_main.dev_mode_name()) == "EXPLORE":
+			_best_gear_due = false
+			_main.dev_apply_best_gear()
 	if _main != null and _main.has_method("dev_equipped_count"):
 		_equipped = maxi(_equipped, int(_main.dev_equipped_count()))
 
@@ -130,6 +141,10 @@ func _track_mode(delta: float) -> void:
 		if mode.begins_with("BATTLE"):
 			_battles += 1
 			_battle_started = _elapsed
+			if _main != null and _main.has_method("dev_take_encounter_gap"):
+				var gap := int(_main.dev_take_encounter_gap())
+				if gap > 0:
+					_encounter_gaps.append(gap)
 		elif _battle_started >= 0.0:
 			# 戦闘から出た。掛かった秒を控える。
 			_battle_seconds.append(_elapsed - _battle_started)
@@ -182,6 +197,10 @@ func _send_input() -> void:
 			# （実測で町の滞在が 0.3 秒だった）。
 			if status.contains("町"):
 				_press(_town_step())
+			elif _town_entered >= 0.0:
+				# 町を出た。次に入ったときのために印を戻す。
+				_town_entered = -1.0
+				_town_leaving = false
 			elif _rng.chance(3):
 				_press("confirm")  # メニューを開ける
 			else:
@@ -221,6 +240,13 @@ func _send_input() -> void:
 				_press(_rng.pick(["ui_up", "ui_down"]))
 			else:
 				_press("confirm")
+		"GEAR":
+			# 拾った装備を聞かれている（C-9）。**選ばずに閉じる。**
+			# ここで人と同じく仲間を選ぶこともできるが、どの仲間が最善かを
+			# 自動プレイが判断すると `BestGear` と二重になる。閉じてから
+			# `dev_apply_best_gear()` を呼ぶので、結果は同じところへ行く。
+			_press("cancel")
+			_best_gear_due = true
 		"SETTINGS":
 			# **設定は遊びの輪の外**。ここで confirm を押し続けると
 			# キー割り当ての待ち状態に入って出られなくなる（実際に 25 秒張り付いた）。
@@ -263,6 +289,9 @@ const TOWN_DWELL := 12.0
 
 var _town_entered := -1.0
 
+## 出口へ向かっている最中か。**滞在の再開を止めるための印。**
+var _town_leaving := false
+
 
 ## 町の中の 1 歩。
 ##
@@ -273,9 +302,16 @@ var _town_entered := -1.0
 func _town_step() -> String:
 	if _town_entered < 0.0:
 		_town_entered = _elapsed
+		_town_leaving = false
 	_town_time += 0.016
-	if _elapsed - _town_entered > TOWN_DWELL:
-		_town_entered = -1.0
+	# **出ると決めたら出きるまで出口へ向かう。**
+	#
+	# 以前は滞在時間が切れた回に `_town_entered` を戻していたので、
+	# 出口へ 1 歩進んだ次の呼び出しでまた滞在が始まっていた。
+	# 出口が 1 歩より遠い町からは、酔歩がたまたま外へ出るまで抜けられない。
+	# 実際に 90 秒とどまり続けた（強い装備で先へ進めるようになって初めて出た）。
+	if _town_leaving or _elapsed - _town_entered > TOWN_DWELL:
+		_town_leaving = true
 		var out: String = _main.dev_step_to_exit()
 		if out != "":
 			return out
@@ -368,6 +404,15 @@ func _report() -> void:
 	print("最も危険  : 危険度 %d" % _deepest)
 	print("町に入った: %d 回（滞在 %.0f 秒）" % [_town_visits, _town_time])
 	print("戦闘      : %d 回" % _battles)
+	if not _encounter_gaps.is_empty():
+		var shortest := _encounter_gaps[0]
+		var gap_total := 0
+		for gap in _encounter_gaps:
+			shortest = mini(shortest, gap)
+			gap_total += gap
+		print("通常遭遇の間隔: 最短 %d 歩 / 平均 %.1f 歩（%d 件）" % [
+			shortest, float(gap_total) / _encounter_gaps.size(), _encounter_gaps.size()
+		])
 	if not _battle_seconds.is_empty():
 		var total := 0.0
 		var longest := 0.0

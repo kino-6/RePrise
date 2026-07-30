@@ -44,7 +44,10 @@ header = f"""## 進み具合
 
 """
 for line in recent:
-    header += line + "\n"
+    # **`[x]` を落としてから写す。** ここは digest であって未完了の一覧ではない。
+    # そのまま写すと tasks.md に `[x]` が残り、衛生の関門（`_test_docs_hygiene`）が
+    # 「控えへの移し忘れ」として落とす。道具どうしが食い違ったまま動いていた。
+    header += line.replace("- [x] ", "- ", 1) + "\n"
 header += "\n"
 
 body = body.replace("## 次にやる", header + "## 次にやる", 1)

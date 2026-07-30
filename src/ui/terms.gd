@@ -41,6 +41,18 @@ static var RUNS_TOTAL := Vocabulary.word("terms", "runs_total", "%d回の潜行"
 ## 行動の速さ。内部は「待ちコスト」（小さいほど速い）だが、
 ## 画面では大きいほど速い数字に直して見せる（speed() を通すこと）。
 static var SPEED := Vocabulary.word("terms", "speed", "速さ")
+
+## そうび回り（C-9 / C-10）。
+##
+## `data/vocabulary.json` にまだ書かれていなくても既定へ落ちるので、
+## 語の見直しは後からできる（`Vocabulary.word` の約束）。
+static var BEST_GEAR := Vocabulary.word("terms", "best_gear", "さいきょう")
+static var EQUIP_NOW := Vocabulary.word("terms", "equip_now", "いま そうびする")
+static var TO_BAG := Vocabulary.word("terms", "to_bag", "もちものへ")
+static var GOT_GEAR := Vocabulary.word("terms", "got_gear", "%s を みつけた")
+static var TAKES_OFF := Vocabulary.word("terms", "takes_off", "はずれる")
+static var NO_ONE_CAN := Vocabulary.word(
+	"terms", "no_one_can", "だれも そうびできない")
 ## 戦闘コマンドに添えるコスト。こちらは「この一手で何待つか」なので待ちのまま出す。
 static var WAIT := Vocabulary.word("terms", "wait", "待")
 static var MASTERY := Vocabulary.word("terms", "mastery", "じゅくれんど")
@@ -52,6 +64,34 @@ static var MAXED := Vocabulary.word("terms", "maxed", "きわみ")
 static var PARTY := Vocabulary.word("terms", "party", "へんせい")
 static var UPGRADE := Vocabulary.word("terms", "upgrade", "アップグレード")
 static var DEPART := Vocabulary.word("terms", "depart", "出撃する")
+
+# --- セーブ消去 ---
+static var SAVE_ERASE := Vocabulary.word("terms", "save_erase", "セーブを けす")
+static var SAVE_ERASE_QUESTION := Vocabulary.word(
+	"terms", "save_erase_question", "セーブを けしますか？"
+)
+static var SAVE_ERASE_WARNING := Vocabulary.word(
+	"terms", "save_erase_warning", "戦績・資源・熟練・中断は すべて消える"
+)
+static var SAVE_ERASE_CANCEL := Vocabulary.word("terms", "save_erase_cancel", "やめる")
+static var SAVE_ERASE_EXECUTE := Vocabulary.word(
+	"terms", "save_erase_execute", "すべて けす"
+)
+static var SAVE_ERASE_HINT := Vocabulary.word(
+	"terms", "save_erase_hint", "Ｚで えらぶ　Ｘで やめる"
+)
+static var SAVE_ERASE_DONE := Vocabulary.word(
+	"terms", "save_erase_done", "セーブを けしました"
+)
+static var SAVE_ERASE_FAILED := Vocabulary.word(
+	"terms", "save_erase_failed", "セーブを けせませんでした"
+)
+static var SAVE_ERASE_NONE := Vocabulary.word(
+	"terms", "save_erase_none", "けすものが ない"
+)
+static var SAVE_ERASE_TITLE_ONLY := Vocabulary.word(
+	"terms", "save_erase_title_only", "タイトルから"
+)
 
 # --- 任意イベント ---
 static var EVENT_CLOSE := Vocabulary.word("terms", "event_close", "Ｚで とじる")
@@ -103,6 +143,9 @@ static var EVENT_MAP_SEALS := Vocabulary.word(
 static var EVENT_MAP_ROUTE := Vocabulary.word(
 	"terms", "event_map_route", "城までの 安全な道を 地図に 記した"
 )
+static var EVENT_SEALS_KNOWN := Vocabulary.word(
+	"terms", "event_seals_known", "封のありかは すべて分かっている"
+)
 static var EVENT_BIOME_CALMED := Vocabulary.word(
 	"terms", "event_biome_calmed", "%sの土地が 鎮まった"
 )
@@ -149,3 +192,17 @@ const SPEED_BASE := 200
 
 static func speed(cost_scale: int) -> int:
 	return SPEED_BASE - cost_scale
+
+
+## 能力の呼び名（C-9 の差分表示）。**画面へ直に英字を出さない。**
+static var STAT_NAMES := {
+	"atk": Vocabulary.word("terms", "stat_atk", "こうげき"),
+	"def": Vocabulary.word("terms", "stat_def", "しゅび"),
+	"agi": Vocabulary.word("terms", "stat_agi", "すばやさ"),
+	"hp": Vocabulary.word("terms", "stat_hp", "たいりょく"),
+	"mag": Vocabulary.word("terms", "stat_mag", "まりょく"),
+}
+
+
+static func stat(key: String) -> String:
+	return String(STAT_NAMES.get(key, key))

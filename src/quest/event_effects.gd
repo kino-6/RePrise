@@ -130,6 +130,17 @@ static func resolution_kind(token: String) -> String:
 	return "unknown"
 
 
+static func fight_grade(tokens: Array) -> int:
+	var grade := 0
+	for raw in tokens:
+		var token := String(raw)
+		if token == "elite_fight":
+			grade = 2
+		elif token == "normal_fight":
+			grade = maxi(grade, 1)
+	return grade
+
+
 ## 選択しただけで済み扱いにしてよいか。
 ## 効果ゼロの撤退手は `defer: true` を必須にし、踏み直せば再び選べる。
 static func choice_has_consequence(choice: Dictionary) -> bool:
@@ -417,6 +428,9 @@ static func _reveal_seal(state: GameState) -> String:
 		return "%s は %s の 洞に ある" % [
 			String(s.get("name", "封")), state.world.biome_name_at(at.x, at.y)
 		]
+	for s in state.world.seals:
+		if not bool(s.get("broken", false)):
+			return Terms.EVENT_SEALS_KNOWN
 	return "封は すべて やぶれている"
 
 

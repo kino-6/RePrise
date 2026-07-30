@@ -30,16 +30,27 @@ const MAX_ENEMIES := 6
 ## 通るのに存在しない世界を測っていた。**測る側と遊ぶ側は同じ式を使う。**
 ## --------------------------------------------------------------------------
 
-## この歩数までは絶対に敵が出ない（場面が切り替わった直後の事故防止）。
+## 戦闘後に必ず歩ける実歩数。地形の重みやイベント補正では短縮されない。
+##
+## 森は1歩を重み3で数えるため、重みだけの安全期間では3歩で次の戦闘が起こり得た。
+## 「戦闘が終わったのにほとんど進めない」体感を確実に消すため、別軸で守る。
+## 6歩を歩き切るまでは無抽選、7歩目から抽選する。
+const MIN_ENCOUNTER_GAP_STEPS := 6
+
+## この重みまでは絶対に敵が出ない（場面が切り替わった直後の事故防止）。
 ## 自動プレイで 150 秒回したら遊んだ時間の 54% が戦闘だったので広げた。
 const MIN_SAFE_STEPS := 9
 
 
-## 重み付き歩数から遭遇するかを決める。
+## 実歩数と重み付き歩数から遭遇するかを決める。
 ##
 ## 確率は歩数の半分ずつ上がる。線形に上げると 10 歩そこそこで必ず出るようになり、
 ## 移動が戦闘の待ち時間になってしまう（実際そうなっていた）。
-static func should_meet(rng: DetRng, weighted_steps: int, event_bias: int = 0) -> bool:
+static func should_meet(
+	rng: DetRng, walked_steps: int, weighted_steps: int, event_bias: int = 0
+) -> bool:
+	if walked_steps <= MIN_ENCOUNTER_GAP_STEPS:
+		return false
 	if weighted_steps < MIN_SAFE_STEPS:
 		return false
 	@warning_ignore("integer_division")

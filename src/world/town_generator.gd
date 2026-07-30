@@ -206,28 +206,33 @@ static func generate(rng: DetRng, danger: int, tileset: String) -> TownMap:
 
 
 ## 出口を 4 辺のどれかに開ける。
-static func _place_exit(map: TownMap, rng: DetRng) -> Vector2i:
-	var side := rng.range_i(0, 3)
-	var at := Vector2i.ZERO
-	match side:
-		0:
-			at = Vector2i(rng.range_i(3, map.width - 4), map.height - 1)
-		1:
-			at = Vector2i(rng.range_i(3, map.width - 4), 0)
-		2:
-			at = Vector2i(0, rng.range_i(3, map.height - 4))
-		_:
-			at = Vector2i(map.width - 1, rng.range_i(3, map.height - 4))
+## 出入口。**南辺の中央に固定する。**
+##
+## 前は四辺から乱数で選んでいたが、変える理由が無かった。町ごとに出口が飛ぶと
+##
+##   * 入った直後にどちらを向けばいいか分からない（毎回探し直す）、
+##   * 出たつもりが別の辺で、世界地図の上を行ったり来たりする
+##     （自動プレイが世界↔町を 8 回続けて往復した）、
+##   * 「戻る場所」が覚えられないので町が土地として頭に残らない、
+##
+## という害だけがあった。町ごとの違いは**入口より先**の街路と地区で作る（C-8）。
+## 画面の下端中央から入るのは、往年の RPG が一貫してそうしていた形でもある。
+static func _place_exit(map: TownMap, _rng: DetRng) -> Vector2i:
+	@warning_ignore("integer_division")
+	var at := Vector2i(map.width / 2, map.height - 1)
 	map.set_tile(at.x, at.y, TownMap.T_EXIT)
 	return at
 
 
 ## 出口の 1 マス内側（入ってきて最初に立つ場所）。
+##
+## 出口は南辺なので**必ず真上**。近傍の並び順に頼ると、町の形によって
+## 左右へずれて「入って正面が壁」になる。
 static func _inward_from(map: TownMap, at: Vector2i) -> Vector2i:
-	for step in FieldMap.NEIGHBORS:
-		var inside: Vector2i = at + step
-		if inside.x > 0 and inside.y > 0 and inside.x < map.width - 1 and inside.y < map.height - 1:
-			return inside
+	var inside := at + Vector2i(0, -1)
+	if inside.y > 0:
+		return inside
+	@warning_ignore("integer_division")
 	return Vector2i(map.width / 2, map.height / 2)
 
 
@@ -316,6 +321,18 @@ static func _place_folk(map: TownMap, rng: DetRng, danger: int) -> void:
 				near = true
 				break
 		if near:
+			continue
+		# 人は壁と同じく通れない。入口固定で乱数列が変わったとき、宿の前を
+		# 町人が塞ぐ町が実際に一つ出た。置くたびに必須地点への道を再検算する。
+		map.folk[at] = {}
+		var dist := map.distance_field(map.start_pos)
+		var routes_kept := true
+		for goal in [map.inn_pos, map.shop_pos, map.exit_pos]:
+			if dist[goal.y * map.width + goal.x] < 0:
+				routes_kept = false
+				break
+		if not routes_kept:
+			map.folk.erase(at)
 			continue
 		spots.append(at)
 

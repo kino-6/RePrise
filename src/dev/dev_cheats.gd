@@ -75,7 +75,7 @@ static func apply_to_run(state: Node) -> Array[String]:
 				continue
 			for i in party.size():
 				var gear_id := String(ids[i % ids.size()])
-				state.add_gear(gear_id)
+				state.add_gear(gear_id, false)
 				state.equip_gear(party[i], gear_id)
 		applied.append("装備一式")
 
@@ -84,7 +84,7 @@ static func apply_to_run(state: Node) -> Array[String]:
 		# （--dev-gear は着せてしまうので、UI を通ったかが分からない）。
 		for slot in ["weapon", "armor", "accessory"]:
 			for id in Database.gear_ids_in_slot(String(slot)):
-				state.add_gear(String(id))
+				state.add_gear(String(id), false)
 		applied.append("装備を手持ちへ")
 
 	if has_flag("--dev-items"):

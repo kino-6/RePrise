@@ -399,7 +399,9 @@ func _mastery_text(member: PartyMember, job_id: String) -> String:
 	var points := member.mastery_points(job_id)
 	var remain := member.mastery_to_next(job_id)
 	if remain <= 0:
-		return "%d きわめた" % points
+		# **極めたら数は出さない。** 上限に達したあとの累計は使い道が無く、
+		# 「429 きわめた」で列を食い切って詰まっていた（関門が拾った）。
+		return "きわめた"
 	return "%d/%d" % [points, points + remain]
 
 
@@ -561,7 +563,7 @@ func _draw_detail() -> void:
 ## 熟練の一覧の列幅。**合計は立ち絵の左端（208）に収める。**
 ## 固定のオフセットで置いていた頃の 96 / 148 と同じ位置だが、
 ## いまは幅として渡すので、長い職名はその列の中で詰まる。
-const MASTERY_NAME_W := 96.0
+const MASTERY_NAME_W := 92.0
 const MASTERY_STAR_W := 52.0
 const MASTERY_TEXT_W := 58.0
 

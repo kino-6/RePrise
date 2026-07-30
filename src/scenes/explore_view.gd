@@ -69,6 +69,10 @@ var rumor: Callable = Callable()
 var _frame := 0
 var _move_cd := 0.0
 var _steps_since_encounter := 0
+## 地形重みを掛けない実歩数。戦闘直後の最低歩数保証に使う。
+var _walked_since_encounter := 0
+## 開発用の実測値。自動プレイが「本当に何歩空いたか」を報告するときに読む。
+var _last_encounter_gap := 0
 var _active := true
 
 
@@ -85,6 +89,8 @@ func setup(
 	facing = FACE_DOWN
 	_frame = 0
 	_steps_since_encounter = 0
+	_walked_since_encounter = 0
+	_last_encounter_gap = 0
 	_update_camera()
 	queue_redraw()
 
@@ -226,21 +232,26 @@ func _try_move_world(target: Vector2i) -> void:
 	# 街道のイベントは拠点地より先に見る（拠点地の上にも重なることがある）。
 	if world.events.has(target) and not world.sites.has(target):
 		_steps_since_encounter = 0
+		_walked_since_encounter = 0
 		event_reached.emit(target)
 		return
 	if world.sites.has(target):
 		# 拠点地の上では遭遇しない。踏んだ歩数も数えない（門前で溜めるのを防ぐ）。
 		_steps_since_encounter = 0
+		_walked_since_encounter = 0
 		site_entered.emit(target)
 		return
 
 	# 地形で歩きにくさが変わる。草原 1 / 丘 2 / 森 3。
 	# 通れる・通れない以外の意味を地形に持たせないと、ただの模様になる。
 	_steps_since_encounter += world.encounter_weight(target.x, target.y)
+	_walked_since_encounter += 1
 	poison_ticked.emit()
 
 	if _should_encounter():
+		_last_encounter_gap = _walked_since_encounter
 		_steps_since_encounter = 0
+		_walked_since_encounter = 0
 		encounter_triggered.emit()
 
 
@@ -263,6 +274,7 @@ func _try_move_dungeon(target: Vector2i) -> void:
 	player_pos = target
 	_frame = (_frame + 1) % 3
 	_steps_since_encounter += 1
+	_walked_since_encounter += 1
 	_update_camera()
 	queue_redraw()
 
@@ -290,13 +302,25 @@ func _try_move_dungeon(target: Vector2i) -> void:
 	poison_ticked.emit()
 
 	if _should_encounter():
+		_last_encounter_gap = _walked_since_encounter
 		_steps_since_encounter = 0
+		_walked_since_encounter = 0
 		encounter_triggered.emit()
 
 
 ## 遭遇の判定は Encounter に置いてある（シミュレータと同じ式を使うため）。
 func _should_encounter() -> bool:
-	return Encounter.should_meet(rng, _steps_since_encounter, GameState.event_encounter_bias)
+	return Encounter.should_meet(
+		rng, _walked_since_encounter, _steps_since_encounter,
+		GameState.event_encounter_bias
+	)
+
+
+## 自動プレイ用。通常遭遇で確定した歩数を一度だけ返す。
+func dev_take_encounter_gap() -> int:
+	var gap := _last_encounter_gap
+	_last_encounter_gap = 0
+	return gap
 
 
 func _update_camera() -> void:

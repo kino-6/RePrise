@@ -390,12 +390,29 @@ func _input_slot(event: InputEvent) -> void:
 		_state = State.MEMBER
 		queue_redraw()
 		return
-	_slot_index = _move(_slot_index, SLOTS.size(), event)
+	# 最後の 1 行は「さいきょう」。**全員ぶんをまとめて配る。**
+	_slot_index = _move(_slot_index, SLOTS.size() + 1, event)
 	if event.is_action_pressed("confirm"):
+		if _slot_index == SLOTS.size():
+			_apply_best_gear()
+			queue_redraw()
+			return
 		Sound.play("confirm")
 		_gear_index = 0
 		_state = State.GEAR
 	queue_redraw()
+
+
+## さいきょう装備（C-10）。**判断は `BestGear` 一本**にしてある ――
+## ここと自動プレイで別々に書くと、測っている強さと遊べる強さがずれる。
+func _apply_best_gear() -> void:
+	var changed := BestGear.apply(GameState, GameState.active_party())
+	if changed > 0:
+		Sound.play("confirm")
+		_notify("%s装備を %d 個 つけかえた" % [Terms.BEST_GEAR, changed])
+	else:
+		Sound.play("cancel")
+		_notify("これ以上 よくならない")
 
 
 func _input_gear(event: InputEvent) -> void:
@@ -706,6 +723,16 @@ func _draw_equip() -> void:
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		PixelUI.draw_text(self, at, String(SLOT_LABELS[SLOTS[i]]), tint, PixelUI.SIZE_SUB)
 		PixelUI.draw_text(self, at + Vector2(76, -2), label, tint)
+
+	# 「さいきょう」の行。3 つのスロットの下に置く。
+	var best_at := origin + Vector2(0, 28 + SLOTS.size() * ROW)
+	var best_on := _slot_index == SLOTS.size()
+	if best_on and _state == State.SLOT:
+		MenuList.draw_cursor(self, CURSOR_TEX, best_at)
+	PixelUI.draw_text(
+		self, best_at + Vector2(76, -2), Terms.BEST_GEAR,
+		PixelUI.C_ACTIVE if best_on else PixelUI.C_TEXT_DIM
+	)
 
 	if _state != State.GEAR:
 		return
