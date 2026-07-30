@@ -33,7 +33,87 @@ const BRIGHT_STEPS := 15.0
 const IN_TIME := 0.30
 const OUT_TIME := 0.20
 
+## 場面転換の覆い。遭遇より少しだけ長い ―― こちらは前後を切るのが仕事なので、
+## 覆いきった一瞬が要る。それでも長くはしない（何十回も通る）。
+const COVER_IN_TIME := 0.32
+const COVER_OUT_TIME := 0.26
+
 var _tween: Tween = null
+
+## 場面転換の覆い（B-3）。遭遇のモザイクとは別物なので、別の子に描かせる。
+## **同じ CanvasItem に描くとモザイクのシェーダが覆いにも掛かる。**
+var _cover: Cover = null
+
+
+## 8 コマのアトラスを全画面へ引き伸ばして覆う板。
+##
+## `assets/transitions/*.png` は 64x40 の 8 コマを横に並べた 512x40 で、
+## 画面（512x320）のちょうど 1/8 なので**整数倍（8 倍）**で拡大できる。
+## 半端な倍率だとドットが滲むので、この寸法は動かさないこと。
+class Cover:
+	extends Node2D
+
+	const FRAMES := 8
+	const CELL := Vector2(64, 40)
+	const DIR := "res://assets/transitions/"
+
+	const COVER_SHADER := "res://src/ui/transition_cover.gdshader"
+
+	## 締めに入る割合。ここから先は全面を覆う（差し替えを隠す一瞬）。
+	const SEAL_FROM := 0.8
+
+	var _tex: Texture2D = null
+	var _at := 0
+
+	static var _cache: Dictionary = {}
+
+	static func texture_of(kind: String) -> Texture2D:
+		if _cache.has(kind):
+			return _cache[kind]
+		var path := "%s%s.png" % [DIR, kind]
+		var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+		_cache[kind] = tex
+		return tex
+
+	func _ready() -> void:
+		z_index = 99
+		visible = false
+		# **アトラスは輝度のマスク。** そのまま描くと絵が乗るだけで覆いにならない。
+		var shader: Shader = (
+			load(COVER_SHADER) if ResourceLoader.exists(COVER_SHADER) else null)
+		if shader != null:
+			var mat := ShaderMaterial.new()
+			mat.shader = shader
+			material = mat
+
+	## `t` は 0（覆っていない）〜 1（覆いきった）。
+	func show_at(kind: String, t: float) -> bool:
+		_tex = texture_of(kind)
+		if _tex == null:
+			return false
+		_at = clampi(int(t * float(FRAMES)), 0, FRAMES - 1)
+		if material != null:
+			# 終わりぎわだけ塗り潰す。覆いきった一瞬が無いと、その裏で
+			# 画面を差し替えたのが見えてしまう。
+			material.set_shader_parameter(
+				"seal", clampf((t - SEAL_FROM) / (1.0 - SEAL_FROM), 0.0, 1.0))
+		visible = true
+		queue_redraw()
+		return true
+
+	func hide_cover() -> void:
+		visible = false
+		_tex = null
+
+	func _draw() -> void:
+		if _tex == null:
+			return
+		var scale := Vector2(PixelUI.SCREEN) / CELL
+		draw_texture_rect_region(
+			_tex,
+			Rect2(Vector2.ZERO, CELL * scale),
+			Rect2(_at * CELL.x, 0, CELL.x, CELL.y)
+		)
 
 
 func _ready() -> void:
@@ -48,11 +128,39 @@ func _ready() -> void:
 		mat.shader = shader
 		mat.set_shader_parameter("screen_size", Vector2(PixelUI.SCREEN))
 		material = mat
+	# **覆いは子にしない。** この ColorRect は普段 `visible = false` なので、
+	# 子にすると一緒に消えて一度も描かれない（実際そうなっていて、
+	# 画面に写っていたのは世界地図の門だった）。兄弟として置く。
+	# 木を触っている最中なので次のフレームへ回す。
+	_cover = Cover.new()
+	get_parent().add_child.call_deferred(_cover)
 
 
 ## 使える状態か。呼び出し側が素の暗転と選ぶために公開する。
 func available() -> bool:
 	return material != null
+
+
+## 場面転換の覆い（B-3）。指定した絵で覆い、`apply` を挟んで開く。
+##
+## 遭遇はモザイク（`play()`）、場面の切り替えはこちら。**分けているのは
+## 意味が違うから** ―― モザイクは「いまいた場所から引きずり込まれる」で
+## 前後が繋がるが、場面転換は前後を**切る**のが仕事。
+##
+## 絵が無ければ false を返す（呼び出し側は素の暗転へ落ちる）。
+func play_cover(kind: String, apply: Callable) -> bool:
+	if _cover == null or _cover.material == null or Cover.texture_of(kind) == null:
+		return false
+	cancel()
+	_cover.show_at(kind, 0.0)
+	_tween = create_tween()
+	_tween.tween_method(
+		func(t: float) -> void: _cover.show_at(kind, t), 0.0, 1.0, COVER_IN_TIME)
+	_tween.tween_callback(apply)
+	_tween.tween_method(
+		func(t: float) -> void: _cover.show_at(kind, 1.0 - t), 0.0, 1.0, COVER_OUT_TIME)
+	_tween.tween_callback(_finish)
+	return true
 
 
 ## モザイクで崩し、`apply` を挟んで戻す。
@@ -85,6 +193,8 @@ func cancel() -> void:
 
 func _finish() -> void:
 	visible = false
+	if _cover != null:
+		_cover.hide_cover()
 	_apply(1.0, 1.0)
 
 

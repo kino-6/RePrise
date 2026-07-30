@@ -4,7 +4,8 @@ const ChestReward := preload("res://src/dungeon/chest_reward.gd")
 
 ## 画面の切り替えとランの進行。
 ##
-## 拠点 → 世界 → 戦闘 → 世界 …… → 城で主 → 戦記 → 拠点、という輪を回すだけ。
+## タイトル →（初回だけプロローグ）→ 拠点 → 世界 → 戦闘 → 世界 ……
+## → 城で主 → 戦記 → 拠点、という輪を回すだけ。
 ##
 ## 世界と洞の中は**同じ Mode.EXPLORE** で扱う。ExploreView は地図の中身に
 ## 依存していないので、`explore.setup()` に渡す地図を差し替えるだけで
@@ -15,9 +16,10 @@ const ChestReward := preload("res://src/dungeon/chest_reward.gd")
 ## 輪が拠点に戻るのが要点。失ったレベルと残った熟練度を並べて見せる場が無いと、
 ## メタ進行が数字の裏側だけで進んでしまう。
 
-enum Mode { TITLE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS, RESULT, EVENT }
+enum Mode { TITLE, PROLOGUE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS, RESULT, EVENT }
 
 var title: TitleView
+var prologue: PrologueView
 var stronghold: StrongholdView
 var shop: ShopView
 var explore: ExploreView
@@ -71,6 +73,10 @@ func _ready() -> void:
 	title = TitleView.new()
 	title.visible = false
 	add_child(title)
+
+	prologue = PrologueView.new()
+	prologue.visible = false
+	add_child(prologue)
 
 	stronghold = StrongholdView.new()
 	stronghold.visible = false
@@ -148,8 +154,9 @@ func _ready() -> void:
 		# 封の名が済んだら、続けてイベントの表層を頼む（印は _ask_event_text が立てる）。
 		_ask_event_text())
 
-	title.started.connect(_enter_stronghold)
+	title.started.connect(_on_title_started)
 	title.resumed.connect(_resume_run)
+	prologue.finished.connect(_on_prologue_finished)
 	stronghold.departed.connect(_start_run)
 	explore.encounter_triggered.connect(_on_encounter)
 	explore.descended.connect(_on_descend)
@@ -218,6 +225,10 @@ func _handle_debug_args() -> bool:
 
 ## 開発用。人と同じ入力だけを流し込んで通しを確認する（src/dev/autoplay.gd）。
 func _start_autoplay(seconds: float) -> void:
+	# 名前付き保存からの再開でなければ、人と同じくタイトルから始める。
+	# ここを省くと初期 Mode.EXPLORE のまま地図なし画面へ入力してしまう。
+	if not _loaded_from_dev:
+		_enter_title()
 	var driver := AutoPlay.new()
 	add_child(driver)
 	driver.start(self, maxf(seconds, 5.0))
@@ -318,6 +329,17 @@ func _capture(which: String) -> void:
 	match which:
 		"title":
 			pass  # 起動直後がタイトル
+		"prologue":
+			_enter_prologue()
+		"prologue_shatter":
+			_enter_prologue()
+			prologue.debug_open_beat(3)
+		"prologue_worlds":
+			_enter_prologue()
+			prologue.debug_open_beat(6)
+		"prologue_oath":
+			_enter_prologue()
+			prologue.debug_open_beat(7)
 		"stronghold":
 			_enter_stronghold()
 		"job":
@@ -525,6 +547,13 @@ func _capture(which: String) -> void:
 					break
 			# 技が増えたときのサブウィンドウの見え方を確かめる。
 			battle.debug_open_spell_menu()
+		"cover":
+			# 場面転換の覆い（B-3）。**覆いきる途中**を撮る。
+			# 実際の切り替えに任せると、どの覆いがいつ鳴るかが撮影と噛み合わない
+			# （世界地図の門を「覆いが出ている」と見間違えた）。直に鳴らす。
+			_start_run()
+			await get_tree().create_timer(0.6).timeout
+			_transition.play_cover("iris_gate", func() -> void: pass)
 		"transition":
 			# 遭遇の演出そのものを撮る。待ちは下の `wait` で調整する
 			# （ここで待つと、そのあとの固定待ちが足されて撮り逃す）。
@@ -558,6 +587,8 @@ func _capture(which: String) -> void:
 		wait = 9.0
 	elif which == "effect" or which == "hitfx":
 		wait = 0.15
+	elif which == "cover":
+		wait = ScreenTransition.COVER_IN_TIME * 0.65
 	elif which == "transition":
 		# **崩れている途中**を撮る。入りきると戦闘画面になってしまうので、
 		# 入りの時間の 6 割で切る。
@@ -587,6 +618,23 @@ func _enter_title() -> void:
 	Sound.play_bgm("title")
 	title.open()
 	_set_mode(Mode.TITLE)
+
+
+func _on_title_started() -> void:
+	if GameState.should_show_prologue():
+		_enter_prologue()
+	else:
+		_enter_stronghold()
+
+
+func _enter_prologue() -> void:
+	prologue.open()
+	_fade_to(Mode.PROLOGUE)
+
+
+func _on_prologue_finished() -> void:
+	GameState.mark_prologue_seen()
+	_enter_stronghold()
 
 
 ## 拠点へ戻る。ラン中に呼ばれることは無い（end_run のあとだけ）。
@@ -992,6 +1040,25 @@ func _make_curtain() -> void:
 
 ## 暗転を挟んで画面を切り替える。
 ## 撮影（--shot）や自動プレイでも同じ経路を通るので、待ち時間は短く保つ。
+## どの切り替えでどの覆いを使うか（B-3）。
+##
+## **4 枚を「場面ごとに意味のある形」で割り当てる。** 絵の中身は
+## `docs/asset_generation_npc_effects.md` にある。
+##
+##   銀青のアイリスが閉じる → 拠点と世界の行き来（門をくぐる）
+##   年代記の頁がめくれる   → 戦記・結果（記録に移る）
+##   黒鉄の歯車が閉じる     → 城と主戦（帝国の側へ入る）
+##   角形の画素が増殖する   → 町や洞の出入り（場所が変わるだけ）
+##
+## 無い画面は素の暗転のまま。**全部に演出を付けない**（毎回同じ長さの間が
+## 挟まると、切り替えそのものが重く感じる）。
+const COVERS := {
+	Mode.STRONGHOLD: "iris_gate",
+	Mode.RESULT: "page_turn",
+	Mode.EXPLORE: "pixel_dissolve",
+}
+
+
 func _fade_to(mode: Mode) -> void:
 	# 幕が下りるのを待たずに歩みを止める。
 	#
@@ -1003,6 +1070,15 @@ func _fade_to(mode: Mode) -> void:
 		_set_mode(mode)
 		return
 	_cancel_fade()
+	# 城へ入るときだけは歯車。**行き先ではなく行為で選ぶ**ので、
+	# Mode の表とは別に見る（城も町も同じ Mode.EXPLORE）。
+	var kind := String(COVERS.get(mode, ""))
+	if mode == Mode.EXPLORE and String(GameState.site.get("kind", "")) == "castle":
+		kind = "gear_shutter"
+	if kind != "" and _transition != null and _transition.play_cover(
+		kind, _apply_mode.bind(mode)
+	):
+		return
 	_fade_tween = create_tween()
 	_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
 	# 幕の裏で切り替えるのは _apply_mode。_set_mode を呼ぶと自分の暗転を
@@ -1063,6 +1139,7 @@ func _set_mode(mode: Mode) -> void:
 func _apply_mode(mode: Mode) -> void:
 	_mode = mode
 	title.visible = mode == Mode.TITLE
+	prologue.visible = mode == Mode.PROLOGUE
 	stronghold.visible = mode == Mode.STRONGHOLD
 	shop.visible = mode == Mode.SHOP
 	menu.visible = mode == Mode.MENU
@@ -1080,6 +1157,8 @@ func _apply_mode(mode: Mode) -> void:
 	explore.set_active(mode == Mode.EXPLORE)
 	if mode != Mode.TITLE:
 		title.close()
+	if mode != Mode.PROLOGUE:
+		prologue.close()
 	if mode != Mode.STRONGHOLD:
 		stronghold.close()
 	if mode != Mode.SHOP:

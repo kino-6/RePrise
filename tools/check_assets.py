@@ -1,6 +1,7 @@
 """候補・生成物・実行時参照の三段を検査する。
 
     python tools/check_assets.py
+    python tools/check_assets.py --selftest   # 検査器そのものを試す
 
 **「画像はあるが一度も出ない」を繰り返さないための関門。**
 
@@ -14,9 +15,10 @@
     生成物 assets/**/*.png                    （生成器が採用したもの）
     参照   src/**/*.gd                        （実行時に読む記述）
 
-採用済み（生成物がある）なのに参照が 0 なら落とす。
-候補があるのに生成物が無いものは「まだ取り込んでいない」として報告だけする
-（取り込む判断は人がするので、ここでは落とさない）。
+**1 枚でも未接続なら落とす。** 以前は「全部が未接続」のときしか落とさず、
+4 枚中 1 枚でも繋がっていれば「生成済みはすべて参照されている」と表示していた。
+保留したいものは `PENDING` に**タスク ID 付きで**書く。ID の無い理由は
+書き捨てになり、いつまでも残る。
 """
 
 from __future__ import annotations
@@ -47,15 +49,22 @@ GROUPS = [
     ("戦闘背景",      "candidate_battle_bg_",  "backgrounds", "battle_bg_"),
     ("イベントFX",    "candidate_fx_",         "effects",     "fx_"),
     ("イベント演出",  "candidate_event_",      "effects",     "event_"),
-    ("トランジション", "candidate_transition_", "transitions", "transition_"),
+    # 生成物に接頭辞は付かない（`assets/transitions/iris_gate.png`）。
+    # `transition_` で探していたので「生成 0 / 候補があるが取り込んでいない」と
+    # 誤報していた ―― 実際は 4 枚とも生成済みで、未接続なだけだった。
+    ("トランジション", "candidate_transition_", "transitions", ""),
     ("マップチップ",  "candidate_tiles_",      "tiles",       ""),
 ]
 
-# 「まだ取り込んでいない」ことが分かっていて、いま落としたくないもの。
-# **理由を書くこと。** 空にするのが目標。
-KNOWN_PENDING = {
-    "トランジション": "B-3 の場面転換で使う。遭遇はモザイクで済ませた（絵は要らなかった）",
-}
+# まだ繋いでいないと分かっていて、いま落としたくないもの。
+#
+# **キーは生成物の名前、値には必ずタスク ID を書く。**
+# 分類ごとに保留していたので、その分類の絵は何枚増えても素通りだった。
+# 理由だけ書くと「あとで」のまま残る。空にするのが目標。
+PENDING: dict[str, str] = {}
+
+## タスク ID の形（`B-3`、`D-4`、`C-10` など）。
+TASK_ID = re.compile(r"\b[A-Z]-\d+\b")
 
 
 def _monster_sprites() -> set[str]:
@@ -88,7 +97,7 @@ def _candidates(prefix: str) -> set[str]:
     for p in CAND.glob(f"{prefix}*.png"):
         stem = p.stem
         # 参考用の派生（_preview / _source / _mockup）は候補として数えない
-        if any(stem.endswith(suffix) for suffix in ("_preview", "_source", "_mockup", "_contact")):
+        if any(stem.endswith(s) for s in ("_preview", "_source", "_mockup", "_contact")):
             continue
         out.add(stem[len(prefix):])
     return out
@@ -109,9 +118,33 @@ def _source_text() -> str:
     return "\n".join(parts)
 
 
-def main() -> int:
-    text = _source_text()
+def judge(unreferenced: dict[str, set[str]], pending: dict[str, str]) -> list[str]:
+    """未接続の一覧から、落とす理由を組み立てる。**ここが判定の全部。**
+
+    実データからも `--selftest` の作り物からも同じ関数を通すので、
+    「本番は通るのに検査器のほうが壊れている」が起きない。
+    """
     failures: list[str] = []
+    for label, stems in sorted(unreferenced.items()):
+        loose = sorted(s for s in stems if s not in pending)
+        if loose:
+            failures.append(
+                "%s: %d 枚が生成済みなのに一度も読まれていない（%s）"
+                % (label, len(loose), "、".join(loose))
+            )
+    # 保留にはタスク ID を必須にする。**ID の無い保留は保留ではなく放置。**
+    for stem, why in sorted(pending.items()):
+        if not TASK_ID.search(why):
+            failures.append("保留 %s の理由にタスク ID が無い（%r）" % (stem, why))
+    return failures
+
+
+def main(argv: list[str]) -> int:
+    if "--selftest" in argv:
+        return _selftest()
+
+    text = _source_text()
+    unreferenced: dict[str, set[str]] = {}
 
     print("候補 / 生成物 / 参照")
     for label, cand_prefix, folder, asset_prefix in GROUPS:
@@ -128,17 +161,17 @@ def main() -> int:
             key = stem if asset_prefix in ("", "@monster") else stem[len(asset_prefix):]
             if stem in text or (key and re.search(r'"%s"' % re.escape(key), text)):
                 referenced.add(stem)
+        missing = made - referenced
+        if missing:
+            unreferenced[label] = missing
+        held = sorted(s for s in missing if s in PENDING)
+        loose = sorted(s for s in missing if s not in PENDING)
         note = ""
-        if made and referenced and len(referenced) < len(made):
-            # **落としはしないが、見えるようにする。** ここが「絵はあるのに
-            # 半分しか出ない」の温床で、数字が並んでいれば気づける。
-            note = "  ← %d 枚が未接続" % (len(made) - len(referenced))
-        if made and not referenced:
-            if label in KNOWN_PENDING:
-                note = f"  ← 未接続（{KNOWN_PENDING[label]}）"
-            else:
-                note = "  ← **生成済みなのに一度も読まれていない**"
-                failures.append(f"{label}: {len(made)} 枚が参照 0")
+        if loose:
+            note = "  ← **%d 枚が一度も読まれていない**（%s）" % (
+                len(loose), "、".join(loose))
+        elif held:
+            note = "  ← %d 枚を保留（%s）" % (len(held), PENDING[held[0]])
         elif cands and not made:
             note = "  ← 候補があるが取り込んでいない"
         print(
@@ -147,16 +180,44 @@ def main() -> int:
         )
 
     print("---")
+    failures = judge(unreferenced, PENDING)
     if failures:
-        print("生成済みなのに使われていない分類 %d 件" % len(failures))
         for f in failures:
-            print(f"  - {f}")
+            print("  - %s" % f)
         return 1
     print("生成済みのものはすべて参照されている")
-    if KNOWN_PENDING:
-        print("（未接続として明示しているもの: %s）" % "、".join(KNOWN_PENDING))
+    if PENDING:
+        print("（保留: %s）" % "、".join(sorted(PENDING)))
+    return 0
+
+
+def _selftest() -> int:
+    """**検査器そのものを試す。** 正常系だけ見ても、壊れた関門は見つからない。
+
+    実際この関門は 3 度嘘をついた ―― 敵を「参照 0」と誤報し、
+    トランジションを「生成 0」と誤報し、4 枚中 1 枚しか繋がっていなくても
+    「すべて参照されている」と言った。どれも本番では静かに通っていた。
+    """
+    cases = [
+        ("未接続が 1 枚でもあれば落ちる", {"演出": {"a", "b"}}, {"a": "B-3 理由"}, 1),
+        ("全部が保留なら通る", {"演出": {"a"}}, {"a": "B-3 理由"}, 0),
+        ("未接続が無ければ通る", {}, {}, 0),
+        ("ID の無い保留は落ちる", {}, {"a": "あとでやる"}, 1),
+    ]
+    bad = 0
+    for name, unref, pending, want in cases:
+        got = 1 if judge(unref, pending) else 0
+        ok = got == want
+        bad += 0 if ok else 1
+        print("  %s  %s（終了コード %d を期待、%d）" % (
+            "OK" if ok else "NG", name, want, got))
+    print("---")
+    if bad:
+        print("検査器が壊れている（%d 件）" % bad)
+        return 1
+    print("検査器は期待どおり動く（%d 件）" % len(cases))
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
