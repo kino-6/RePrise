@@ -67,6 +67,8 @@ static func _build(rng: DetRng) -> WorldMap:
 	_place_sites(map, rng)
 	_place_seals(map, rng)
 	_place_events(map, rng)
+	# 物語は最後。町と洞が置かれていないと拍を土地へ結べない。
+	map.story = StoryArcGenerator.generate_for_world(map, rng.fork("story"))
 	return map
 
 
@@ -180,7 +182,21 @@ static func verify(map: WorldMap) -> Array[String]:
 		if String(map.events[pos].get("event_id", "")) == "":
 			problems.append("イベントに id が無い")
 
-	# 6. 買い物ができること。町に 1 つも歩けないと、備えの手段が宝箱だけになる
+	# 6. 物語が成立していること。**筋が通らない世界は出さない。**
+	#    六拍のどれかが土地に結べていないと、そのランは途中で話が切れる。
+	if not bool(map.story.get("valid", false)):
+		problems.append("物語が成立しない: %s" % str(map.story.get("errors", [])))
+	else:
+		var beats: Array = map.story.get("beats", [])
+		if beats.size() != 6:
+			problems.append("物語の拍が %d（6 であるべき）" % beats.size())
+		for beat in beats:
+			var site: Dictionary = beat.get("site", {})
+			var at := Vector2i(int(site.get("x", -1)), int(site.get("y", -1)))
+			if at.x >= 0 and not reachable.call(at):
+				problems.append("物語の拍（%s）の土地に歩けない" % String(beat.get("id", "?")))
+
+	# 7. 買い物ができること。町に 1 つも歩けないと、備えの手段が宝箱だけになる
 	var towns := 0
 	for pos in map.sites:
 		if String(map.sites[pos].get("kind", "")) == "town" and reachable.call(pos):

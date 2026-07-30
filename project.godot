@@ -64,6 +64,10 @@ cancel={
 "deadzone": 0.5,
 "events": [Object(InputEventKey,"physical_keycode":88,"pressed":true),Object(InputEventKey,"physical_keycode":4194305,"pressed":true)]
 }
+auto={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":65,"pressed":true),Object(InputEventKey,"physical_keycode":4194325,"pressed":true)]
+}
 
 [rendering]
 

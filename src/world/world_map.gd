@@ -44,6 +44,26 @@ var danger: PackedByteArray = PackedByteArray()
 ## 訪れた拠点地。町の在庫や洞の踏破を覚えておくのに使う。
 var visited: Dictionary = {}
 
+## この世界の中核シナリオ（六拍）。`data/story_arcs.json` から生成。
+##
+## 単発イベントを何件並べても、守りたくなるのは「世界」ではなく
+## そこで知った一人・一つの約束なので、ランに 1 本だけ通した筋を持つ。
+## 拍の順序は固定、変わるのはどの骨格・どの土地・誰の名前か。
+var story: Dictionary = {}
+
+## いま何拍目か（0 から。`story.beats` の添字）。
+var story_beat := 0
+
+## 「代償の選択」で選んだ手の id（未選択なら空）。
+var story_choice := ""
+
+
+## 次に起きる拍（終わっていれば空）。
+func next_beat() -> Dictionary:
+	var beats: Array = story.get("beats", [])
+	return beats[story_beat] if story_beat < beats.size() else {}
+
+
 ## 世界に置いたイベント（位置 -> instantiate() した 1 件）。
 ##
 ## 街道は世界のマス、町と洞はその拠点地のマスに置く。

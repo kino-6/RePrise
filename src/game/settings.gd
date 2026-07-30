@@ -12,10 +12,10 @@ extends RefCounted
 const PATH := "user://config.json"
 
 ## 変えられるキー。ここに無いもの（ui_accept など）は既定のまま。
-const ACTIONS := ["ui_up", "ui_down", "ui_left", "ui_right", "confirm", "cancel"]
+const ACTIONS := ["ui_up", "ui_down", "ui_left", "ui_right", "confirm", "cancel", "auto"]
 
 const ACTION_LABELS := {
-	"ui_up": "うえ", "ui_down": "した", "ui_left": "ひだり", "ui_right": "みぎ",
+	"ui_up": "うえ", "ui_down": "した", "ui_left": "ひだり", "ui_right": "みぎ", "auto": "オート",
 	"confirm": "けってい", "cancel": "キャンセル",
 }
 

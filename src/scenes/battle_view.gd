@@ -312,12 +312,19 @@ func _choose_root() -> void:
 		Root.ESCAPE:
 			_try_escape()
 		Root.AUTO:
-			# 押すたびに作戦が回る（切 → いのち → ガンガン → 切）。
-			_auto = AutoTactic.next_mode(_auto)
-			if _auto == AutoTactic.Mode.OFF:
-				_open_root_menu()
-			else:
-				_auto_act()
+			_cycle_auto()
+
+
+## オートの作戦を回す（切 → いのち → ガンガン → 切）。
+##
+## コマンド欄からも、A キーからも、同じここを通す。**入口を 2 つにして
+## 中身を 2 つ書くと、片方だけ直したときにずれる。**
+func _cycle_auto() -> void:
+	_auto = AutoTactic.next_mode(_auto)
+	if _auto == AutoTactic.Mode.OFF:
+		_open_root_menu()
+	else:
+		_auto_act()
 
 
 # --------------------------------------------------------------------------
@@ -621,6 +628,16 @@ func _finish() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo():
 		return
+
+	# オートは A キーで、**どの階層からでも**切り替えられる。
+	# コマンド欄の末尾まで下がらないと触れないと、連戦のたびに 6 回下げる
+	# ことになる。止め方も同じキーなので、入り方と出方が対称になる。
+	if event.is_action_pressed("auto") and _state in [State.COMMAND, State.LIST, State.TARGET]:
+		Sound.play("confirm")
+		_state = State.COMMAND
+		_cycle_auto()
+		return
+
 	match _state:
 		State.COMMAND:
 			_input_root(event)
@@ -833,7 +850,7 @@ func _draw_message_or_command() -> void:
 	if _auto != AutoTactic.Mode.OFF:
 		PixelUI.draw_text_right(
 			self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.position.y + 6),
-			"%s　Ｘで かいじょ" % AutoTactic.label(_auto), PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
+			"%s　Ａで きりかえ　Ｘで かいじょ" % AutoTactic.label(_auto), PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
 		)
 		# 何を基準に動いているかを出す。基準が見えないと「連打しているだけ」に見える。
 		PixelUI.draw_text_right(

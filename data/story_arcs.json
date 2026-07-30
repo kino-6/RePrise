@@ -1,0 +1,542 @@
+{
+  "_comment": "一世界で完結する連続物語の骨格。AIが変更してよいのはskinだけ。beats、choices、endings、fail_forwardはScriptが所有する。",
+  "version": 1,
+  "phases": ["hook", "bond", "reversal", "choice", "finale", "epilogue"],
+  "skin_keys": ["title", "anchor_name", "motif", "home_name"],
+  "arcs": [
+    {
+      "id": "last_message",
+      "theme": "約束と真実",
+      "anchor_role": "傷ついた伝令",
+      "promise": "預かった言葉を、待つ者へ届ける。",
+      "conflict": "希望を守る嘘と、未来を変える真実は両立しない。",
+      "skin": {
+        "title": ["最後の返書", "届かなかった言葉", "封じたままの手紙"],
+        "anchor_name": ["セナ", "ユノ", "トワ"],
+        "motif": ["青い封蝋", "欠けた印章", "雨染みの手紙"],
+        "home_name": ["薄鈴の村", "風待ちの町", "水枝の里"]
+      },
+      "ai_slots": {"title": 14, "anchor_name": 8, "motif": 10, "home_name": 10},
+      "beats": [
+        {
+          "id": "hook", "phase": "hook", "site_role": "town_low",
+          "anchor_present": true, "motif_state": "entrusted",
+          "line": "{home_name}で倒れていた{anchor_name}は、{motif}を城にいる弟へ渡してほしいと頼む。勝つことより、返事を聞いてほしいという。"
+        },
+        {
+          "id": "bond", "phase": "bond", "site_role": "cave_low",
+          "anchor_present": true, "motif_state": "protected",
+          "line": "{anchor_name}は傷を隠して同行し、洞で一行をかばう。夜になると{motif}へ、まだ届いていない返事を書き足している。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "site_role": "town_mid",
+          "anchor_present": true, "motif_state": "opened",
+          "line": "町の記録から、{anchor_name}こそ{home_name}を戦場へ変えた命令の伝令だったと分かる。{motif}には謝罪と、弟へ事実を隠す最後の命令がある。"
+        },
+        {
+          "id": "choice", "phase": "choice", "site_role": "cave_high",
+          "anchor_present": true, "motif_state": "judged",
+          "line": "城門を前に、{anchor_name}はもう歩けない。封を閉じたまま届けるか、真実を見せるか、本人を最後の道へ連れていくかを一行へ委ねる。"
+        },
+        {
+          "id": "finale", "phase": "finale", "site_role": "castle",
+          "anchor_present": false, "motif_state": "answered",
+          "line": "城の主は{anchor_name}の弟の姿と声を借り、約束を捨てれば楽になると迫る。一行が掲げた{motif}へ、本物の弟の返事が城内から返る。"
+        },
+        {
+          "id": "epilogue", "phase": "epilogue", "site_role": "castle",
+          "anchor_present": true, "motif_state": "remembered",
+          "line": "世界が閉じる前、{anchor_name}の名と選んだ答えだけが{motif}に残る。約束は同じ形ではなくても、待っていた者まで届いた。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "keep_sealed", "label": "封を切らずに届ける",
+          "immediate_cost": "真実を語る機会",
+          "preserves": "弟が抱いていた姉の記憶",
+          "sacrifices": "故郷が滅びた理由の全容",
+          "ending_id": "gentle_lie"
+        },
+        {
+          "id": "tell_truth", "label": "手紙を開いて真実を渡す",
+          "immediate_cost": "伝令への信頼",
+          "preserves": "同じ命令を繰り返さない未来",
+          "sacrifices": "美しいままの思い出",
+          "ending_id": "painful_truth"
+        },
+        {
+          "id": "carry_anchor", "label": "本人を城まで連れていく",
+          "immediate_cost": "安全な進軍",
+          "preserves": "本人の声で謝る権利",
+          "sacrifices": "無傷で帰る望み",
+          "ending_id": "answered_voice"
+        }
+      ],
+      "endings": {
+        "gentle_lie": {
+          "tone": "bittersweet", "promise_state": "kept",
+          "line": "弟は封を開けず胸へ抱く。真相は消えるが、{anchor_name}が最後まで帰ろうとしたことだけは信じ続ける。"
+        },
+        "painful_truth": {
+          "tone": "hopeful", "promise_state": "transformed",
+          "line": "弟は泣きながら命令書を焼き、{anchor_name}の名を罪人でなく証言者として町の記録へ残す。"
+        },
+        "answered_voice": {
+          "tone": "grave", "promise_state": "kept",
+          "line": "{anchor_name}は弟の返事を聞いてから息を引き取る。弟は{motif}を受け取り、二度と伝令だけを責めないと誓う。"
+        }
+      },
+      "fallback_choice": "tell_truth",
+      "fail_forward": [
+        {"when": "bond_missed", "continues_to": "reversal", "change": "手紙の追伸がなく、町の記録から罪を知る。"},
+        {"when": "motif_lost", "continues_to": "choice", "change": "封蝋の欠片だけを拾い、内容を自分の言葉で伝える。"},
+        {"when": "anchor_falls", "continues_to": "finale", "change": "本人の代わりに、最後に聞いた言葉を一行が運ぶ。"}
+      ]
+    },
+    {
+      "id": "war_beast_keeper",
+      "theme": "命の価値と役目",
+      "anchor_role": "魔獣を育てた子ども",
+      "promise": "兵器として生まれた魔獣を、生き物として城の外へ連れ出す。",
+      "conflict": "魔獣を生かすことと、世界を最も安全に救うことが衝突する。",
+      "skin": {
+        "title": ["鈴を付けた兵器", "やさしい戦獣", "城へ帰らない獣"],
+        "anchor_name": ["ミオ", "ララ", "ニア"],
+        "motif": ["煤けた首鈴", "赤紐の鈴", "音の割れた鈴"],
+        "home_name": ["牧鐘の町", "草笛の里", "灰牧の村"]
+      },
+      "ai_slots": {"title": 14, "anchor_name": 8, "motif": 10, "home_name": 10},
+      "beats": [
+        {
+          "id": "hook", "phase": "hook", "site_role": "town_low",
+          "anchor_present": true, "motif_state": "named",
+          "line": "{home_name}の{anchor_name}は、帝国が置き去りにした戦獣を家族だと言い、{motif}の音が届く場所まで一緒に連れていってほしいと頼む。"
+        },
+        {
+          "id": "bond", "phase": "bond", "site_role": "cave_mid",
+          "anchor_present": true, "motif_state": "trusted",
+          "line": "戦獣は命令では動かず、{anchor_name}の{motif}にだけ従う。崩れる洞で一行を背に乗せ、自分の傷を隠して進む。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "site_role": "town_mid",
+          "anchor_present": true, "motif_state": "silenced",
+          "line": "軍医の記録から、{anchor_name}が育てた戦獣の心臓は城の炉と繋がると判明する。止めれば主は弱るが、獣は二度と{motif}へ応えない。"
+        },
+        {
+          "id": "choice", "phase": "choice", "site_role": "cave_high",
+          "anchor_present": true, "motif_state": "chosen",
+          "line": "{anchor_name}は泣かず、獣の命を一行へ預ける。心臓を抜くか、繋がりを子へ分けるか、弱らせず共に主へ挑むかを選ぶ。"
+        },
+        {
+          "id": "finale", "phase": "finale", "site_role": "castle",
+          "anchor_present": true, "motif_state": "defiant",
+          "line": "城の主が戦獣へ最後の命令を下す。{anchor_name}は命令より小さな{motif}を鳴らし、獣がどちらを自分で選ぶか見届ける。"
+        },
+        {
+          "id": "epilogue", "phase": "epilogue", "site_role": "castle",
+          "anchor_present": true, "motif_state": "free",
+          "line": "{motif}は勝利の合図ではなく、命令から解かれた一つの命を呼ぶ音になる。{anchor_name}は結果から目をそらさない。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "take_heart", "label": "獣の心臓を炉から切り離す",
+          "immediate_cost": "戦獣の命",
+          "preserves": "世界を救う最も確かな勝機",
+          "sacrifices": "子どもと獣の明日",
+          "ending_id": "last_bell"
+        },
+        {
+          "id": "share_burden", "label": "繋がりを子どもへ分ける",
+          "immediate_cost": "子どもの平穏な身体",
+          "preserves": "二人が共に生きる可能性",
+          "sacrifices": "帝国の力と無縁でいる未来",
+          "ending_id": "two_heartbeats"
+        },
+        {
+          "id": "trust_beast", "label": "獣自身の選択に任せる",
+          "immediate_cost": "主が弱らないままの決戦",
+          "preserves": "獣が自分の命を決める権利",
+          "sacrifices": "安全な勝ち筋",
+          "ending_id": "chosen_roar"
+        }
+      ],
+      "endings": {
+        "last_bell": {
+          "tone": "grave", "promise_state": "broken_honestly",
+          "line": "{anchor_name}は動かない獣の首から{motif}を外さない。世界を救った代償を、誰かの武勲に書き換えさせないためだ。"
+        },
+        "two_heartbeats": {
+          "tone": "bittersweet", "promise_state": "transformed",
+          "line": "二人の胸に同じ炉の光が残る。{anchor_name}は怖いと認め、それでも獣と{home_name}への道を歩き出す。"
+        },
+        "chosen_roar": {
+          "tone": "hopeful", "promise_state": "kept",
+          "line": "戦獣は主の命令でなく{motif}へ応え、自ら炉を砕いて生還する。初めて命令なしで{anchor_name}の隣に座る。"
+        }
+      },
+      "fallback_choice": "trust_beast",
+      "fail_forward": [
+        {"when": "bond_missed", "continues_to": "reversal", "change": "獣の信頼が薄く、終盤の命令抵抗が不安定になる。"},
+        {"when": "motif_lost", "continues_to": "choice", "change": "子どもが声で獣を呼び、鈴に頼らない関係へ変わる。"},
+        {"when": "anchor_falls", "continues_to": "finale", "change": "獣が子どもを背負い、一行の合図を信じて城へ進む。"}
+      ]
+    },
+    {
+      "id": "erased_town",
+      "theme": "記憶と存在",
+      "anchor_role": "消えかけた町の記録係",
+      "promise": "世界が救われても消える町の名を、最後まで覚えている。",
+      "conflict": "町を物理的に残すことと、住民を偽りから解放することが衝突する。",
+      "skin": {
+        "title": ["地図にない故郷", "忘れられる町", "最後の町名録"],
+        "anchor_name": ["リネ", "オウカ", "エマ"],
+        "motif": ["白紙の名簿", "欠けた町鐘", "消える案内板"],
+        "home_name": ["朝凪の町", "玻璃坂の町", "遠灯の町"]
+      },
+      "ai_slots": {"title": 14, "anchor_name": 8, "motif": 10, "home_name": 10},
+      "beats": [
+        {
+          "id": "hook", "phase": "hook", "site_role": "town_low",
+          "anchor_present": true, "motif_state": "recorded",
+          "line": "{home_name}では家も人も端から透け始めている。記録係の{anchor_name}は、消える前に全員の名を{motif}へ書く手伝いを求める。"
+        },
+        {
+          "id": "bond", "phase": "bond", "site_role": "town_mid",
+          "anchor_present": true, "motif_state": "filled",
+          "line": "一行は離れた住民の名と小さな思い出を集める。{anchor_name}は立派な功績より、好きだった料理や喧嘩の理由を{motif}へ残す。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "site_role": "cave_mid",
+          "anchor_present": true, "motif_state": "doubted",
+          "line": "地下の装置は、{home_name}が主の作った偽の町だと示す。主を倒せば町は消え、{anchor_name}の集めた{motif}だけが残る。"
+        },
+        {
+          "id": "choice", "phase": "choice", "site_role": "town_high",
+          "anchor_present": true, "motif_state": "rewritten",
+          "line": "{anchor_name}は存在の長さで本物か決めないでほしいと言う。町を世界へ縫い留めるか、名だけ持ち出すか、偽の記録そのものを壊すかを選ぶ。"
+        },
+        {
+          "id": "finale", "phase": "finale", "site_role": "castle",
+          "anchor_present": true, "motif_state": "claimed",
+          "line": "城の主は{home_name}の住民を自分の創作物だと呼ぶ。{anchor_name}は{motif}を読み上げ、作られた命にも自分で過ごした日々があると答える。"
+        },
+        {
+          "id": "epilogue", "phase": "epilogue", "site_role": "castle",
+          "anchor_present": true, "motif_state": "carried",
+          "line": "町が残っても消えても、{motif}の名は最後まで読み終えられる。一行は世界の外へ、実在を証明するには十分な重みを持ち帰る。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "anchor_town", "label": "町を世界へ縫い留める",
+          "immediate_cost": "住民が町の外へ出る自由",
+          "preserves": "故郷の景色と暮らし",
+          "sacrifices": "偽の役目から完全に離れる未来",
+          "ending_id": "remaining_streets"
+        },
+        {
+          "id": "carry_names", "label": "名簿だけを世界の外へ運ぶ",
+          "immediate_cost": "町そのもの",
+          "preserves": "一人ずつの名と記憶",
+          "sacrifices": "帰れる場所",
+          "ending_id": "names_beyond"
+        },
+        {
+          "id": "break_record", "label": "偽の町という記録を壊す",
+          "immediate_cost": "誰にも結末を予測できないこと",
+          "preserves": "住民が役目を自分で選ぶ権利",
+          "sacrifices": "確実に何かを残す保証",
+          "ending_id": "unwritten_morning"
+        }
+      ],
+      "endings": {
+        "remaining_streets": {
+          "tone": "bittersweet", "promise_state": "kept",
+          "line": "{home_name}は小さな島として残る。住民は境界を越えられないが、{anchor_name}は毎朝新しい名を{motif}へ足す。"
+        },
+        "names_beyond": {
+          "tone": "grave", "promise_state": "kept",
+          "line": "町は光へ溶けるが、{motif}だけが砦まで届く。ページを開くたび、誰かの好きだった匂いまで思い出せる。"
+        },
+        "unwritten_morning": {
+          "tone": "hopeful", "promise_state": "transformed",
+          "line": "記録から解かれた住民は別々の土地で目を覚ます。{anchor_name}は空になった{motif}へ、初めて明日の予定を書く。"
+        }
+      },
+      "fallback_choice": "carry_names",
+      "fail_forward": [
+        {"when": "bond_missed", "continues_to": "reversal", "change": "集まらなかった名は空欄のまま残り、終幕で住民自身が名乗る。"},
+        {"when": "motif_lost", "continues_to": "choice", "change": "一行と記録係が覚えた名を交互に口へ出して運ぶ。"},
+        {"when": "anchor_falls", "continues_to": "finale", "change": "記録係の声を住民全員が引き継ぎ、名簿を読み終える。"}
+      ]
+    },
+    {
+      "id": "deserter_oath",
+      "theme": "贖罪と裁き",
+      "anchor_role": "帝国を裏切った士官",
+      "promise": "徴兵された若者を城の部隊から生きて帰す。",
+      "conflict": "今必要な救助者と、過去に裁かれるべき加害者が同じ人物である。",
+      "skin": {
+        "title": ["破れた軍旗の誓い", "帰らない士官", "赦しのない救出"],
+        "anchor_name": ["ガイ", "イサナ", "レオ"],
+        "motif": ["裂けた白旗", "折れた指揮杖", "血を拭った徽章"],
+        "home_name": ["麦風の村", "石垣の町", "川舟の里"]
+      },
+      "ai_slots": {"title": 14, "anchor_name": 8, "motif": 10, "home_name": 10},
+      "beats": [
+        {
+          "id": "hook", "phase": "hook", "site_role": "town_low",
+          "anchor_present": true, "motif_state": "surrendered",
+          "line": "{home_name}へ投降した士官{anchor_name}は、城へ送った徴兵隊を救うまで裁きを待ってほしいと{motif}を差し出す。"
+        },
+        {
+          "id": "bond", "phase": "bond", "site_role": "cave_low",
+          "anchor_present": true, "motif_state": "used",
+          "line": "{anchor_name}は帝国の合図と通路を使い、一行と捕虜を逃がす。救った若者たちは、かつての指揮官だと知りながら{motif}の後ろを歩く。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "site_role": "town_mid",
+          "anchor_present": true, "motif_state": "stained",
+          "line": "避難民が{motif}を見て、以前{home_name}を焼く命令へ署名したのは{anchor_name}だと告発する。本人は否定も弁解もしない。"
+        },
+        {
+          "id": "choice", "phase": "choice", "site_role": "cave_high",
+          "anchor_present": true, "motif_state": "judged",
+          "line": "残る徴兵隊の居場所を知るのは{anchor_name}だけだ。今ここで拘束するか、救出まで指揮を任せるか、被害者へ決定を委ねるかを選ぶ。"
+        },
+        {
+          "id": "finale", "phase": "finale", "site_role": "castle",
+          "anchor_present": true, "motif_state": "raised",
+          "line": "城の主は古い命令を再び読み上げ、従えば全員を帰すと誘う。{anchor_name}は{motif}を掲げるが、最後の命令を出す権利は一行へ返す。"
+        },
+        {
+          "id": "epilogue", "phase": "epilogue", "site_role": "castle",
+          "anchor_present": true, "motif_state": "lowered",
+          "line": "若者たちは帰還し、{anchor_name}の罪も消えない。救った人数を赦しの値段にせず、{motif}は裁きの場まで本人と共に運ばれる。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "bind_now", "label": "今ここで指揮権を奪う",
+          "immediate_cost": "最短の救出経路",
+          "preserves": "加害者を無条件に信じない原則",
+          "sacrifices": "救える人数と時間",
+          "ending_id": "bound_return"
+        },
+        {
+          "id": "lead_rescue", "label": "救出まで指揮を任せる",
+          "immediate_cost": "裏切られる危険",
+          "preserves": "徴兵隊を全員帰す可能性",
+          "sacrifices": "被害者がすぐ裁く権利",
+          "ending_id": "last_command"
+        },
+        {
+          "id": "victims_decide", "label": "被害者たちへ決定を委ねる",
+          "immediate_cost": "一行が結論を急ぐ権利",
+          "preserves": "傷つけられた側の意思",
+          "sacrifices": "単純な正解",
+          "ending_id": "borrowed_judgment"
+        }
+      ],
+      "endings": {
+        "bound_return": {
+          "tone": "grave", "promise_state": "transformed",
+          "line": "{anchor_name}は縛られたまま道を教え、救えなかった名も全て覚える。{home_name}へ戻ると自分から牢へ入る。"
+        },
+        "last_command": {
+          "tone": "bittersweet", "promise_state": "kept",
+          "line": "最後の命令は全員の帰還で、全員が戻る。{anchor_name}は歓声を受けず、{motif}を置いて裁きへ歩く。"
+        },
+        "borrowed_judgment": {
+          "tone": "hopeful", "promise_state": "kept",
+          "line": "被害者たちは救出を先に選び、その後の裁きを自分たちで始める。{anchor_name}は赦しでなく証言を求められる。"
+        }
+      },
+      "fallback_choice": "victims_decide",
+      "fail_forward": [
+        {"when": "bond_missed", "continues_to": "reversal", "change": "救えなかった隊員の名が終幕の裁きへ加わる。"},
+        {"when": "motif_lost", "continues_to": "choice", "change": "軍旗なしで投降し、武器を地面へ置く行為が合図になる。"},
+        {"when": "anchor_falls", "continues_to": "finale", "change": "残した通路図と最後の命令を徴兵隊の一人が引き継ぐ。"}
+      ]
+    },
+    {
+      "id": "nameless_machine",
+      "theme": "自己決定と別れ",
+      "anchor_role": "自我を得た戦争機械",
+      "promise": "役目でなく自分の名を選ぶまで、機械を兵器へ戻させない。",
+      "conflict": "城を開く鍵として使えば、芽生えた人格が消える。",
+      "skin": {
+        "title": ["名を探す機械", "歌を覚えた兵器", "最後の起動命令"],
+        "anchor_name": ["ネム", "キリ", "ルカ"],
+        "motif": ["途切れる子守歌", "真鍮の名札", "片音の笛"],
+        "home_name": ["歯車坂の町", "炉辺の里", "鉄花の町"]
+      },
+      "ai_slots": {"title": 14, "anchor_name": 8, "motif": 10, "home_name": 10},
+      "beats": [
+        {
+          "id": "hook", "phase": "hook", "site_role": "town_low",
+          "anchor_present": true, "motif_state": "heard",
+          "line": "{home_name}で再起動した機械は製造番号を拒み、仮の名を{anchor_name}とする。止まる前に{motif}の続きを知りたいと一行へ頼む。"
+        },
+        {
+          "id": "bond", "phase": "bond", "site_role": "cave_mid",
+          "anchor_present": true, "motif_state": "learned",
+          "line": "{anchor_name}は命令にない遠回りをして負傷者を救う。感情を故障と呼びながら、誰も聞いていない時だけ{motif}を練習する。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "site_role": "town_mid",
+          "anchor_present": true, "motif_state": "decoded",
+          "line": "設計図から、{anchor_name}の炉が城門を開く唯一の認証鍵だと分かる。使えば扉は開くが、炉は初期化され人格と{motif}を失う。"
+        },
+        {
+          "id": "choice", "phase": "choice", "site_role": "cave_high",
+          "anchor_present": true, "motif_state": "completed",
+          "line": "{anchor_name}は恐怖を故障と呼ぶのをやめる。初期化を受け入れるか、記憶を小さな器へ移すか、鍵を使わず城を破るかを一行と選ぶ。"
+        },
+        {
+          "id": "finale", "phase": "finale", "site_role": "castle",
+          "anchor_present": true, "motif_state": "sung",
+          "line": "城は製造番号で服従を命じる。{anchor_name}は自分で選んだ名を答え、最後まで覚えた{motif}を一音ずつ鳴らす。"
+        },
+        {
+          "id": "epilogue", "phase": "epilogue", "site_role": "castle",
+          "anchor_present": true, "motif_state": "inherited",
+          "line": "残った身体や記憶の量にかかわらず、名を選んだ瞬間は消えない。{motif}は命令音でなく、誰かを呼び戻す歌になる。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "accept_reset", "label": "認証鍵として扉を開く",
+          "immediate_cost": "機械が得た記憶と人格",
+          "preserves": "一行が城へ入る確実な道",
+          "sacrifices": "同じ姿で再会する未来",
+          "ending_id": "name_after_reset"
+        },
+        {
+          "id": "copy_memory", "label": "記憶を小さな器へ移す",
+          "immediate_cost": "身体と多くの記憶",
+          "preserves": "名と歌の断片",
+          "sacrifices": "これまで通りの人格",
+          "ending_id": "small_voice"
+        },
+        {
+          "id": "break_gate", "label": "鍵を使わず城門を破る",
+          "immediate_cost": "最も危険な決戦",
+          "preserves": "機械が自分のまま生きる権利",
+          "sacrifices": "安全な侵入路",
+          "ending_id": "walks_away"
+        }
+      ],
+      "endings": {
+        "name_after_reset": {
+          "tone": "grave", "promise_state": "broken_honestly",
+          "line": "初期化された機械は{anchor_name}を知らない。それでも{motif}の最初の一音にだけ振り返り、新しい名を尋ねる。"
+        },
+        "small_voice": {
+          "tone": "bittersweet", "promise_state": "transformed",
+          "line": "小さな器は多くを忘れたが、{anchor_name}という音を自分の名だと選び直す。一行は歌を最初から教える。"
+        },
+        "walks_away": {
+          "tone": "hopeful", "promise_state": "kept",
+          "line": "{anchor_name}は自分の足で城を出る。{home_name}へ戻る道で、完成した{motif}を初めて誰かのために歌う。"
+        }
+      },
+      "fallback_choice": "copy_memory",
+      "fail_forward": [
+        {"when": "bond_missed", "continues_to": "reversal", "change": "感情を示す場面が減るが、恐怖を認める選択は終盤に残る。"},
+        {"when": "motif_lost", "continues_to": "choice", "change": "一行が覚えた旋律を口ずさぎ、機械が続きを自作する。"},
+        {"when": "anchor_falls", "continues_to": "finale", "change": "停止した身体を城門まで運び、記録された本人の選択を実行する。"}
+      ]
+    },
+    {
+      "id": "divided_guardian",
+      "theme": "自分であることと完成",
+      "anchor_role": "城の主から分かれた案内人",
+      "promise": "案内人が何者でも、本人が望む結末まで同行する。",
+      "conflict": "主と一つに戻れば世界は安定するが、案内人という人格は終わる。",
+      "skin": {
+        "title": ["半身の案内人", "鏡越しの主", "ひとり分の帰還"],
+        "anchor_name": ["シロ", "アサギ", "ヨル"],
+        "motif": ["曇った鏡片", "半分の仮面", "銀糸の結び目"],
+        "home_name": ["鏡瀬の町", "月影の里", "双塔の町"]
+      },
+      "ai_slots": {"title": 14, "anchor_name": 8, "motif": 10, "home_name": 10},
+      "beats": [
+        {
+          "id": "hook", "phase": "hook", "site_role": "town_low",
+          "anchor_present": true, "motif_state": "reflected",
+          "line": "{home_name}で道を知る{anchor_name}は、自分の過去だけ思い出せない。城まで案内する代わりに、{motif}へ映る本当の姿を最後まで見届けてほしいと頼む。"
+        },
+        {
+          "id": "bond", "phase": "bond", "site_role": "cave_low",
+          "anchor_present": true, "motif_state": "shared",
+          "line": "{anchor_name}は一行の傷を自分へ移し、痛みを初めての記憶として大切にする。{motif}には本人と城の主が同時に映る。"
+        },
+        {
+          "id": "reversal", "phase": "reversal", "site_role": "cave_mid",
+          "anchor_present": true, "motif_state": "recognized",
+          "line": "封印記録と{motif}は、{anchor_name}が主から切り離された慈悲と恐怖だと示す。戻れば主は完全になるが、旅をした人格は残らない。"
+        },
+        {
+          "id": "choice", "phase": "choice", "site_role": "town_high",
+          "anchor_present": true, "motif_state": "accepted",
+          "line": "{anchor_name}は半分でも過ごした時間は全部自分のものだと言う。主へ戻るか、永遠に切り離すか、結末を本人へ任せるかを選ぶ。"
+        },
+        {
+          "id": "finale", "phase": "finale", "site_role": "castle",
+          "anchor_present": true, "motif_state": "whole",
+          "line": "城の主は{anchor_name}を欠陥と呼び、戻れば苦しみは終わると誘う。{motif}には一行と歩いた姿だけが、主とは別に映り続ける。"
+        },
+        {
+          "id": "epilogue", "phase": "epilogue", "site_role": "castle",
+          "anchor_present": true, "motif_state": "witnessed",
+          "line": "統合、分離、本人の選択。どの形でも、一行は{anchor_name}が確かに一人として旅をした証人になる。"
+        }
+      ],
+      "choices": [
+        {
+          "id": "merge", "label": "主へ戻る儀式を助ける",
+          "immediate_cost": "案内人という人格",
+          "preserves": "世界を支える完全な守護者",
+          "sacrifices": "旅の続きを共に歩く未来",
+          "ending_id": "merciful_whole"
+        },
+        {
+          "id": "sever", "label": "主との繋がりを断つ",
+          "immediate_cost": "世界を安定させる古い仕組み",
+          "preserves": "案内人の独立した生",
+          "sacrifices": "完成へ戻る道",
+          "ending_id": "imperfect_life"
+        },
+        {
+          "id": "let_choose", "label": "本人へ最後の選択を返す",
+          "immediate_cost": "望む答えを押しつける権利",
+          "preserves": "本人の意思",
+          "sacrifices": "一行が結末を管理すること",
+          "ending_id": "self_chosen_form"
+        }
+      ],
+      "endings": {
+        "merciful_whole": {
+          "tone": "grave", "promise_state": "kept",
+          "line": "完全になった守護者は一行を知らないが、攻撃を止めて道を開く。足元の{motif}だけを、理由もなく拾い上げる。"
+        },
+        "imperfect_life": {
+          "tone": "hopeful", "promise_state": "kept",
+          "line": "{anchor_name}は不完全なまま朝を迎える。世界の揺れを支える旅へ、一行から譲られた{motif}を持って出る。"
+        },
+        "self_chosen_form": {
+          "tone": "bittersweet", "promise_state": "transformed",
+          "line": "{anchor_name}は慈悲だけを主へ返し、恐怖と記憶を持って残る。以前と同じではないが、自分で選んだ姿だと名乗る。"
+        }
+      },
+      "fallback_choice": "let_choose",
+      "fail_forward": [
+        {"when": "bond_missed", "continues_to": "reversal", "change": "案内人の人間らしさを知る場面が減るが、本人の意思は選択肢に残る。"},
+        {"when": "motif_lost", "continues_to": "choice", "change": "鏡でなく仲間の記憶が、案内人と主を別人として証明する。"},
+        {"when": "anchor_falls", "continues_to": "finale", "change": "残った半身の声が一行へ結末を託し、主との対話は続く。"}
+      ]
+    }
+  ]
+}
