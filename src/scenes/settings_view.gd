@@ -42,12 +42,40 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	# 割り当て中は、押されたキーをそのまま受け取る（アクションとして解釈しない）。
+	#
+	# ただし**逃げ道は必ず残す**。ここで全部のキーを飲み込むと、
+	# 割り当てを始めた時点で取り消せなくなる。自動プレイがこれで settings に
+	# 25 秒張り付いて動けなくなった（人も同じところで詰まる）。
 	if _awaiting:
+		# **アクションでも抜けられるようにする。** キーイベントだけを見ていると、
+		# InputEventAction を流し込む自動プレイはここから永久に出られない
+		# （実際に settings へ 25 秒張り付いた）。キャンセルは取り消しに使う、
+		# という約束はどの画面でも同じなので、割り当ての対象からは外す。
+		if event.is_action_pressed("cancel"):
+			_awaiting = false
+			Sound.play("cancel")
+			queue_redraw()
+			return
 		if event is InputEventKey:
 			var key: InputEventKey = event
 			var code := key.physical_keycode if key.physical_keycode != 0 else key.keycode
+			if code == KEY_ESCAPE:
+				_awaiting = false
+				Sound.play("cancel")
+				queue_redraw()
+				return
+			# 他の操作に割り当て済みのキーは断る。重ねると、その操作が
+			# 二度と出せなくなる（自分で自分を閉じ込める設定になる）。
+			var taken := _action_using(code)
+			if taken != "":
+				Sound.play("cancel")
+				_notice = "そのキーは %s に つかわれている" % taken
+				_awaiting = false
+				queue_redraw()
+				return
 			Settings.rebind(String(Settings.ACTIONS[_key_index]), code)
 			_awaiting = false
+			_notice = ""
 			Sound.play("confirm")
 			queue_redraw()
 		return
@@ -56,6 +84,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		_input_keys(event)
 		return
 	_input_root(event)
+
+
+## そのキーを既に使っている操作の名前（無ければ空）。
+func _action_using(code: int) -> String:
+	for i in Settings.ACTIONS.size():
+		if i == _key_index:
+			continue
+		var action := String(Settings.ACTIONS[i])
+		for e in InputMap.action_get_events(action):
+			if e is InputEventKey:
+				var k: InputEventKey = e
+				var c := k.physical_keycode if k.physical_keycode != 0 else k.keycode
+				if c == code:
+					return Settings.action_label(action)
+	return ""
+
+
+## 断ったときの一言。割り当て画面に出す。
+var _notice := ""
 
 
 func _input_root(event: InputEvent) -> void:

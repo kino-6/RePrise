@@ -95,6 +95,7 @@ func _ready() -> void:
 	explore.shop_entered.connect(_on_shop_entered)
 	explore.site_entered.connect(_on_site_entered)
 	explore.talked.connect(_on_talked)
+	explore.rumor = _rumor
 	explore.inn_entered.connect(_on_inn)
 	explore.town_left.connect(_on_town_left)
 	# 町を出たら世界へ戻る（世界の上に立ち直す）。洞の出店ならその階へ戻るだけ。
@@ -170,6 +171,10 @@ func dev_equipped_count() -> int:
 func dev_step_to_exit() -> String:
 	if _mode != Mode.EXPLORE:
 		return ""
+	# 町は閉じた広場なので、酔歩では出口に当たらない（40 秒 居座った）。
+	# 町に居るあいだは出口へ向かわせる。
+	if _town != null:
+		return explore.dev_step_toward(_town.exit_pos)
 	if _map == null:
 		if GameState.world == null:
 			return ""
@@ -458,9 +463,21 @@ func _on_site_entered(pos: Vector2i) -> void:
 			# 町は安全地帯。今の出店をそのまま宿つきの町として使う。
 			_open_town()
 		"cave":
+			var seal := GameState.seal_here()
+			if not seal.is_empty() and not bool(seal.get("broken", false)):
+				hud.toast("%s の けはい。%s" % [
+					String(seal.get("name", "封")), String(seal.get("why", ""))
+				])
 			_enter_floor()
 		"castle":
-			# 終点。ここが 1 ラン の終わり方（勝てば生還、負ければ全滅）。
+			# 終点。**封が残っていると扉は開かない。**
+			# ここで通してしまうと、洞へ寄る理由が宝箱だけに戻る。
+			var left := GameState.seals_remaining()
+			if left > 0:
+				Sound.play("cancel")
+				hud.toast("とびらは 固く 閉ざされている。封が あと %d つ。" % left)
+				GameState.site = {}
+				return
 			hud.toast("城の門が ひらいた。ここから先は 戻れない。")
 			_on_boss_reached()
 		_:
@@ -487,9 +504,25 @@ func _open_town() -> void:
 
 
 ## 町の人の一言。
+##
+## 物知りだけは**封の在り処**を教える。これが町に寄る理由になる
+## （それ以外の役は世間話のままにする。全員が案内役だと町が掲示板になる）。
 func _on_talked(line: String) -> void:
 	Sound.play("confirm")
 	hud.toast(line)
+
+
+## 物知りの台詞を、まだ解けていない封の手掛かりに差し替える。
+func _rumor() -> String:
+	if GameState.world == null:
+		return ""
+	for s in GameState.world.seals:
+		if bool(s.get("broken", false)):
+			continue
+		var at: Vector2i = s.get("pos", Vector2i(-1, -1))
+		var place := GameState.world.biome_name_at(at.x, at.y)
+		return "%s は %s の 洞に あるという。" % [String(s.get("name", "封")), place]
+	return "封は すべて やぶれた。あとは 城だけだ。"
 
 
 ## 宿。**取り上げるものは無いので、ゴールドも取らない。**
@@ -707,7 +740,10 @@ func _place_label() -> String:
 		"castle":
 			return "%s　%s" % [Terms.CASTLE, danger]
 	var place := GameState.place_name()
-	return danger if place == "" else "%s　%s" % [place, danger]
+	var head := danger if place == "" else "%s　%s" % [place, danger]
+	# 封の残りを常に見せる。何をすれば先へ進めるかが画面から読めること。
+	var left := GameState.seals_remaining()
+	return head if left <= 0 else "%s　封%d" % [head, left]
 
 
 # --------------------------------------------------------------------------
@@ -777,7 +813,18 @@ func _finish_run(victory: bool) -> void:
 func _on_descend() -> void:
 	Sound.play("stairs")
 	if int(GameState.site.get("floor", 1)) >= GameState.cave_depth():
-		hud.toast("洞を ぬけた。")
+		# 洞の底。封があればここで解ける。
+		var seal := GameState.seal_here()
+		if not seal.is_empty() and not bool(seal.get("broken", false)):
+			GameState.break_seal()
+			Sound.play("learn")
+			var left := GameState.seals_remaining()
+			if left > 0:
+				hud.toast("%s が やぶれた。のこり %d。" % [String(seal.get("name", "封")), left])
+			else:
+				hud.toast("%s が やぶれた。城の とびらが ひらく。" % String(seal.get("name", "封")))
+		else:
+			hud.toast("洞を ぬけた。")
 		_leave_site()
 		return
 	GameState.descend()

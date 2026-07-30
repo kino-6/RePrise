@@ -41,11 +41,12 @@ const PARTY := [
 
 ## 歩き方。**世界が広いので「どう進むか」で結果が変わる。**
 ## 直行と寄り道を並べて測らないと、洞に入る価値が数字にならない。
-enum Policy { STRAIGHT, DETOUR, TOUR }
+enum Policy { STRAIGHT, DETOUR, SEALS, TOUR }
 
 const POLICY_NAMES := {
-	Policy.STRAIGHT: "直行（城へ最短）",
-	Policy.DETOUR: "寄り道（洞を 2 つ経由）",
+	Policy.STRAIGHT: "直行（城へ最短。封が残るので入れない）",
+	Policy.DETOUR: "寄り道（手近な洞を 2 つ）",
+	Policy.SEALS: "封（3 つの封の洞だけ回って城へ）",
 	Policy.TOUR: "全周（洞を全部まわってから城）",
 }
 
@@ -61,7 +62,7 @@ func _initialize() -> void:
 	print("%d ラン × %d 方針" % [_runs, POLICY_NAMES.size()])
 
 	var reports := {}
-	for policy in [Policy.STRAIGHT, Policy.DETOUR, Policy.TOUR]:
+	for policy in [Policy.STRAIGHT, Policy.DETOUR, Policy.SEALS, Policy.TOUR]:
 		reports[policy] = _run_policy(policy)
 
 	for policy in reports:
@@ -159,8 +160,13 @@ func _print_verdict(reports: Dictionary) -> void:
 	# **判定はいちばん強い方針（全周）で行う。**
 	# 直行が勝てないのは設計どおり（急げば着くが勝てない）なので、
 	# そこを基準に「主が硬い」と言うと、毎回誤診する。
+	# **判定はいちばん強い方針（全周）で行う。**
+	# 人は道すがら洞を拾っていくので、実際の遊び方は全周に近い。
+	# 封だけを狙って深い土地へ急ぐ線は「急ぎすぎ」の参考値として並べる。
 	var tour: Dictionary = reports[Policy.TOUR]
+	var seals: Dictionary = reports[Policy.SEALS]
 	var t_win := int(tour["won"]) * 100 / _runs
+	var seal_win := int(seals["won"]) * 100 / _runs
 
 	if s_reach < 5:
 		print("所見: 城が遠すぎる。直行でも %d%% しか着かない。" % s_reach)
@@ -172,19 +178,26 @@ func _print_verdict(reports: Dictionary) -> void:
 		print("所見: 辛い。全周しても %d%% しか勝てないので、勝ち筋が無い。" % t_win)
 		print("      Encounter.EXP_GAIN を上げる。")
 	else:
-		print("所見: 妥当な帯（全周 %d%%）。自動操縦は道具も買い物も使わないので、" % t_win)
+		print("所見: 妥当な帯（全周 %d%% / 封だけ狙い %d%%）。" % [t_win, seal_win])
+		print("      自動操縦は道具も買い物も使わないので、")
 		print("      これは人が操作したときの下限。")
 	if s_win > 15:
 		print("警告: 直行で %d%% 勝てている。急ぐ判断と寄る判断が同値になっていて、" % s_win)
 		print("      「寄るか急ぐか」が判断として成立していない。")
 
-	if d_win > s_win + 3:
-		print("寄り道: 効いている（勝率 %d%% → %d%%）。洞に入る理由が数字として在る。" % [s_win, d_win])
-	elif d_win < s_win - 3:
-		print("寄り道: 損。洞で削られるぶんが得るものを上回っている（%d%% → %d%%）。" % [s_win, d_win])
+	# 封が効いているか。**直行で勝ててはいけない**（扉が開かないので 0% が正しい）。
+	if s_win > 0:
+		print("警告: 直行で %d%% 勝てている。封の門が効いていない。" % s_win)
+	elif seal_win <= 0:
+		print("警告: 封を回っても勝てない。集めた先に勝ち筋が無い。")
 	else:
-		print("寄り道: ほぼ無意味（%d%% → %d%%）。**封を置く理由がここにある。**" % [s_win, d_win])
-		print("      いま洞の見返りは宝箱だけで、寄る動機が弱い（docs/quest_design.md）。")
+		print("封: 効いている（直行 0%% → 封 %d%% → 全周 %d%%）。" % [seal_win, t_win])
+		print("      急げば城には着くが扉が開かない、が数字として在る。")
+
+	# 手近な洞を 2 つ拾うだけでは足りないこと（封の洞を選ぶ意味）
+	if d_win > 0:
+		print("注意: 封と関係ない洞を 2 つ回るだけで %d%% 勝てている。" % d_win)
+		print("      封を置いた意味が薄い。配置の帯を見直す。")
 
 
 # --------------------------------------------------------------------------
@@ -203,13 +216,18 @@ func _simulate(seed_value: int, policy: Policy) -> Dictionary:
 		"steps": 0, "battles": 0, "gold": 0, "danger": 1, "dead": false,
 	}
 
-	# 行き先の列。寄り道の方針では洞を挟んでから城へ向かう。
+	# 行き先の列。
+	#
+	# **城は封が 3 つ解けるまで開かない**ので、直行は「着くが入れない」になる。
+	# それを含めて測る（遊ぶ側と同じ構造を通すのがこのシミュレータの前提）。
 	var waypoints: Array[Vector2i] = []
 	if policy == Policy.DETOUR:
 		waypoints.append_array(_pick_caves(world, 2))
+	elif policy == Policy.SEALS:
+		# 封のある洞だけを回ってから城へ。これが想定している遊び方。
+		for s in world.seals:
+			waypoints.append(s["pos"])
 	elif policy == Policy.TOUR:
-		# 世界を何周も歩く形（封を 3 つ集める構造の近似）。
-		# 直行が成立しないなら、**周回の回数が難度の主軸**ということになる。
 		waypoints.append_array(_pick_caves(world, 99))
 	waypoints.append(world.castle_pos)
 
@@ -223,8 +241,14 @@ func _simulate(seed_value: int, policy: Policy) -> Dictionary:
 			_delve(world, members, rng, state, goal)
 			if bool(state["dead"]):
 				return _result(members, state, false, false, span)
+			# 洞の底まで行けば封が解ける（遊ぶ側と同じ扱い）
+			var seal := world.seal_at(goal)
+			if not seal.is_empty():
+				seal["broken"] = true
 
-	# 城に着いた。ここからが主戦。
+	# 城に着いた。**封が残っていれば扉は開かない。**
+	if world.seals_remaining() > 0:
+		return _result(members, state, true, false, span)
 	var boss := Encounter.build_boss(rng, WorldMap.MAX_DANGER)
 	if boss.is_empty():
 		return _result(members, state, true, false, span)

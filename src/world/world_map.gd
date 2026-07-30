@@ -44,6 +44,34 @@ var danger: PackedByteArray = PackedByteArray()
 ## 訪れた拠点地。町の在庫や洞の踏破を覚えておくのに使う。
 var visited: Dictionary = {}
 
+## 城の主を守る封。**3 つ解くまで城の扉は開かない。**
+##
+## 各要素は {"pos": 洞の位置, "band": 帯の名, "danger": int, "name": String,
+##          "why": String, "broken": bool}。
+## 数（3）と帯（低・中・高）は固定で、名と由来だけが世界ごとに変わる。
+## 固定の部分が 1 ラン の長さと難度曲線を保証し、変わる部分が毎回の顔になる。
+var seals: Array = []
+
+
+func seals_broken() -> int:
+	var count := 0
+	for s in seals:
+		if bool(s.get("broken", false)):
+			count += 1
+	return count
+
+
+func seals_remaining() -> int:
+	return seals.size() - seals_broken()
+
+
+## その洞に封があるか（無ければ空）。
+func seal_at(pos: Vector2i) -> Dictionary:
+	for s in seals:
+		if s.get("pos") == pos:
+			return s
+	return {}
+
 ## マスごとの生物相（`BIOMES` の添字）。
 ##
 ## **地形を「模様」から「情報」に変えるのがこれの役目。**

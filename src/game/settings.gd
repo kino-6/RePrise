@@ -47,6 +47,11 @@ static func speed_label() -> String:
 	return String(SPEED_LABELS[clampi(text_speed, 0, SPEED_LABELS.size() - 1)])
 
 
+## 操作の呼び名。設定画面で「そのキーは けってい に使われている」と出すのに使う。
+static func action_label(action: String) -> String:
+	return String(ACTION_LABELS.get(action, action))
+
+
 ## いま割り当たっているキーの名前。割り当てが無ければ既定を読む。
 static func key_label(action: String) -> String:
 	if bindings.has(action):

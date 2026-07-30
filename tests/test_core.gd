@@ -637,6 +637,43 @@ func _test_world_generation() -> void:
 			on_walkable = false
 	_check("拠点地は必ず歩ける場所にある", on_walkable)
 
+	# 生成器の自己検算。**ここが本体。**
+	# 世界は毎回違うので、目で見て確かめられるのはごく一部でしかない。
+	# 生成器に自分の出力を疑わせて、通ったものだけを世界にする。
+	var bad := []
+	for seed_value in range(1, 60):
+		var w := WorldGenerator.generate(DetRng.new(seed_value * 5171))
+		var problems := WorldGenerator.verify(w)
+		if not problems.is_empty():
+			bad.append("種%d: %s" % [seed_value, "/".join(problems)])
+	_check(
+		"59 個の世界すべてが生成器の検算を通る", bad.is_empty(),
+		"(落ちた: %s)" % str(bad.slice(0, 3))
+	)
+
+	# 検算が壊れた世界を見逃さないこと。**検算そのものを試す。**
+	# 通す側だけ試すと、いつも空を返す検算でもテストは緑になる。
+	var broken := WorldGenerator.generate(DetRng.new(31337))
+	broken.seals.clear()
+	_check("封が無い世界は検算に落ちる", not WorldGenerator.verify(broken).is_empty())
+	var shifted := WorldGenerator.generate(DetRng.new(31337))
+	for s in shifted.seals:
+		s["band"] = "low"
+	_check("帯が偏った世界は検算に落ちる", not WorldGenerator.verify(shifted).is_empty())
+
+	# 封の中身
+	var w2 := WorldGenerator.generate(DetRng.new(2024))
+	_check("封が 3 つ置かれる", w2.seals.size() == 3)
+	_check("封はすべて洞にある", w2.seals.all(func(s: Dictionary) -> bool:
+		return String(w2.sites.get(s["pos"], {}).get("kind", "")) == "cave"))
+	_check("最初はどれも解けていない", w2.seals_remaining() == 3)
+	_check("封に名と由来が付く", w2.seals.all(func(s: Dictionary) -> bool:
+		return String(s.get("name", "")) != "" and String(s.get("why", "")) != ""))
+	var names := {}
+	for s in w2.seals:
+		names[String(s["name"])] = true
+	_check("封の名が重複しない", names.size() == w2.seals.size())
+
 
 ## 町の生成。**迷わせないこと**と**用が足せること**を守る。
 ##

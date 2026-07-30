@@ -1,0 +1,717 @@
+{
+  "_comment": "世界ごとの任意イベント32型。choices以下はゲームが決める不変の骨格。skinとai_slotsだけが表示用の可変部。AIはcosts/risks/rewardsへ触れない。",
+  "version": 1,
+  "allowed_costs": [
+    "none",
+    "item",
+    "gold",
+    "hp",
+    "mp",
+    "equipment",
+    "steps",
+    "normal_fight",
+    "elite_fight",
+    "route_loss",
+    "service_loss",
+    "encounter_up"
+  ],
+  "allowed_rewards": [
+    "none",
+    "shortcut",
+    "route_safe",
+    "map_reveal",
+    "quest_reveal",
+    "heal",
+    "rest",
+    "gold",
+    "item",
+    "equipment",
+    "shop_bonus",
+    "inn_bonus",
+    "temporary_attack",
+    "temporary_guard",
+    "temporary_speed",
+    "temporary_resist",
+    "encounter_down",
+    "boss_weaken",
+    "boss_intel",
+    "temporary_ally",
+    "biome_shift",
+    "town_service",
+    "elite_loot"
+  ],
+  "events": [
+    {
+      "id": "broken_bridge",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [1, 8],
+      "tags": ["route", "land"],
+      "premise": "陸路をつなぐ橋が壊れ、進み方を選ぶ。",
+      "trigger": "enter_route",
+      "choices": [
+        {"id": "repair", "label": "資材で直す", "costs": ["item"], "risks": [], "rewards": ["shortcut", "route_safe"]},
+        {"id": "detour", "label": "遠回りする", "costs": ["steps", "encounter_up"], "risks": ["encounter_up"], "rewards": ["none"]},
+        {"id": "clear", "label": "占拠者を倒す", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["shortcut", "elite_loot"]}
+      ],
+      "skin": {
+        "title": ["崩れた渡橋", "裂けた石橋", "沈み橋"],
+        "actor": ["橋守", "旅商人", "街道の斥候"],
+        "cause": ["増水で橋脚が流された", "地鳴りで道が裂けた", "魔物が橋を壊した"],
+        "flavor": ["荷車の轍が水際で消えている。", "折れた欄干が流れに揺れている。", "対岸から助けを呼ぶ灯が見える。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "wildfire",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [2, 9],
+      "tags": ["forest", "hazard"],
+      "premise": "火勢が進路と物資を同時に脅かす。",
+      "trigger": "enter_biome",
+      "choices": [
+        {"id": "rescue", "label": "物資を救う", "costs": ["hp", "steps"], "risks": ["hp"], "rewards": ["item", "gold"]},
+        {"id": "guide", "label": "人を導く", "costs": ["steps", "encounter_up"], "risks": ["encounter_up"], "rewards": ["town_service", "inn_bonus"]},
+        {"id": "rush", "label": "火中を抜ける", "costs": ["hp"], "risks": ["hp"], "rewards": ["shortcut"]}
+      ],
+      "skin": {
+        "title": ["赤い林道", "灰降る森", "走る野火"],
+        "actor": ["炭焼き", "森番", "避難する薬師"],
+        "cause": ["乾いた落雷から燃え広がった", "戦いの火が林へ移った", "地中の熱が根を焦がした"],
+        "flavor": ["煙の向こうで鐘が鳴り続ける。", "焼けた薬草の匂いが道を覆う。", "獣の足跡が火のない方角へ続く。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "monster_migration",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [2, 10],
+      "tags": ["beast", "route"],
+      "premise": "魔獣の群れが街道を横切っている。",
+      "trigger": "enter_route",
+      "choices": [
+        {"id": "bait", "label": "餌でそらす", "costs": ["item"], "risks": [], "rewards": ["route_safe", "encounter_down"]},
+        {"id": "fight_leader", "label": "群れの長を討つ", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["elite_loot", "encounter_down"]},
+        {"id": "circle", "label": "群れを避ける", "costs": ["steps"], "risks": ["encounter_up"], "rewards": ["none"]}
+      ],
+      "skin": {
+        "title": ["角の大移動", "渡る獣群", "黒い群れ"],
+        "actor": ["老いた猟師", "獣道の見張り", "荷を失った商人"],
+        "cause": ["遠くの主に追われてきた", "季節外れの匂いに導かれた", "住処を帝国に焼かれた"],
+        "flavor": ["地面が低く震え続けている。", "木々の間を無数の目が流れる。", "群れの後ろには何も残っていない。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "merchant_caravan",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [1, 8],
+      "tags": ["trade", "escort"],
+      "premise": "孤立した商隊をどの町へ導くか決める。",
+      "trigger": "enter_route",
+      "choices": [
+        {"id": "safe_town", "label": "近い町へ護衛", "costs": ["steps", "normal_fight"], "risks": ["normal_fight"], "rewards": ["shop_bonus", "gold"]},
+        {"id": "rich_town", "label": "遠い町へ護衛", "costs": ["steps", "elite_fight"], "risks": ["elite_fight"], "rewards": ["shop_bonus", "equipment"]},
+        {"id": "trade_now", "label": "ここで取引する", "costs": ["gold"], "risks": [], "rewards": ["item"]}
+      ],
+      "skin": {
+        "title": ["迷い商隊", "鈴鳴る荷車", "帰れぬ行商"],
+        "actor": ["若い隊商主", "無口な御者", "帳面を抱えた商人"],
+        "cause": ["案内役が戻らない", "街道標が倒されている", "護衛が夜に逃げた"],
+        "flavor": ["荷車の鈴だけが明るく響く。", "積荷には各地の土が付いている。", "商人は地図を逆さに持っている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "signal_tower",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [3, 10],
+      "tags": ["landmark", "information"],
+      "premise": "古い信号塔は地図を明かすが敵も呼ぶ。",
+      "trigger": "discover_landmark",
+      "choices": [
+        {"id": "ignite", "label": "塔を起動する", "costs": ["normal_fight", "encounter_up"], "risks": ["encounter_up"], "rewards": ["map_reveal", "quest_reveal"]},
+        {"id": "quiet_search", "label": "静かに調べる", "costs": ["steps"], "risks": [], "rewards": ["boss_intel"]},
+        {"id": "salvage", "label": "部品を外す", "costs": ["route_loss"], "risks": ["route_loss"], "rewards": ["item", "gold"]}
+      ],
+      "skin": {
+        "title": ["眠る信号塔", "風見の高楼", "消えた烽火"],
+        "actor": ["塔守の石像", "記録を読む斥候", "部品を探す技師"],
+        "cause": ["世界が閉じてから灯っていない", "伝令が最後の火を消した", "内部を魔物が巣にした"],
+        "flavor": ["頂から世界の端まで見渡せる。", "煤けた鏡がまだ空を映している。", "風が通るたび古い歯車が動く。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "rival_expedition",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [3, 10],
+      "tags": ["rival", "information"],
+      "premise": "別の探索隊と情報と獲物をどう分けるか選ぶ。",
+      "trigger": "meet_party",
+      "choices": [
+        {"id": "share", "label": "情報を交換する", "costs": ["gold"], "risks": [], "rewards": ["map_reveal", "quest_reveal"]},
+        {"id": "race", "label": "先回りする", "costs": ["steps", "encounter_up"], "risks": ["encounter_up"], "rewards": ["equipment", "elite_loot"]},
+        {"id": "cooperate", "label": "共闘を申し出る", "costs": ["normal_fight"], "risks": ["normal_fight"], "rewards": ["temporary_ally", "boss_intel"]}
+      ],
+      "skin": {
+        "title": ["もう一つの一行", "先を行く旗", "競う探索者"],
+        "actor": ["傷だらけの隊長", "笑う地図師", "寡黙な四人組"],
+        "cause": ["同じ主を追っている", "失われた荷を探している", "砦とは別の門から来た"],
+        "flavor": ["互いの地図には違う道が描かれている。", "彼らの装備にも同じ土が付いている。", "焚火を挟んでも武器から手を離さない。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "fallen_star",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [4, 10],
+      "tags": ["anomaly", "treasure"],
+      "premise": "落星の力を持ち去るか封じるか決める。",
+      "trigger": "discover_crater",
+      "choices": [
+        {"id": "take", "label": "核を持ち去る", "costs": ["encounter_up"], "risks": ["encounter_up"], "rewards": ["equipment", "temporary_attack"]},
+        {"id": "seal", "label": "落星を封じる", "costs": ["mp"], "risks": [], "rewards": ["temporary_resist", "boss_weaken"]},
+        {"id": "leave", "label": "触れずに去る", "costs": ["none"], "risks": [], "rewards": ["none"]}
+      ],
+      "skin": {
+        "title": ["落星の穴", "白い隕火", "夜を割る石"],
+        "actor": ["星読み", "焦げた石碑", "光を恐れる旅人"],
+        "cause": ["昨夜空から落ちた", "世界の外から押し出された", "城の主が引き寄せた"],
+        "flavor": ["穴の底だけ影の向きが違う。", "石は冷たいのに周囲が焦げている。", "近づくほど遠い鐘の音がする。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "flooded_ford",
+      "category": "road",
+      "site_kind": "world",
+      "danger": [1, 9],
+      "tags": ["water", "route"],
+      "premise": "増水した渡り場を速度・物資・安全から選ぶ。",
+      "trigger": "enter_water_route",
+      "choices": [
+        {"id": "force", "label": "流れを渡る", "costs": ["hp"], "risks": ["hp"], "rewards": ["shortcut"]},
+        {"id": "rope", "label": "道具で渡る", "costs": ["item"], "risks": [], "rewards": ["shortcut", "route_safe"]},
+        {"id": "marsh", "label": "浅瀬を探す", "costs": ["steps", "encounter_up"], "risks": ["encounter_up"], "rewards": ["item"]}
+      ],
+      "skin": {
+        "title": ["荒れる浅瀬", "消えた渡し", "濁流の道"],
+        "actor": ["渡し守", "濡れた巡礼者", "岸辺の猟師"],
+        "cause": ["雪解け水が一気に下った", "上流の堰が壊れた", "水の魔物が流れを変えた"],
+        "flavor": ["水面の下に古い道標が見える。", "対岸の縄だけが残っている。", "流れの中を青い光が横切る。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "tainted_well",
+      "category": "town",
+      "site_kind": "town",
+      "danger": [1, 8],
+      "tags": ["healing", "investigation"],
+      "premise": "町の水を応急処置するか汚染源を断つ。",
+      "trigger": "enter_town",
+      "choices": [
+        {"id": "medicine", "label": "薬を配る", "costs": ["item"], "risks": [], "rewards": ["inn_bonus", "heal"]},
+        {"id": "source", "label": "汚染源を探す", "costs": ["steps", "elite_fight"], "risks": ["elite_fight"], "rewards": ["town_service", "shop_bonus", "quest_reveal"]},
+        {"id": "leave", "label": "関わらない", "costs": ["service_loss"], "risks": ["service_loss"], "rewards": ["none"]}
+      ],
+      "skin": {
+        "title": ["濁った井戸", "苦い泉", "眠り水"],
+        "actor": ["町の薬師", "井戸番", "水を運ぶ子ども"],
+        "cause": ["上流の洞から黒い水が来た", "古い管に毒草が絡んだ", "地下の魔物が目覚めた"],
+        "flavor": ["桶の底に銀色の膜が浮く。", "水を飲んだ鳥だけが眠っている。", "井戸の奥から小さな息遣いがする。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "rival_claimants",
+      "category": "town",
+      "site_kind": "town",
+      "danger": [1, 9],
+      "tags": ["social", "service"],
+      "premise": "対立する二人のどちらへ町の資源を任せるか選ぶ。",
+      "trigger": "talk_elder",
+      "choices": [
+        {"id": "inn", "label": "宿側を支持", "costs": ["gold"], "risks": ["service_loss"], "rewards": ["inn_bonus", "rest"]},
+        {"id": "shop", "label": "店側を支持", "costs": ["gold"], "risks": ["service_loss"], "rewards": ["shop_bonus", "item"]},
+        {"id": "mediate", "label": "仲裁する", "costs": ["steps"], "risks": [], "rewards": ["town_service", "boss_intel"]}
+      ],
+      "skin": {
+        "title": ["二つの鍵", "町を分ける帳面", "譲れぬ広場"],
+        "actor": ["宿主と店主", "姉妹の代表", "二人の古参"],
+        "cause": ["残った倉をどちらが使うか争う", "避難民の受入れ方で割れた", "主への備えを巡って対立した"],
+        "flavor": ["広場の椅子がきれいに二列へ分かれる。", "双方の帳面には同じ印がある。", "町人は買物のたび反対側を気にする。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "missing_scout",
+      "category": "town",
+      "site_kind": "town",
+      "danger": [2, 9],
+      "tags": ["rescue", "information"],
+      "premise": "帰らない斥候本人か、持ち帰るはずの情報かを優先する。",
+      "trigger": "talk_guard",
+      "choices": [
+        {"id": "rescue", "label": "斥候を救う", "costs": ["steps", "elite_fight"], "risks": ["elite_fight"], "rewards": ["quest_reveal", "temporary_ally"]},
+        {"id": "recover", "label": "荷だけ回収", "costs": ["normal_fight"], "risks": ["normal_fight"], "rewards": ["map_reveal", "item"]},
+        {"id": "hire_search", "label": "捜索を頼む", "costs": ["gold"], "risks": [], "rewards": ["map_reveal"]}
+      ],
+      "skin": {
+        "title": ["戻らぬ斥候", "途切れた足跡", "空の見張台"],
+        "actor": ["斥候隊の妹", "門番", "片目の案内人"],
+        "cause": ["高地の洞を調べに行った", "魔獣の群れを追って消えた", "帝国の行軍を見張っていた"],
+        "flavor": ["地図には帰路だけが描かれていない。", "見張台に冷めた食事が残っている。", "最後の伝令は封じた筒だけ届いた。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "night_market",
+      "category": "town",
+      "site_kind": "town",
+      "danger": [2, 10],
+      "tags": ["trade", "risk"],
+      "premise": "装備を正体不明の取引へ出すか選ぶ。",
+      "trigger": "enter_town",
+      "choices": [
+        {"id": "bundle", "label": "装備を品束と交換", "costs": ["equipment"], "risks": ["equipment"], "rewards": ["item", "equipment"]},
+        {"id": "rumor", "label": "情報だけ買う", "costs": ["gold"], "risks": [], "rewards": ["boss_intel", "quest_reveal"]},
+        {"id": "refuse", "label": "取引しない", "costs": ["none"], "risks": [], "rewards": ["none"]}
+      ],
+      "skin": {
+        "title": ["夜だけの市", "覆面の露店", "灯裏の取引"],
+        "actor": ["顔を隠す商人", "鐘を持つ仲買人", "影の長い店主"],
+        "cause": ["日が落ちると別の商人が集まる", "城から流れた品が並ぶ", "世界の外の品を扱うと噂される"],
+        "flavor": ["値札には金額でなく絵が描かれる。", "客は品物より互いの手元を見ている。", "最後の鐘が鳴ると店ごと消えるという。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "road_guard",
+      "category": "town",
+      "site_kind": "town",
+      "danger": [1, 8],
+      "tags": ["combat", "route"],
+      "premise": "街道の安全を金で買うか自分で作る。",
+      "trigger": "talk_guard",
+      "choices": [
+        {"id": "hire", "label": "警備を雇う", "costs": ["gold"], "risks": [], "rewards": ["route_safe", "encounter_down"]},
+        {"id": "patrol", "label": "巡回へ加わる", "costs": ["normal_fight", "steps"], "risks": ["normal_fight"], "rewards": ["gold", "map_reveal"]},
+        {"id": "ambush", "label": "根城を急襲する", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["encounter_down", "elite_loot"]}
+      ],
+      "skin": {
+        "title": ["街道の番", "消えた道標", "夜襲の相談"],
+        "actor": ["疲れた衛兵長", "臨時の見張り", "盾を失った兵士"],
+        "cause": ["魔物が町の灯を覚えた", "賊が道標を偽っている", "帝国の斥候が街道を測っている"],
+        "flavor": ["門の外だけ松明が二重に置かれる。", "戻った兵は皆同じ傷を負っている。", "街道図には赤い印が増え続ける。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "broken_forge",
+      "category": "town",
+      "site_kind": "town",
+      "danger": [2, 9],
+      "tags": ["craft", "cave"],
+      "premise": "洞の鉱石を装備・金・別の町のどれへ使うか選ぶ。",
+      "trigger": "talk_trader",
+      "choices": [
+        {"id": "repair", "label": "鍛冶場を直す", "costs": ["item", "steps"], "risks": [], "rewards": ["equipment", "town_service"]},
+        {"id": "sell", "label": "鉱石を売る", "costs": ["item"], "risks": [], "rewards": ["gold"]},
+        {"id": "deliver", "label": "別の町へ渡す", "costs": ["item", "steps"], "risks": ["encounter_up"], "rewards": ["shop_bonus", "boss_weaken"]}
+      ],
+      "skin": {
+        "title": ["冷えた鍛冶場", "折れたふいご", "火のない炉"],
+        "actor": ["片腕の鍛冶師", "煤だらけの弟子", "炉を守る老女"],
+        "cause": ["炉石が割れて火を保てない", "良い鉱石が尽きた", "帝国に工具を持ち去られた"],
+        "flavor": ["金床だけが磨かれたまま残る。", "炉には昨日の灰もない。", "壁に未完成の剣が並んでいる。"]
+      },
+      "ai_slots": {"title": 12, "actor": 8, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "last_festival",
+      "category": "town",
+      "site_kind": "town",
+      "danger": [1, 9],
+      "tags": ["social", "boon"],
+      "premise": "町の祭で一つの準備だけを手伝う。",
+      "trigger": "enter_town",
+      "choices": [
+        {"id": "food", "label": "食事を整える", "costs": ["item"], "risks": [], "rewards": ["heal", "temporary_guard"]},
+        {"id": "watch", "label": "警備を手伝う", "costs": ["normal_fight"], "risks": ["normal_fight"], "rewards": ["temporary_attack", "gold"]},
+        {"id": "music", "label": "演目を支える", "costs": ["mp"], "risks": [], "rewards": ["temporary_speed", "rest"]}
+      ],
+      "skin": {
+        "title": ["世界最後の祭", "灯を送る夜", "短い祝宴"],
+        "actor": ["祭を仕切る宿主", "鐘打ちの子ども", "古い歌を知る長老"],
+        "cause": ["城へ向かう者を送り出すため", "消えた季節を一夜だけ戻すため", "町に残った者の名を呼ぶため"],
+        "flavor": ["飾りは古布でも広場は明るい。", "皆が明日の話だけはしない。", "料理の香りが門の外まで届く。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "town_evacuation",
+      "category": "town",
+      "site_kind": "town",
+      "danger": [3, 10],
+      "tags": ["escort", "service"],
+      "premise": "町の避難を安全路か近道で助ける。",
+      "trigger": "enter_town",
+      "choices": [
+        {"id": "safe", "label": "安全路を護衛", "costs": ["steps", "normal_fight"], "risks": ["normal_fight"], "rewards": ["inn_bonus", "town_service"]},
+        {"id": "short", "label": "危険な近道へ", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["shop_bonus", "equipment"]},
+        {"id": "supplies", "label": "物資だけ渡す", "costs": ["item", "gold"], "risks": ["service_loss"], "rewards": ["map_reveal"]}
+      ],
+      "skin": {
+        "title": ["空になる町", "最後の荷車", "門を閉じる日"],
+        "actor": ["避難を束ねる長老", "荷車を引く宿主", "町に残る衛兵"],
+        "cause": ["城の影が町まで伸びた", "魔獣の巣が近づいた", "地面の熱が井戸を枯らした"],
+        "flavor": ["家々の扉には同じ白布が結ばれる。", "荷車には家具より水が積まれる。", "町の鐘は出発まで鳴り続ける。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "twin_altar",
+      "category": "cave",
+      "site_kind": "cave",
+      "danger": [2, 10],
+      "tags": ["altar", "boon"],
+      "premise": "二つの強化から一つを選び、対応する弱点も受ける。",
+      "trigger": "discover_room",
+      "choices": [
+        {"id": "body", "label": "肉体へ誓う", "costs": ["mp"], "risks": ["mp"], "rewards": ["temporary_attack", "temporary_guard"]},
+        {"id": "mind", "label": "精神へ誓う", "costs": ["hp"], "risks": ["hp"], "rewards": ["temporary_speed", "temporary_resist"]},
+        {"id": "break", "label": "祭壇を壊す", "costs": ["normal_fight"], "risks": ["normal_fight"], "rewards": ["item"]}
+      ],
+      "skin": {
+        "title": ["二面の祭壇", "相反する誓い", "双子の石座"],
+        "actor": ["左右から響く声", "二つの石像", "名を失った祭司"],
+        "cause": ["一つの力を二つに分けて封じた", "守る者と進む者が争った", "選ばれなかった側が代償を取る"],
+        "flavor": ["片方へ近づくともう片方が冷える。", "二つの杯には同じ水が満ちる。", "床の足跡は必ずどちらかへ曲がる。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "trapped_traveler",
+      "category": "cave",
+      "site_kind": "cave",
+      "danger": [1, 9],
+      "tags": ["rescue", "resource"],
+      "premise": "閉じ込められた旅人と残された物資をどう扱うか選ぶ。",
+      "trigger": "discover_room",
+      "choices": [
+        {"id": "heal", "label": "治療して連れ出す", "costs": ["item", "steps"], "risks": ["encounter_up"], "rewards": ["quest_reveal", "shop_bonus"]},
+        {"id": "supplies", "label": "物資を受け取る", "costs": ["none"], "risks": ["service_loss"], "rewards": ["item", "gold"]},
+        {"id": "return", "label": "出口を確保する", "costs": ["normal_fight"], "risks": ["normal_fight"], "rewards": ["route_safe", "temporary_ally"]}
+      ],
+      "skin": {
+        "title": ["岩間の旅人", "消えかけた灯", "帰れない採掘者"],
+        "actor": ["負傷した旅人", "若い採掘師", "帝国から逃げた荷運び"],
+        "cause": ["落盤で帰路を失った", "魔物に追われ奥へ逃げた", "仲間が物資を持って去った"],
+        "flavor": ["小さな灯が返事のように揺れる。", "壁には日数でなく名前が刻まれる。", "水袋だけが丁寧に残されている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "unstable_mine",
+      "category": "cave",
+      "site_kind": "cave",
+      "danger": [2, 10],
+      "tags": ["route", "treasure"],
+      "premise": "爆破で近道を開くと別の区画が失われる。",
+      "trigger": "discover_fork",
+      "choices": [
+        {"id": "shortcut", "label": "近道を爆破", "costs": ["item"], "risks": ["route_loss"], "rewards": ["shortcut"]},
+        {"id": "treasure", "label": "宝物区画を守る", "costs": ["steps", "normal_fight"], "risks": ["normal_fight"], "rewards": ["equipment", "gold"]},
+        {"id": "brace", "label": "坑道を補強する", "costs": ["item", "steps"], "risks": [], "rewards": ["shortcut", "item"]}
+      ],
+      "skin": {
+        "title": ["軋む坑道", "崩れる鉱脈", "音を返す岩壁"],
+        "actor": ["置き去りの坑夫札", "岩を読む技師", "壊れた掘削人形"],
+        "cause": ["地中の熱で支柱が曲がった", "古い爆薬が漏れている", "巨大なものが壁の向こうを動く"],
+        "flavor": ["砂が落ちるたび奥で音が返る。", "支柱には帰る方向だけ矢印がない。", "鉱石の光が亀裂に沿って走る。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "mirror_double",
+      "category": "cave",
+      "site_kind": "cave",
+      "danger": [3, 10],
+      "tags": ["combat", "anomaly"],
+      "premise": "一行の映し身と戦うか、鏡を壊して報酬を捨てる。",
+      "trigger": "discover_room",
+      "choices": [
+        {"id": "fight", "label": "映し身と戦う", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["equipment", "elite_loot"]},
+        {"id": "shatter", "label": "鏡を砕く", "costs": ["mp"], "risks": [], "rewards": ["route_safe"]},
+        {"id": "study", "label": "動きを観察する", "costs": ["steps", "encounter_up"], "risks": ["encounter_up"], "rewards": ["boss_intel", "temporary_speed"]}
+      ],
+      "skin": {
+        "title": ["映し身の鏡", "遅れる影", "逆さの一行"],
+        "actor": ["鏡の中の隊長", "顔のない映し身", "一拍遅れて動く影"],
+        "cause": ["洞が通る者の戦い方を覚える", "主が挑戦者を測っている", "古い訓練場の術が残った"],
+        "flavor": ["鏡像だけが先に武器を抜く。", "背後を向いても視線を感じる。", "鏡の中には出口が一つ多い。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "flooded_chambers",
+      "category": "cave",
+      "site_kind": "cave",
+      "danger": [2, 9],
+      "tags": ["water", "choice"],
+      "premise": "水位操作で宝と近道の片方だけを開く。",
+      "trigger": "discover_switch",
+      "choices": [
+        {"id": "drain_treasure", "label": "宝の部屋を排水", "costs": ["steps"], "risks": ["route_loss"], "rewards": ["equipment", "item"]},
+        {"id": "drain_route", "label": "近道を排水", "costs": ["steps"], "risks": ["route_loss"], "rewards": ["shortcut"]},
+        {"id": "dive", "label": "水中を探る", "costs": ["hp", "mp"], "risks": ["hp"], "rewards": ["item", "map_reveal"]}
+      ],
+      "skin": {
+        "title": ["二つの水門", "沈んだ回廊", "逆流する洞"],
+        "actor": ["水門の石像", "濡れた記録板", "水音を数える旅人"],
+        "cause": ["一つを開くと一つが沈む仕組み", "地下河川が洞を割った", "古い守り手が流れを封じた"],
+        "flavor": ["水面に二つの扉が映っている。", "魚が壁の向こうへ消えていく。", "水位の印だけ新しく削られている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "sleeping_colossus",
+      "category": "cave",
+      "site_kind": "cave",
+      "danger": [4, 10],
+      "tags": ["elite", "stealth"],
+      "premise": "眠る巨獣を供物・戦闘・迂回で越える。",
+      "trigger": "discover_room",
+      "choices": [
+        {"id": "offer", "label": "供物を置く", "costs": ["item"], "risks": [], "rewards": ["route_safe", "temporary_resist"]},
+        {"id": "wake", "label": "起こして戦う", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["elite_loot", "boss_intel"]},
+        {"id": "sneak", "label": "脇道を抜ける", "costs": ["steps", "hp"], "risks": ["hp"], "rewards": ["shortcut"]}
+      ],
+      "skin": {
+        "title": ["眠る巨躯", "岩となった獣", "息づく石室"],
+        "actor": ["眠る守護獣", "苔むした巨人", "鎖に繋がれた竜"],
+        "cause": ["洞そのものを守って眠る", "主に敗れてここへ封じられた", "世界が閉じるたび目覚める"],
+        "flavor": ["床の上下は巨獣の呼吸だった。", "武器の柄に新しい手跡がある。", "片目だけが薄く開いている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "captive_beast",
+      "category": "cave",
+      "site_kind": "cave",
+      "danger": [3, 10],
+      "tags": ["beast", "faction"],
+      "premise": "囚われた魔獣を解放・討伐・一時使役する。",
+      "trigger": "discover_cage",
+      "choices": [
+        {"id": "free", "label": "檻を開く", "costs": ["normal_fight"], "risks": ["normal_fight"], "rewards": ["encounter_down", "biome_shift"]},
+        {"id": "kill", "label": "檻越しに討つ", "costs": ["normal_fight"], "risks": [], "rewards": ["item", "gold"]},
+        {"id": "tame", "label": "一時的に従える", "costs": ["item", "mp"], "risks": ["encounter_up"], "rewards": ["temporary_ally"]}
+      ],
+      "skin": {
+        "title": ["鎖の魔獣", "飼われた牙", "壊れかけの檻"],
+        "actor": ["傷ついた魔獣", "帝国の飼育個体", "子を守る大型獣"],
+        "cause": ["兵器として調教されていた", "洞の守り手として捨てられた", "別の魔物を誘う餌にされた"],
+        "flavor": ["鎖には何度も噛んだ跡がある。", "檻の外にだけ餌皿が置かれる。", "近づくと唸らず出口を見る。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "greedy_vault",
+      "category": "cave",
+      "site_kind": "cave",
+      "danger": [3, 10],
+      "tags": ["treasure", "choice"],
+      "premise": "三つの宝から一つを取り、残りを守護者へ渡す。",
+      "trigger": "discover_vault",
+      "choices": [
+        {"id": "weapon", "label": "武器を選ぶ", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["equipment", "temporary_attack"]},
+        {"id": "armor", "label": "防具を選ぶ", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["equipment", "temporary_guard"]},
+        {"id": "supplies", "label": "物資を選ぶ", "costs": ["normal_fight"], "risks": ["normal_fight"], "rewards": ["item", "rest"]}
+      ],
+      "skin": {
+        "title": ["欲深い宝庫", "三つの石棺", "選ぶ収蔵庫"],
+        "actor": ["宝を量る番人", "三つ首の石像", "声だけの収集家"],
+        "cause": ["持ち去る価値を戦いで測る", "一つ選ぶと残りが守り手になる", "主への献上品が選び手を試す"],
+        "flavor": ["三つの台座に同じ埃が積もる。", "選ばなかった箱から鎖の音がする。", "床には一つだけ持つよう刻まれる。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "checkpoint",
+      "category": "faction",
+      "site_kind": "world",
+      "danger": [2, 9],
+      "tags": ["imperial", "route"],
+      "premise": "武装勢力の検問を金・通行証・戦闘で越える。",
+      "trigger": "enter_route",
+      "choices": [
+        {"id": "bribe", "label": "通行料を払う", "costs": ["gold"], "risks": [], "rewards": ["route_safe"]},
+        {"id": "permit", "label": "町で証を得る", "costs": ["steps"], "risks": ["encounter_up"], "rewards": ["route_safe", "boss_intel"]},
+        {"id": "breakthrough", "label": "正面突破する", "costs": ["elite_fight"], "risks": ["elite_fight", "encounter_up"], "rewards": ["shortcut", "elite_loot"]}
+      ],
+      "skin": {
+        "title": ["黒鉄の検問", "閉ざす街道", "旗の下の関所"],
+        "actor": ["帝国の検問長", "雇われ槍兵", "無表情な士官"],
+        "cause": ["城へ向かう者を記録している", "逃亡した実験体を探している", "補給路を守るため道を閉じた"],
+        "flavor": ["柵より先に銃口が並んでいる。", "通行証には顔でなく靴跡を記す。", "旗だけが風と逆に揺れている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "deserter",
+      "category": "faction",
+      "site_kind": "world",
+      "danger": [2, 10],
+      "tags": ["imperial", "social"],
+      "premise": "脱走兵をかくまう・引き渡す・一時雇用する。",
+      "trigger": "meet_actor",
+      "choices": [
+        {"id": "shelter", "label": "かくまう", "costs": ["encounter_up"], "risks": ["encounter_up"], "rewards": ["boss_intel", "quest_reveal"]},
+        {"id": "turn_in", "label": "追手へ渡す", "costs": ["none"], "risks": [], "rewards": ["gold", "route_safe"]},
+        {"id": "hire", "label": "武装解除して雇う", "costs": ["gold"], "risks": ["normal_fight"], "rewards": ["temporary_ally"]}
+      ],
+      "skin": {
+        "title": ["捨てられた軍服", "旗を降りた兵", "逃亡する銃兵"],
+        "actor": ["若い脱走兵", "片足を引く士官", "獣使いだった兵士"],
+        "cause": ["命令された町を撃てなかった", "実験体の扱いを見て逃げた", "部隊ごと囮にされた"],
+        "flavor": ["軍服の印だけ丁寧に剥がされている。", "武器より水筒を先に差し出す。", "追手の合図を聞くたび顔を伏せる。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "supply_train",
+      "category": "faction",
+      "site_kind": "world",
+      "danger": [3, 10],
+      "tags": ["imperial", "resource"],
+      "premise": "帝国の補給を奪う・壊す・追跡する。",
+      "trigger": "discover_convoy",
+      "choices": [
+        {"id": "raid", "label": "積荷を奪う", "costs": ["elite_fight"], "risks": ["elite_fight", "encounter_up"], "rewards": ["item", "equipment"]},
+        {"id": "destroy", "label": "補給を焼く", "costs": ["item", "normal_fight"], "risks": ["normal_fight"], "rewards": ["boss_weaken"]},
+        {"id": "follow", "label": "行先を追う", "costs": ["steps"], "risks": ["encounter_up"], "rewards": ["map_reveal", "boss_intel"]}
+      ],
+      "skin": {
+        "title": ["鉄輪の補給隊", "灰色の荷列", "城へ向かう車列"],
+        "actor": ["補給隊の監督官", "鎖に繋がれた御者", "荷を守る自動兵"],
+        "cause": ["城へ燃料を運んでいる", "飼育魔獣の餌を輸送している", "各町から徴発した品を集めている"],
+        "flavor": ["車輪の跡から油の匂いがする。", "積荷の箱は内側から傷ついている。", "護衛は道より空を警戒している。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "relay_tower",
+      "category": "faction",
+      "site_kind": "world",
+      "danger": [4, 10],
+      "tags": ["imperial", "information"],
+      "premise": "帝国通信を妨害・傍受・維持利用する。",
+      "trigger": "discover_landmark",
+      "choices": [
+        {"id": "jam", "label": "通信を妨害", "costs": ["normal_fight"], "risks": ["normal_fight"], "rewards": ["encounter_down", "boss_weaken"]},
+        {"id": "listen", "label": "通信を傍受", "costs": ["steps", "mp"], "risks": ["encounter_up"], "rewards": ["boss_intel", "quest_reveal"]},
+        {"id": "relay_trade", "label": "商人へ回線を貸す", "costs": ["gold"], "risks": [], "rewards": ["shop_bonus", "item"]}
+      ],
+      "skin": {
+        "title": ["帝国通信塔", "青火の中継塔", "空へ伸びる線"],
+        "actor": ["塔を守る技官", "雑音に紛れる声", "回線を狙う商人"],
+        "cause": ["各部隊へ命令を送っている", "城の主の動きを観測している", "町の会話まで拾っている"],
+        "flavor": ["塔の青火は音に合わせて揺れる。", "誰もいないのに返事だけが続く。", "壁一面に町の名が刻まれている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "specimen_convoy",
+      "category": "faction",
+      "site_kind": "world",
+      "danger": [3, 10],
+      "tags": ["imperial", "beast"],
+      "premise": "輸送中の実験体を解放・再捕獲・処分する。",
+      "trigger": "discover_convoy",
+      "choices": [
+        {"id": "release", "label": "実験体を解放", "costs": ["normal_fight"], "risks": ["encounter_up", "biome_shift"], "rewards": ["boss_weaken", "encounter_down"]},
+        {"id": "recapture", "label": "生け捕りにする", "costs": ["elite_fight", "item"], "risks": ["elite_fight"], "rewards": ["gold", "temporary_ally"]},
+        {"id": "destroy", "label": "檻ごと処分する", "costs": ["item"], "risks": [], "rewards": ["item", "route_safe"]}
+      ],
+      "skin": {
+        "title": ["標本輸送檻", "鎖の荷車", "眠らない積荷"],
+        "actor": ["帝国の飼育官", "檻から覗く魔獣", "震える輸送兵"],
+        "cause": ["城の兵器へ組み込む予定だった", "環境へ適応するか試されている", "別の魔獣を従わせる餌にされる"],
+        "flavor": ["檻の鍵は外より内側が削れている。", "荷車の周りだけ虫の声がない。", "実験体は兵士でなく森を見ている。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "monster_feud",
+      "category": "faction",
+      "site_kind": "world",
+      "danger": [3, 10],
+      "tags": ["beast", "ecology"],
+      "premise": "争う二つの魔物勢力の片方へ加勢するか止める。",
+      "trigger": "enter_biome",
+      "choices": [
+        {"id": "first", "label": "一方へ加勢", "costs": ["normal_fight"], "risks": ["biome_shift"], "rewards": ["temporary_resist", "encounter_down"]},
+        {"id": "second", "label": "もう一方へ加勢", "costs": ["normal_fight"], "risks": ["biome_shift"], "rewards": ["temporary_attack", "item"]},
+        {"id": "both", "label": "両者を退ける", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["elite_loot", "route_safe"]}
+      ],
+      "skin": {
+        "title": ["二群の争い", "牙と羽の境", "森を分ける咆哮"],
+        "actor": ["巣を守る獣群", "空から来た魔物", "土地を追われた小型種"],
+        "cause": ["水場が一つしか残っていない", "帝国に縄張りを狭められた", "城の主が片方を操っている"],
+        "flavor": ["地面と木の上に別々の印がある。", "争いの中央だけ花が残っている。", "遠吠えに違う声が答え続ける。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "wounded_commander",
+      "category": "faction",
+      "site_kind": "world",
+      "danger": [4, 10],
+      "tags": ["imperial", "social"],
+      "premise": "負傷した敵指揮官を治療・捕縛・討伐する。",
+      "trigger": "meet_actor",
+      "choices": [
+        {"id": "heal", "label": "治療する", "costs": ["item"], "risks": ["encounter_up"], "rewards": ["boss_intel", "route_safe"]},
+        {"id": "capture", "label": "町へ連行する", "costs": ["steps", "normal_fight"], "risks": ["normal_fight"], "rewards": ["gold", "quest_reveal"]},
+        {"id": "finish", "label": "ここで討つ", "costs": ["elite_fight"], "risks": ["elite_fight"], "rewards": ["equipment", "elite_loot"]}
+      ],
+      "skin": {
+        "title": ["倒れた指揮官", "血の付いた外套", "命令を失った士官"],
+        "actor": ["負傷した帝国士官", "魔獣部隊の指揮官", "城から退いた将校"],
+        "cause": ["自軍の兵器に撃たれた", "主への命令を拒んだ", "部下を逃がして一人残った"],
+        "flavor": ["剣を取らず暗号筒を握っている。", "足元の地図だけ血で汚れていない。", "助けを求めず部隊の方角を指す。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    },
+    {
+      "id": "dormant_war_machine",
+      "category": "faction",
+      "site_kind": "world",
+      "danger": [5, 10],
+      "tags": ["imperial", "machine"],
+      "premise": "停止した戦争機械を修理・解体・過負荷させる。",
+      "trigger": "discover_landmark",
+      "choices": [
+        {"id": "repair", "label": "修理して使う", "costs": ["item", "gold"], "risks": ["encounter_up"], "rewards": ["temporary_ally", "route_safe"]},
+        {"id": "salvage", "label": "部品へ解体", "costs": ["steps"], "risks": [], "rewards": ["equipment", "item"]},
+        {"id": "overload", "label": "過負荷で爆破", "costs": ["mp", "normal_fight"], "risks": ["normal_fight", "route_loss"], "rewards": ["shortcut", "boss_weaken"]}
+      ],
+      "skin": {
+        "title": ["眠る戦争機械", "止まった鉄巨人", "草に埋もれた砲台"],
+        "actor": ["壊れた自動兵", "機械を知る脱走兵", "内部に残る制御声"],
+        "cause": ["燃料切れで街道に捨てられた", "命令系統を失って停止した", "城への砲撃前に封じられた"],
+        "flavor": ["鳥が砲身の中へ巣を作っている。", "胸の炉だけがかすかに温かい。", "近づくと古い命令を繰り返す。"]
+      },
+      "ai_slots": {"title": 12, "actor": 10, "cause": 28, "flavor": 34}
+    }
+  ]
+}

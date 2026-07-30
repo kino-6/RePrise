@@ -180,6 +180,11 @@ func _send_input() -> void:
 				_press(_rng.pick(["ui_up", "ui_down"]))
 			else:
 				_press("confirm")
+		"SETTINGS":
+			# **設定は遊びの輪の外**。ここで confirm を押し続けると
+			# キー割り当ての待ち状態に入って出られなくなる（実際に 25 秒張り付いた）。
+			# 出口へ向かうのが唯一の正しい振る舞い。
+			_press("cancel")
 		_:
 			_press("confirm")
 

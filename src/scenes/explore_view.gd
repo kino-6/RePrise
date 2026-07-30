@@ -59,6 +59,10 @@ var facing := FACE_DOWN
 var rng: DetRng = null
 var hero_tex: Texture2D = null
 
+## 物知りが話す内容を外から差し込む口（main.gd が封の手掛かりを入れる）。
+## ExploreView は世界の事情を知らないので、文章はここでは作らない。
+var rumor: Callable = Callable()
+
 var _frame := 0
 var _move_cd := 0.0
 var _steps_since_encounter := 0
@@ -176,7 +180,14 @@ func _try_move_town(target: Vector2i) -> void:
 	if town.folk.has(target):
 		facing = _facing_for(target - player_pos)
 		queue_redraw()
-		talked.emit(String(town.folk[target].get("line", "")))
+		var who: Dictionary = town.folk[target]
+		# 物知りだけは決まり文句ではなく、そのときの手掛かりを話す。
+		var line := String(who.get("line", ""))
+		if String(who.get("kind", "")) == "elder" and rumor.is_valid():
+			var hint := String(rumor.call())
+			if hint != "":
+				line = hint
+		talked.emit(line)
 		return
 
 	if not map.is_walkable(target.x, target.y):

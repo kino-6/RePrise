@@ -33,7 +33,30 @@ const CAVE_COUNT := 5
 const SITE_SPACING := 7
 
 
+## 何度まで作り直すか。**検算に落ちた世界は出さない。**
+const MAX_ATTEMPTS := 12
+
+
+## 世界を 1 つ作る。
+##
+## **作ったものは必ずその場で検算する。** 詰む世界を 1 つ出すだけで、
+## そのランが丸ごと無駄になる。落ちたら種を振り直して作り直し、
+## それでも駄目なら最後の 1 つを返して理由を警告に残す
+## （黙って壊れた世界を返すより、出す・気づける方がまだよい）。
 static func generate(rng: DetRng) -> WorldMap:
+	var map: WorldMap = null
+	var problems: Array[String] = []
+	for attempt in MAX_ATTEMPTS:
+		# 種を振り直す。同じ種で作り直しても同じ世界しか出ない。
+		map = _build(rng.fork("attempt:%d" % attempt))
+		problems = verify(map)
+		if problems.is_empty():
+			return map
+	push_warning("検算に通る世界を作れなかった: %s" % "　/　".join(problems))
+	return map
+
+
+static func _build(rng: DetRng) -> WorldMap:
 	var map := WorldMap.new(MAP_W, MAP_H)
 	map.biome = "world"
 	_carve_land(map, rng)
@@ -42,7 +65,154 @@ static func generate(rng: DetRng) -> WorldMap:
 	_assign_biomes(map, rng)
 	_paint_terrain(map, rng)
 	_place_sites(map, rng)
+	_place_seals(map, rng)
 	return map
+
+
+# --------------------------------------------------------------------------
+# 検算
+#
+# 生成器が自分の出力を疑う。ここを通ったものだけが世界になる。
+# --------------------------------------------------------------------------
+
+
+## 世界が最後まで遊べるかを確かめる。問題の一覧を返す（空なら健全）。
+##
+## **見た目ではなく到達性と構造を見る。** 綺麗な世界でも、封に届かなければ
+## そのランは最初から負けが決まっている。目で見て気づけない類の壊れ方なので、
+## 機械に測らせる。テスト（`_test_world_generation`）もここを呼ぶ。
+static func verify(map: WorldMap) -> Array[String]:
+	var problems: Array[String] = []
+	if map == null:
+		return ["世界が無い"]
+
+	var dist := map.distance_field(map.start_pos)
+	var reachable := func(at: Vector2i) -> bool:
+		return map.in_bounds(at.x, at.y) and dist[at.y * map.width + at.x] >= 0
+
+	# 1. 城まで歩けること。これが崩れたら他を見るまでもない。
+	if not reachable.call(map.castle_pos):
+		problems.append("城まで歩けない")
+
+	# 2. 封が 3 つあること
+	if map.seals.size() != SEAL_COUNT:
+		problems.append("封が %d 個（%d 個であるべき）" % [map.seals.size(), SEAL_COUNT])
+
+	# 3. 封のある洞にすべて歩けること。1 つでも届かなければ城の扉が永久に開かない
+	var seen_bands := {}
+	var seen_caves := {}
+	for s in map.seals:
+		var at: Vector2i = s.get("pos", Vector2i(-1, -1))
+		if not reachable.call(at):
+			problems.append("封（%s）のある洞に歩けない" % String(s.get("name", "?")))
+		if seen_caves.has(at):
+			problems.append("同じ洞に封が 2 つ置かれている")
+		seen_caves[at] = true
+		seen_bands[String(s.get("band", ""))] = true
+		if String(s.get("name", "")) == "":
+			problems.append("封に名前が無い")
+
+	# 4. 帯が 3 つに分かれていること。全部が浅い土地にあると、
+	#    「順番は自由だが必ず 3 つ回る」という形が崩れて、難度曲線も潰れる。
+	if map.seals.size() == SEAL_COUNT and seen_bands.size() != SEAL_COUNT:
+		problems.append("封の危険度が帯ごとに分かれていない")
+
+	# 5. 買い物ができること。町に 1 つも歩けないと、備えの手段が宝箱だけになる
+	var towns := 0
+	for pos in map.sites:
+		if String(map.sites[pos].get("kind", "")) == "town" and reachable.call(pos):
+			towns += 1
+	if towns < 1:
+		problems.append("歩いて行ける町が無い")
+
+	return problems
+
+
+# --------------------------------------------------------------------------
+# 封
+# --------------------------------------------------------------------------
+
+## 封の数と、置く危険度の帯。**ここが固定だから 1 ラン の長さが読める。**
+const SEAL_COUNT := 3
+const SEAL_BANDS := [
+	{"id": "low", "name": "浅", "range": [1, 4]},
+	{"id": "mid", "name": "中", "range": [4, 7]},
+	{"id": "high", "name": "深", "range": [7, 10]},
+]
+
+## 封の名。語 × 語で作る（テンプレート語彙表 × DetRng）。
+## AI を繋ぐ前の土台で、これだけでも毎回違う名前が出る。
+## AI が来たらここを差し替えるのではなく、**落ちたときの受け皿**として残す。
+const SEAL_HEAD := [
+	"しずまりの", "とこしえの", "うつろな", "かたくなな", "まどろむ",
+	"ふるびた", "こごえた", "いさぎよい", "ものいわぬ", "あかつきの",
+]
+const SEAL_TAIL := ["錠", "枷", "結び", "封", "戒め", "楔"]
+
+## なぜそれが要るのかの一文。名前だけだと「集めろと言われたから集める」になる。
+const SEAL_WHY := [
+	"これが ある かぎり 城の あるじは 傷つかない。",
+	"むかし ここに 沈められた ものが 城を まもっている。",
+	"この地の ちからが 城の とびらを 閉ざしている。",
+	"洞の そこで 息づいて、城へ ちからを おくっている。",
+]
+
+
+## 封を洞に置く。帯ごとに 1 つずつ。
+##
+## 洞にしか置かない（町に置くと寄り道が本筋になってしまう）。
+## 帯に合う洞が無い帯は、いちばん近い危険度の未使用の洞で代える。
+## それでも足りなければ検算が落として作り直しになる。
+static func _place_seals(map: WorldMap, rng: DetRng) -> void:
+	map.seals = []
+	var caves: Array[Vector2i] = []
+	for pos in map.sites:
+		if String(map.sites[pos].get("kind", "")) == "cave":
+			caves.append(pos)
+	caves.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return int(map.sites[a].get("danger", 0)) < int(map.sites[b].get("danger", 0)))
+
+	var used := {}
+	for band in SEAL_BANDS:
+		var lo := int(band["range"][0])
+		var hi := int(band["range"][1])
+		var pick := Vector2i(-1, -1)
+		# まず帯に収まる洞から
+		for at in caves:
+			if used.has(at):
+				continue
+			var d := int(map.sites[at].get("danger", 0))
+			if d >= lo and d <= hi:
+				pick = at
+				break
+		# 無ければ帯に近い順で代える
+		if pick.x < 0:
+			var best := -1
+			for at in caves:
+				if used.has(at):
+					continue
+				var d := int(map.sites[at].get("danger", 0))
+				var gap: int = mini(absi(d - lo), absi(d - hi))
+				if best < 0 or gap < best:
+					best = gap
+					pick = at
+		if pick.x < 0:
+			continue  # 洞が足りない。検算が落とす
+		used[pick] = true
+		map.seals.append({
+			"pos": pick,
+			"band": String(band["id"]),
+			"band_name": String(band["name"]),
+			"danger": int(map.sites[pick].get("danger", 1)),
+			"name": "%s%s" % [
+				SEAL_HEAD[rng.range_i(0, SEAL_HEAD.size() - 1)],
+				SEAL_TAIL[rng.range_i(0, SEAL_TAIL.size() - 1)],
+			],
+			"why": SEAL_WHY[rng.range_i(0, SEAL_WHY.size() - 1)],
+			"broken": false,
+		})
+		# 洞の側にも印を付ける。HUD と町の聞き込みで使う。
+		map.sites[pick]["seal"] = map.seals.size() - 1
 
 
 # --------------------------------------------------------------------------

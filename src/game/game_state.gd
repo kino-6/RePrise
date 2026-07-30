@@ -348,6 +348,26 @@ func enter_site(at: Vector2i) -> Dictionary:
 	return site
 
 
+## いま入っている洞に封があるか（無ければ空）。
+func seal_here() -> Dictionary:
+	if world == null or String(site.get("kind", "")) != "cave":
+		return {}
+	return world.seal_at(Vector2i(site.get("pos", Vector2i(-1, -1))))
+
+
+## 封を解く。解けたら true。
+func break_seal() -> bool:
+	var s := seal_here()
+	if s.is_empty() or bool(s.get("broken", false)):
+		return false
+	s["broken"] = true
+	return true
+
+
+func seals_remaining() -> int:
+	return world.seals_remaining() if world != null else 0
+
+
 ## いま立っている土地の生物相。敵の抽選と絵の両方に使う。
 ## 洞の中ではその洞が建っている土地の生物相を引き継ぐ。
 func biome_here() -> String:
