@@ -33,6 +33,10 @@ var shop_stock: Dictionary = {}
 ## 最終階かどうか。出口の意味が「次の階」から「ボス戦」に変わる。
 var is_final: bool = false
 
+## この階の地形（assets/tiles/<biome>.png）。深いほど景色が変わる。
+## 同じ絵で 10 階ぶん潜ると、進んでいる感じが出ない。
+var biome: String = "dungeon"
+
 
 func _init(w: int = 0, h: int = 0) -> void:
 	width = w

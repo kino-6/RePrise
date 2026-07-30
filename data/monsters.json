@@ -623,5 +623,418 @@
     },
     "floor_min": 10,
     "floor_max": 10
+  },
+  "clockwork_hound": {
+    "name": "からくりいぬ",
+    "sprite": "clockwork_hound",
+    "hp": 34,
+    "mp": 0,
+    "atk": 12,
+    "def": 8,
+    "agi": 20,
+    "cost_scale": 70,
+    "exp": 26,
+    "gold": 12,
+    "abilities": [
+      "attack",
+      "quick_stab"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "dark"
+    ],
+    "steal": {
+      "common": "herb"
+    },
+    "floor_min": 4,
+    "floor_max": 8
+  },
+  "sentry_orb": {
+    "name": "かんしきゅう",
+    "sprite": "sentry_orb",
+    "hp": 30,
+    "mp": 20,
+    "atk": 10,
+    "def": 12,
+    "agi": 16,
+    "cost_scale": 100,
+    "exp": 30,
+    "gold": 14,
+    "abilities": [
+      "attack",
+      "slow"
+    ],
+    "weak": [
+      "ice"
+    ],
+    "resist": [
+      "bolt"
+    ],
+    "steal": {
+      "common": "water"
+    },
+    "floor_min": 5,
+    "floor_max": 9
+  },
+  "lancer": {
+    "name": "ていこくそうへい",
+    "sprite": "lancer",
+    "hp": 54,
+    "mp": 0,
+    "atk": 15,
+    "def": 10,
+    "agi": 13,
+    "cost_scale": 105,
+    "exp": 36,
+    "gold": 18,
+    "abilities": [
+      "attack",
+      "power_slash"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [],
+    "steal": {
+      "common": "herb"
+    },
+    "floor_min": 5,
+    "floor_max": 9
+  },
+  "rifleman": {
+    "name": "ていこくじゅうへい",
+    "sprite": "rifleman",
+    "hp": 44,
+    "mp": 4,
+    "atk": 16,
+    "def": 7,
+    "agi": 15,
+    "cost_scale": 95,
+    "exp": 38,
+    "gold": 18,
+    "abilities": [
+      "attack",
+      "arrow"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [],
+    "steal": {
+      "common": "herb",
+      "rare": "water"
+    },
+    "floor_min": 5,
+    "floor_max": 10
+  },
+  "medic": {
+    "name": "ていこくえいせいへい",
+    "sprite": "medic",
+    "hp": 44,
+    "mp": 30,
+    "atk": 10,
+    "def": 9,
+    "agi": 13,
+    "cost_scale": 100,
+    "exp": 40,
+    "gold": 22,
+    "abilities": [
+      "attack",
+      "heal"
+    ],
+    "weak": [
+      "dark"
+    ],
+    "resist": [],
+    "steal": {
+      "common": "herb",
+      "rare": "elixir"
+    },
+    "floor_min": 6,
+    "floor_max": 10
+  },
+  "sapper": {
+    "name": "ていこくこうへい",
+    "sprite": "sapper",
+    "hp": 50,
+    "mp": 16,
+    "atk": 13,
+    "def": 9,
+    "agi": 12,
+    "cost_scale": 115,
+    "exp": 42,
+    "gold": 20,
+    "abilities": [
+      "attack",
+      "bomb"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [],
+    "steal": {
+      "common": "water"
+    },
+    "floor_min": 6,
+    "floor_max": 10
+  },
+  "boiler_automaton": {
+    "name": "じょうききどうへい",
+    "sprite": "boiler_automaton",
+    "hp": 78,
+    "mp": 0,
+    "atk": 15,
+    "def": 16,
+    "agi": 8,
+    "cost_scale": 140,
+    "exp": 46,
+    "gold": 24,
+    "abilities": [
+      "attack",
+      "power_slash"
+    ],
+    "weak": [
+      "ice"
+    ],
+    "resist": [
+      "fire",
+      "dark"
+    ],
+    "steal": {
+      "common": "herb"
+    },
+    "floor_min": 6,
+    "floor_max": 10
+  },
+  "ash_revenant": {
+    "name": "はいのもうじゃ",
+    "sprite": "ash_revenant",
+    "hp": 58,
+    "mp": 12,
+    "atk": 16,
+    "def": 9,
+    "agi": 14,
+    "cost_scale": 110,
+    "exp": 50,
+    "gold": 24,
+    "abilities": [
+      "attack",
+      "poison_blade"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [
+      "dark"
+    ],
+    "steal": {
+      "common": "water"
+    },
+    "floor_min": 7,
+    "floor_max": 10
+  },
+  "officer": {
+    "name": "ていこくしかん",
+    "sprite": "officer",
+    "hp": 68,
+    "mp": 20,
+    "atk": 18,
+    "def": 12,
+    "agi": 14,
+    "cost_scale": 110,
+    "exp": 58,
+    "gold": 30,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "haste"
+    ],
+    "weak": [
+      "dark"
+    ],
+    "resist": [],
+    "steal": {
+      "common": "elixir"
+    },
+    "floor_min": 7,
+    "floor_max": 10
+  },
+  "magus": {
+    "name": "ていこくまどうへい",
+    "sprite": "magus",
+    "hp": 52,
+    "mp": 36,
+    "atk": 12,
+    "def": 8,
+    "agi": 15,
+    "cost_scale": 120,
+    "exp": 60,
+    "gold": 30,
+    "abilities": [
+      "attack",
+      "fire",
+      "frost"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "fire"
+    ],
+    "steal": {
+      "common": "water",
+      "rare": "elixir"
+    },
+    "floor_min": 7,
+    "floor_max": 10
+  },
+  "iron_cavalier": {
+    "name": "てつきへい",
+    "sprite": "iron_cavalier",
+    "hp": 94,
+    "mp": 0,
+    "atk": 21,
+    "def": 15,
+    "agi": 15,
+    "cost_scale": 120,
+    "exp": 76,
+    "gold": 40,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "whirlwind"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "ice"
+    ],
+    "steal": {
+      "common": "elixir"
+    },
+    "floor_min": 8,
+    "floor_max": 10
+  },
+  "siege_walker": {
+    "name": "こうじょうほこうき",
+    "sprite": "siege_walker",
+    "hp": 132,
+    "mp": 10,
+    "atk": 24,
+    "def": 18,
+    "agi": 6,
+    "cost_scale": 170,
+    "exp": 92,
+    "gold": 50,
+    "abilities": [
+      "attack",
+      "whirlwind",
+      "bomb"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "fire",
+      "ice"
+    ],
+    "steal": {
+      "rare": "elixir"
+    },
+    "floor_min": 9,
+    "floor_max": 10
+  },
+  "iron_margrave": {
+    "name": "てつのへんきょうはく",
+    "sprite": "iron_margrave",
+    "boss": true,
+    "hp": 660,
+    "mp": 40,
+    "atk": 50,
+    "def": 26,
+    "agi": 15,
+    "cost_scale": 130,
+    "exp": 400,
+    "gold": 300,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "whirlwind",
+      "haste"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "ice"
+    ],
+    "steal": {
+      "rare": "elixir"
+    },
+    "floor_min": 10,
+    "floor_max": 10
+  },
+  "land_dreadnought": {
+    "name": "りくじょうせんかん",
+    "sprite": "land_dreadnought",
+    "boss": true,
+    "hp": 760,
+    "mp": 40,
+    "atk": 50,
+    "def": 30,
+    "agi": 9,
+    "cost_scale": 160,
+    "exp": 400,
+    "gold": 300,
+    "abilities": [
+      "attack",
+      "bomb",
+      "whirlwind",
+      "blast"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "fire"
+    ],
+    "steal": {
+      "rare": "elixir"
+    },
+    "floor_min": 10,
+    "floor_max": 10
+  },
+  "aetheric_war_engine": {
+    "name": "れいきせんそうき",
+    "sprite": "aetheric_war_engine",
+    "boss": true,
+    "hp": 620,
+    "mp": 90,
+    "atk": 44,
+    "def": 22,
+    "agi": 17,
+    "cost_scale": 120,
+    "exp": 400,
+    "gold": 300,
+    "abilities": [
+      "attack",
+      "bolt_all",
+      "frost",
+      "haste_all"
+    ],
+    "weak": [
+      "ice"
+    ],
+    "resist": [
+      "bolt"
+    ],
+    "steal": {
+      "rare": "elixir"
+    },
+    "floor_min": 10,
+    "floor_max": 10
   }
 }

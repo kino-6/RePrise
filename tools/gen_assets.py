@@ -407,6 +407,29 @@ def _tileset_readable(sheet: Canvas) -> tuple[bool, str]:
     )
 
 
+## 場所ごとのタイル。既定（dungeon）は assets/tiles/dungeon.png に、
+## それ以外は名前のまま置く。無い場所は単に生成されないので、
+## ゲーム側は「あれば使う」で拾えばよい。
+BIOMES = ["dungeon", "grassland", "snowfield", "volcano", "wetland"]
+
+
+def build_biomes() -> None:
+    """既定以外の場所のタイルを書き出す。条件に落ちたものは見送る。"""
+    for name in BIOMES:
+        if name == "dungeon":
+            continue  # 既定は build_tileset が面倒をみる
+        sheet = _load_sheet(f"candidate_tiles_{name}", TILESET_SIZE)
+        if sheet is None:
+            continue
+        readable, reason = _tileset_readable(sheet)
+        if not readable:
+            print(f"  見送り: candidate_tiles_{name}.png — {reason}")
+            continue
+        sheet.to_png(ASSETS / "tiles" / f"{name}.png")
+        sheet.scaled(6).to_png(PREVIEW / f"tiles_{name}.png")
+        print(f"  取り込み: {name}.png（chara_image/candidate_tiles_{name}.png）")
+
+
 def build_tileset() -> None:
     """9 枚を横一列に並べた 144x16 のタイルシート。
 
@@ -1261,10 +1284,17 @@ IMPORTED_MONSTERS = [
     "arcane_hound", "lantern_mimic", "plague_moth", "crystal_drake",
     "ruin_automaton", "ember_wraith", "frost_stalker", "mire_oracle",
     "fungal_knight", "void_scribe", "chain_ogre", "shattered_seraph",
+    # 帝国。深い階の主役になる一団で、機械と兵科で揃えてある。
+    "lancer", "rifleman", "officer", "medic", "magus", "sapper",
+    "clockwork_hound", "boiler_automaton", "sentry_orb", "ash_revenant",
+    "iron_cavalier", "siege_walker",
 ]
 
-## 主。名前は candidate_boss_<ID>.png で探す。
-IMPORTED_BOSSES = ["thorn_crowned_king", "crucible_colossus", "frostbound_oracle"]
+## 主。名前は candidate_boss_<ID>.png / candidate_imperial_boss_<ID>.png で探す。
+IMPORTED_BOSSES = [
+    "thorn_crowned_king", "crucible_colossus", "frostbound_oracle",
+    "iron_margrave", "land_dreadnought", "aetheric_war_engine",
+]
 
 
 def _load_monster_sheet(name: str) -> Canvas | None:
@@ -1273,7 +1303,15 @@ def _load_monster_sheet(name: str) -> Canvas | None:
     敵は 1 体ずつ寸法が違う（ゲルは 48x40、主は 64x64）ので、
     寸法は候補のものをそのまま受け取り、上限だけを見る。
     """
-    for stem in (f"candidate_enemy_{name}_refined", f"candidate_enemy_{name}"):
+    # 素材の名前は置いた側の都合で揺れる。探す順だけ決めて、あるものを拾う。
+    stems = (
+        f"candidate_enemy_{name}_refined",
+        f"candidate_enemy_{name}",
+        f"candidate_imperial_enemy_{name}",
+        f"candidate_boss_{name}",
+        f"candidate_imperial_boss_{name}",
+    )
+    for stem in stems:
         path = HERO_SOURCE_DIR / f"{stem}.png"
         if not path.exists():
             continue
@@ -1300,6 +1338,8 @@ def build_imported_monsters() -> None:
             sheet.scaled(4).to_png(PREVIEW / f"{name}.png")
     for name in IMPORTED_BOSSES:
         path = HERO_SOURCE_DIR / f"candidate_boss_{name}.png"
+        if not path.exists():
+            path = HERO_SOURCE_DIR / f"candidate_imperial_boss_{name}.png"
         if not path.exists():
             continue
         sheet, moved = _quantize(load_png(path))
@@ -1450,6 +1490,7 @@ def build_cursor() -> Canvas:
 
 def main() -> None:
     build_tileset()
+    build_biomes()
     build_heroes()
     build_blob("gel", GEL, width=24, height=40)
     build_monster("bat", BAT_HALF, BAT, width=24)

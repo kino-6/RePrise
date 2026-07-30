@@ -6,6 +6,15 @@ extends RefCounted
 ## 乱数は渡された DetRng からしか引かない。時刻にもエンジンの乱数にも触らないので、
 ## 同じシードと同じ階層からは必ず同じフロアが出る。
 
+## 階層ごとの地形。深いほど景色が変わる（進んでいる感じを絵で出す）。
+## 素材が無い場所は既定に落ちるので、ここに書いても壊れない。
+const BIOME_BY_FLOOR := {7: "snowfield", 8: "snowfield", 9: "snowfield", 10: "snowfield"}
+
+
+static func biome_for(floor_number: int) -> String:
+	return String(BIOME_BY_FLOOR.get(floor_number, "dungeon"))
+
+
 const MAP_W := 40
 const MAP_H := 32
 
@@ -20,6 +29,7 @@ const ROOM_LIMIT := 8
 ## 到達性テストの外側に出てしまうため）。
 static func generate(rng: DetRng, floor_number: int, final_floor: bool = false) -> DungeonMap:
 	var map := DungeonMap.new(MAP_W, MAP_H)
+	map.biome = biome_for(floor_number)
 	map.is_final = final_floor
 	_carve_rooms(map, rng)
 	if map.rooms.is_empty():

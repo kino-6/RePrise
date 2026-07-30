@@ -19,6 +19,18 @@ const MIN_SAFE_STEPS := 9
 
 const TILES_TEX: Texture2D = preload("res://assets/tiles/dungeon.png")
 
+## 階ごとの地形。素材が無い場所は既定（dungeon）に落ちる。
+static var _tilesets: Dictionary = {}
+
+
+static func tileset_for(biome: String) -> Texture2D:
+	if _tilesets.has(biome):
+		return _tilesets[biome]
+	var path := "res://assets/tiles/%s.png" % biome
+	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else TILES_TEX
+	_tilesets[biome] = tex
+	return tex
+
 ## キャラは 16x16 のタイルより大きい。足元をタイルに合わせ、頭は上へはみ出させる。
 const CHAR_W := 24
 const CHAR_H := 32
@@ -193,7 +205,7 @@ func _draw() -> void:
 			if t == DungeonMap.T_VOID:
 				continue
 			draw_texture_rect_region(
-				TILES_TEX,
+				tileset_for(map.biome),
 				Rect2(x * TILE, y * TILE, TILE, TILE),
 				Rect2(t * TILE, 0, TILE, TILE)
 			)
