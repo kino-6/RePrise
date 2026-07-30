@@ -237,6 +237,18 @@ func _tokens(list: Array, kind: String) -> String:
 	return "・".join(parts)
 
 
+## 詳細窓の左半分の幅。「あぶない」を右半分へ逃がすための境目。
+const DETAIL_HALF_W := 242.0
+
+
+## 詳細窓の 1 行。**幅は窓の内側から取る**（窓の寸法を変えても古くならない）。
+func _detail(origin: Vector2, dy: float, width: float = -1.0) -> UiPanel:
+	var inner := PixelUI.content(DETAIL_RECT)
+	var room := width if width > 0.0 else inner.end.x - origin.x - 16.0
+	return UiPanel.inside(self, Rect2(
+		origin + Vector2(8, dy), Vector2(room, PixelUI.LINE)))
+
+
 func _draw_detail() -> void:
 	PixelUI.draw_window(self, DETAIL_RECT, WINDOW_TEX)
 	var origin := PixelUI.content(DETAIL_RECT).position
@@ -255,52 +267,50 @@ func _draw_detail() -> void:
 		for row in rows:
 			if String(row[1]) == "":
 				continue
-			PixelUI.draw_text(
-				self, origin + Vector2(8, shown * 18),
-				PixelUI.clip("%s: %s" % [row[0], row[1]], 470.0, PixelUI.SIZE_SUB),
-				PixelUI.C_HP_LOW if row[0] == "手ばなす" else PixelUI.C_TEXT, PixelUI.SIZE_SUB
+			_detail(origin, shown * 18).line(
+				"%s: %s" % [row[0], row[1]],
+				PixelUI.C_HP_LOW if row[0] == "手ばなす" else PixelUI.C_TEXT,
+				PixelUI.SIZE_SUB
 			)
 			shown += 1
 		if shown == 0:
-			PixelUI.draw_text(
-				self, origin + Vector2(8, 0), "Ｚで つづける", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-			)
+			_detail(origin, 0).line("Ｚで つづける", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 		return
 
 	if bool(c.get("defer", false)):
-		PixelUI.draw_text(
-			self, origin + Vector2(8, 0),
-			Terms.EVENT_DEFER_DETAIL, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+		_detail(origin, 0).line(
+			Terms.EVENT_DEFER_DETAIL, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 		return
 
 	var risks := _tokens(c.get("risks", []), "risk")
-	PixelUI.draw_text(
-		self, origin + Vector2(8, 0),
-		"はらう: %s" % [_tokens(c.get("costs", []), "cost") if not c.get("costs", []).is_empty() else "なし"],
+	# 左半分に「はらう」、右半分に「あぶない」。**列として幅を渡す**ので、
+	# 手で 218 や 470 と書いていた数字が要らなくなる（窓を変えると古くなる数字）。
+	_detail(origin, 0, DETAIL_HALF_W).line(
+		"はらう: %s" % [
+			_tokens(c.get("costs", []), "cost")
+			if not c.get("costs", []).is_empty() else "なし"
+		],
 		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 	)
-	PixelUI.draw_text(
-		self, origin + Vector2(8, 18),
-		PixelUI.clip("もらう: %s" % [_tokens(c.get("rewards", []), "reward")], 470.0, PixelUI.SIZE_SUB),
+	_detail(origin, 18).line(
+		"もらう: %s" % [_tokens(c.get("rewards", []), "reward")],
 		PixelUI.C_TEXT, PixelUI.SIZE_SUB
 	)
-	# 右半分に置くので、残り幅で切る（切らずに置いたら 20px 出た）。
-	PixelUI.draw_text(
-		self, origin + Vector2(250, 0),
-		PixelUI.clip("あぶない: %s" % [risks if risks != "" else "なし"], 218.0, PixelUI.SIZE_SUB),
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(DETAIL_HALF_W + 8.0, 0),
+		Vector2(PixelUI.content(DETAIL_RECT).end.x - origin.x - DETAIL_HALF_W - 16.0,
+			PixelUI.LINE)
+	)).line(
+		"あぶない: %s" % [risks if risks != "" else "なし"],
 		PixelUI.C_HP_LOW if risks != "" else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 	)
 	# 払えないときは、その理由を最優先で出す。
 	if not _blocked.is_empty():
-		PixelUI.draw_text(
-			self, origin + Vector2(8, 38), "たりない: %s" % "・".join(_blocked),
-			PixelUI.C_HP_LOW, PixelUI.SIZE_SUB
-		)
+		_detail(origin, 38).line(
+			"たりない: %s" % "・".join(_blocked), PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
 		return
-	PixelUI.draw_text(
-		self, origin + Vector2(8, 38), "Ｚで きめる　Ｘで 見送る", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
+	_detail(origin, 38).line(
+		"Ｚで きめる　Ｘで 見送る", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 
 ## 払えない理由を外から入れる（GameState を知らないので自分では調べない）。

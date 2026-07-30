@@ -707,31 +707,32 @@ func _draw_menu() -> void:
 		_draw_learned()
 
 
+## 下の窓の 1 行。**幅は窓の内側から取る**（文言を差し替えても溢れない）。
+func _menu_line(dy: float) -> UiPanel:
+	var menu := PixelUI.content(MENU_RECT)
+	return UiPanel.inside(self, Rect2(
+		menu.position + Vector2(8, dy), Vector2(menu.size.x - 16.0, PixelUI.LINE)))
+
+
 ## 編成のときの案内。名簿の行と操作を分けて書く。
 func _draw_party_hint() -> void:
-	var origin := PixelUI.content(MENU_RECT).position
-	PixelUI.draw_text(self, origin + Vector2(8, 2), "連れて行く なかまを えらぶ", PixelUI.C_TEXT)
-	PixelUI.draw_text(
-		self, origin + Vector2(8, 28), "● が 出撃する なかま。Ｚ で 入れ替える。", PixelUI.C_TEXT_DIM
-	)
-	PixelUI.draw_text(
-		self, origin + Vector2(8, 52),
-		"留守番した なかまは 熟練が 積まれない。", PixelUI.C_TEXT_DIM
-	)
+	_menu_line(2).line("連れて行く なかまを えらぶ", PixelUI.C_TEXT)
+	_menu_line(28).line("● が 出撃する なかま。Ｚ で 入れ替える。", PixelUI.C_TEXT_DIM)
+	_menu_line(52).line("留守番した なかまは 熟練が 積まれない。", PixelUI.C_TEXT_DIM)
 
 
 func _draw_upgrade_desc() -> void:
-	var origin := PixelUI.content(MENU_RECT).position
 	if _upgrade_ids.is_empty():
 		return
 	var id := String(_upgrade_ids[_upgrade_index])
 	var u := Database.upgrade(id)
-	PixelUI.draw_text(self, origin + Vector2(8, 2), String(u.get("name", id)), PixelUI.C_ACTIVE)
-	PixelUI.draw_text(self, origin + Vector2(8, 26), String(u.get("desc", "")), PixelUI.C_TEXT)
+	# 名も説明も data/upgrades.json 側なので、長さを前提にしない。
+	_menu_line(2).line(String(u.get("name", id)), PixelUI.C_ACTIVE)
+	_menu_line(26).line(String(u.get("desc", "")), PixelUI.C_TEXT)
 	var tail := "Ｚで のばす　Ｘで もどる"
 	if _state != State.UPGRADE:
 		tail = "Ｚで えらぶ"
-	PixelUI.draw_text(self, origin + Vector2(8, 52), tail, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	_menu_line(52).line(tail, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 
 func _draw_learned() -> void:
@@ -765,14 +766,9 @@ func _draw_learned() -> void:
 
 
 func _draw_hint() -> void:
-	var origin := PixelUI.content(MENU_RECT).position
-	PixelUI.draw_text(self, origin + Vector2(8, 2), "↑↓ えらぶ　Ｚ けってい　Ｘ もどる", PixelUI.C_TEXT_DIM)
-	PixelUI.draw_text(
-		self, origin + Vector2(8, 28), "なかまを えらぶと てんしょくできる。", PixelUI.C_TEXT_DIM
-	)
-	PixelUI.draw_text(
-		self, origin + Vector2(8, 52), "じゅくれんは しょくぎょうごとに のこる。", PixelUI.C_TEXT_DIM
-	)
+	_menu_line(2).line("↑↓ えらぶ　Ｚ けってい　Ｘ もどる", PixelUI.C_TEXT_DIM)
+	_menu_line(28).line("なかまを えらぶと てんしょくできる。", PixelUI.C_TEXT_DIM)
+	_menu_line(52).line("じゅくれんは しょくぎょうごとに のこる。", PixelUI.C_TEXT_DIM)
 
 
 func _draw_job_menu() -> void:
@@ -813,7 +809,8 @@ func _draw_job_menu() -> void:
 		# 4 列に詰めたので、ここは名前だけ。★ と速さと説明は上の詳細窓に出ている。
 		# 名前の隣に ★ を置くと「まじゅうつかい」のような長い名前とぶつかった。
 		var label := _job_name(job_id) if not locked else _job_name(job_id) + "×"
-		PixelUI.draw_text(self, at, label, tint, PixelUI.SIZE_SUB)
+		UiPanel.inside(self, Rect2(at, Vector2(ABILITY_COL_W - 6.0, PixelUI.LINE))).line(
+			label, tint, PixelUI.SIZE_SUB)
 
 
 func _draw_notice() -> void:
