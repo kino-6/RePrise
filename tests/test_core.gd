@@ -27,6 +27,7 @@ func _initialize() -> void:
 	_test_data_integrity()
 	_test_save_migration()
 	_test_save_to_disk()
+	_test_suspend()
 	_test_roster()
 	_test_field_poison()
 	_test_settings()
@@ -877,6 +878,75 @@ func _test_event_effects() -> void:
 		if a.events[pos]["skin"] != b.events[pos]["skin"]:
 			same_skin = false
 	_check("同じ種から同じ表層が出る", same_skin)
+
+
+## 中断と再開。
+##
+## **世界を書き出さず、種から作り直す**作りなので、復元が本当に一致するかを
+## ここで見る。目で見て気づけるのは「同じ場所に立っている」だけで、
+## 封やイベントの進みが落ちていても画面では分からない。
+func _test_suspend() -> void:
+	var state: Node = load("res://src/game/game_state.gd").new()
+	state.use_save_paths("user://test_suspend_save")
+	state.roster = _fresh_roster()
+	state.start_new_run(4242)
+
+	# 進めた状態を作る（場所・封・イベント・物語・持ち物）
+	state.world_pos = state.world.seals[0]["pos"]
+	state.floor_number = 6
+	state.gold = 321
+	state.kills = 12
+	state.add_item("herb", 2)
+	state.world.seals[0]["broken"] = true
+	state.world.story_beat = 3
+	state.world.story_choice = "test_choice"
+	state.event_done[Vector2i(9, 9)] = true
+	state.event_tags["rescue"] = 2
+	state.lifeline_left = 1
+	state.active_party()[0].hp = 7
+
+	var suspended: Dictionary = state.to_suspend()
+	_check("中断に世界の地形を書かない（種だけ）", not suspended.has("tiles"))
+	_equal("種を書く", int(suspended["seed"]), 4242)
+
+	# 別の GameState で読み直す（保存ファイルは共有なので同じ経路を通る）
+	_check("中断を書き出せる", state.save_suspend())
+	_check("中断があると分かる", state.has_suspend())
+
+	var back: Node = load("res://src/game/game_state.gd").new()
+	back.use_save_paths("user://test_suspend_save")
+	back.roster = _fresh_roster()
+	_check("中断から再開できる", back.resume())
+
+	_equal("居た場所が戻る", back.world_pos, state.world_pos)
+	_equal("危険度が戻る", back.floor_number, 6)
+	_equal("ゴールドが戻る", back.gold, 321)
+	_equal("撃破数が戻る", back.kills, 12)
+	_equal("持ち物が戻る", int(back.inventory.get("herb", 0)), 2)
+	_check("解いた封が戻る", bool(back.world.seals[0].get("broken", false)))
+	_equal("物語の進みが戻る", back.world.story_beat, 3)
+	_equal("選んだ手が戻る", back.world.story_choice, "test_choice")
+	_check("済んだイベントが戻る", back.event_done.has(Vector2i(9, 9)))
+	_equal("えらび方の記憶が戻る", int(back.event_tags.get("rescue", 0)), 2)
+	_equal("命の綱が戻る", back.lifeline_left, 1)
+	_equal("HP が戻る", back.active_party()[0].hp, 7)
+
+	# **同じ世界であること。** 種から作り直すので、ここが崩れたら全部が嘘になる。
+	_equal("同じ世界が出る", back.world.to_ascii(), state.world.to_ascii())
+	_equal("封の場所も同じ", back.world.seals[1]["pos"], state.world.seals[1]["pos"])
+
+	# 読んだら消える（同じ中断を二度使えない）
+	_check("読んだら中断は消える", not back.has_suspend())
+
+	state.free()
+	back.free()
+
+
+func _fresh_roster() -> Array[PartyMember]:
+	var members: Array[PartyMember] = []
+	for entry in [["ア", "soldier"], ["イ", "priest"], ["ウ", "mage"], ["エ", "thief"]]:
+		members.append(PartyMember.create(String(entry[0]), String(entry[1])))
+	return members
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。

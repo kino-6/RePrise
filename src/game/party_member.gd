@@ -333,6 +333,31 @@ func to_dict() -> Dictionary:
 	}
 
 
+## ラン中の状態（中断のときだけ書き出す）。
+##
+## `to_dict()` は**恒久データ専用**なので分けてある。混ぜると、拠点のセーブに
+## ラン中の HP が混ざり込む（境界を 1 か所に集める、という決めごとが崩れる）。
+func to_run_dict() -> Dictionary:
+	return {
+		"level": level,
+		"exp": exp_points,
+		"hp": hp,
+		"mp": mp,
+		"equipment": equipment.duplicate(),
+		"poison": poison_steps,
+	}
+
+
+func load_run_dict(d: Dictionary) -> void:
+	level = maxi(int(d.get("level", 1)), 1)
+	exp_points = int(d.get("exp", 0))
+	equipment = d.get("equipment", {}).duplicate()
+	poison_steps = int(d.get("poison", 0))
+	# HP と MP は最大値を出したあとに入れる（装備で最大値が変わる）。
+	hp = clampi(int(d.get("hp", max_hp())), 0, max_hp())
+	mp = clampi(int(d.get("mp", max_mp())), 0, max_mp())
+
+
 static func from_dict(d: Dictionary) -> PartyMember:
 	var m := PartyMember.new()
 	m.name = String(d.get("name", ""))

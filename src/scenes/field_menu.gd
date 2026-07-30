@@ -13,6 +13,8 @@ extends Node2D
 
 signal closed
 signal settings_requested
+## ラン途中で保存して閉じる。**世界 1 周が 1 ランなので、途中で閉じられないと無理がある。**
+signal suspend_requested
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
@@ -31,7 +33,7 @@ const SLOT_LABELS := {"weapon": "ぶき", "armor": "よろい", "accessory": "�
 enum State { ROOT, MEMBER, ITEM, ITEM_TARGET, STATUS, SLOT, GEAR, JOB }
 
 const ROOT_ITEMS: Array[String] = [
-	"どうぐ", "つよさ", "そうび", "てんしょく", "せってい", "とじる",
+	"どうぐ", "つよさ", "そうび", "てんしょく", "せってい", "ちゅうだん", "とじる",
 ]
 
 ## てんしょくの一覧は 2 列。15 職あるので 1 列だと枠から出る。
@@ -175,6 +177,10 @@ func _input_root(event: InputEvent) -> void:
 				settings_requested.emit()
 				return
 			5:
+				close()
+				suspend_requested.emit()
+				return
+			6:
 				_leave()
 				return
 	queue_redraw()
@@ -493,6 +499,8 @@ func _draw_body() -> void:
 				_draw_status()
 			elif _root_index == 3:
 				_draw_job_notice()
+			elif _root_index == 5:
+				_draw_suspend_notice()
 
 
 ## てんしょくを選ぶ前の案内。押す前に読める位置に置く。
@@ -548,6 +556,19 @@ func _draw_jobs() -> void:
 			PixelUI.draw_text_right(
 				self, Vector2(at.x + 132.0, at.y + 2), "★%d" % rank, tint, PixelUI.SIZE_SUB
 			)
+
+
+## 中断の案内。**何が起きるかを押す前に書く。**
+func _draw_suspend_notice() -> void:
+	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
+	PixelUI.draw_text(self, origin, "ちゅうだん", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	var lines := [
+		"いまの ところで 保存して とじる。",
+		"つぎに ひらくと ここから つづく。",
+		"世界も もちものも そのまま。",
+	]
+	for i in lines.size():
+		PixelUI.draw_text(self, origin + Vector2(0, 32 + i * 22), lines[i], PixelUI.C_TEXT_DIM)
 
 
 func _draw_items() -> void:

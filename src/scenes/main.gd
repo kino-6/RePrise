@@ -130,6 +130,7 @@ func _ready() -> void:
 		_ask_event_text())
 
 	title.started.connect(_enter_stronghold)
+	title.resumed.connect(_resume_run)
 	stronghold.departed.connect(_start_run)
 	explore.encounter_triggered.connect(_on_encounter)
 	explore.descended.connect(_on_descend)
@@ -151,20 +152,39 @@ func _ready() -> void:
 	explore.poison_ticked.connect(_on_poison_tick)
 	menu.closed.connect(_close_menu)
 	menu.settings_requested.connect(_open_settings)
+	menu.suspend_requested.connect(_suspend_run)
 	title.settings_requested.connect(_open_settings)
 	settings.closed.connect(_close_settings)
 	result.dismissed.connect(_enter_stronghold)
 
 	_make_curtain()
-	_enter_title()
 	_handle_debug_args()
+	# 開発用の保存から立ち上げたときは、その場面のままにする。
+	if not _loaded_from_dev and _mode == Mode.EXPLORE:
+		_enter_title()
 
 
 ## 開発用。画面を 1 枚撮って終了する。
 ##   godot --path . -- --shot=explore
 ## GUI を触らずに見た目を確認できるので、ドット絵の調整に効く。
 func _handle_debug_args() -> void:
+	# **先に全部の引数を見る。** 下の輪は最初に当たった指定で return するので、
+	# 「--play=12 --dev-save=probe」のように後ろへ書くと読まれなかった。
 	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--dev-save="):
+			_dev_save_name = arg.trim_prefix("--dev-save=")
+
+	for arg in OS.get_cmdline_user_args():
+		# 開発用。「この世界のこの場面」を保存／読み込みする。
+		#   godot --path . -- --dev-load=boss1
+		# **読み込んだあとも他の指定を続ける。** ここで return すると
+		# 「--dev-load=x --play=10」の自動プレイが始まらず、headless が終わらない。
+		if arg.begins_with("--dev-load="):
+			if GameState.dev_load(arg.trim_prefix("--dev-load=")):
+				print("開発用の保存から再開: %s" % arg.trim_prefix("--dev-load="))
+				_resume_loaded()
+				_loaded_from_dev = true
+			continue
 		if arg.begins_with("--shot="):
 			_capture(arg.trim_prefix("--shot="))
 			return
@@ -522,6 +542,34 @@ const QUEST_PROMPT := """あなたは SFC 期の日本語 RPG の名づけ役で
 """
 
 
+## 開発用。`--dev-save=名前` を付けて起動すると、ランを始めた直後に保存する。
+var _dev_save_name := ""
+
+## 開発用の保存から立ち上げたか（そのときはタイトルへ戻さない）。
+var _loaded_from_dev := false
+
+
+## 読み込んだ状態から画面を立ち上げる（中断の再開と同じ道）。
+func _resume_loaded() -> void:
+	_event_skinned = {}
+	_awaiting_event_text = false
+	if String(GameState.site.get("kind", "")) == "cave":
+		_enter_floor()
+	else:
+		GameState.site = {}
+		_enter_world()
+
+
+## 中断から再開する。読めなければ拠点へ落とす（詰ませない）。
+func _resume_run() -> void:
+	if not GameState.resume():
+		hud.toast("つづきが 読めなかった。")
+		_enter_stronghold()
+		return
+	# 世界は種から作り直したので、いま居る場所へ立ち直すだけでよい。
+	_resume_loaded()
+
+
 func _start_run() -> void:
 	GameState.start_new_run()
 	Sound.play("depart")
@@ -531,6 +579,9 @@ func _start_run() -> void:
 	if not applied.is_empty():
 		print("開発指定: %s" % "　".join(applied))
 	# 「封の言い伝え」を買っているぶん、出撃前から在り処が分かっている。
+	if _dev_save_name != "":
+		if GameState.dev_save(_dev_save_name):
+			print("開発用の保存: %s" % _dev_save_name)
 	var told := GameState.reveal_known_seals()
 	if not told.is_empty():
 		hud.toast("言い伝え: %s" % " ".join(told))
@@ -1093,6 +1144,21 @@ func _open_menu() -> void:
 
 func _close_menu() -> void:
 	_set_mode(Mode.EXPLORE)
+
+
+## ラン途中で保存して閉じる。
+##
+## **世界そのものは書かない。** 決定性があるので種から作り直せる。
+## 書き出したらタイトルへ戻る（そのまま遊び続けられると、同じ中断から
+## 二度始められてしまう）。
+func _suspend_run() -> void:
+	if not GameState.save_suspend():
+		hud.toast("いまは ちゅうだんできない。")
+		_set_mode(Mode.EXPLORE)
+		return
+	Sound.play("confirm")
+	GameState.run_active = false
+	_enter_title()
 
 
 ## 設定はどの画面からでも開ける。閉じたら開く前の画面へ戻す。

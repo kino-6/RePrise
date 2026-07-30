@@ -1301,7 +1301,26 @@ def _load_sheet(stem: str, size: tuple[int, int]) -> Canvas | None:
 ##
 ## 借りていたときは、町の中に自分と同じ姿が 4 人立っていた。
 ## 24x32 の 1 コマだけなので歩行はしないが、町に居るのは立ち止まっている人。
-NPC_ROLES = ["innkeeper", "merchant", "elder", "scout", "guard"]
+NPC_ROLES = [
+    "innkeeper",
+    "merchant",
+    "elder",
+    "scout",
+    "guard",
+    # 町の用途と輪郭が一目で分かれる追加 NPC。
+    "healer",
+    "blacksmith",
+    "miner",
+    "ferryman",
+    "farmer",
+    "beastkeeper",
+    "mechanic",
+    "scribe",
+    "refugee",
+    "pilgrim",
+    "performer",
+    "imperial_officer",
+]
 
 
 def build_npcs() -> None:
@@ -1312,6 +1331,44 @@ def build_npcs() -> None:
         sheet.to_png(ASSETS / "sprites" / f"npc_{role}.png")
         sheet.scaled(4).to_png(PREVIEW / f"npc_{role}.png")
         print(f"  取り込み: npc_{role}.png")
+
+
+# 非戦闘イベント用の 4 コマ演出と、画面全体を覆う 8 コマ遷移。
+# 候補画像を正寸の横一列アトラスにしておき、再生側はフレーム幅だけを知ればよい。
+EVENT_EFFECTS = [
+    "world_gate",
+    "seal_break",
+    "chronicle_echo",
+    "imperial_alarm",
+]
+TRANSITIONS = [
+    "pixel_dissolve",
+    "iris_gate",
+    "page_turn",
+    "gear_shutter",
+]
+EVENT_EFFECT_SIZE = (48 * 4, 48)
+TRANSITION_SIZE = (64 * 8, 40)
+
+
+def build_event_effects() -> None:
+    for effect in EVENT_EFFECTS:
+        sheet = _load_sheet(f"candidate_event_fx_{effect}", EVENT_EFFECT_SIZE)
+        if sheet is None:
+            continue
+        sheet.to_png(ASSETS / "effects" / f"event_{effect}.png")
+        sheet.scaled(4).to_png(PREVIEW / f"event_fx_{effect}.png")
+        print(f"  取り込み: event_{effect}.png")
+
+
+def build_transitions() -> None:
+    for transition in TRANSITIONS:
+        sheet = _load_sheet(f"candidate_transition_{transition}", TRANSITION_SIZE)
+        if sheet is None:
+            continue
+        sheet.to_png(ASSETS / "transitions" / f"{transition}.png")
+        sheet.scaled(2).to_png(PREVIEW / f"transition_{transition}.png")
+        print(f"  取り込み: transition/{transition}.png")
 
 
 def build_heroes() -> None:
@@ -1886,6 +1943,8 @@ def main() -> None:
     build_world_tileset()
     build_biomes()
     build_npcs()
+    build_event_effects()
+    build_transitions()
     build_heroes()
     build_blob("gel", GEL, width=24, height=40)
     build_monster("bat", BAT_HALF, BAT, width=24)

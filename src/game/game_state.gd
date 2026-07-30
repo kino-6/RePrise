@@ -760,6 +760,163 @@ const SAVE_VERSION := 2
 
 ## 恒久データを辞書にする。ファイル入出力と分けてあるので、
 ## 「書いて読み直しても壊れない」をテストから確かめられる。
+## 中断の置き場。本体セーブとは分ける（拠点の恒久データを汚さない）。
+const SUSPEND_PATH := "user://suspend.json"
+
+## 中断の形式。
+const SUSPEND_VERSION := 1
+
+
+## 中断できるか（ラン中で、まだ終わっていない）。
+func can_suspend() -> bool:
+	return run_active and world != null
+
+
+## ラン途中の状態を書き出す。
+##
+## **世界そのものは書かない。** 決定性があるので `run_seed` から作り直せる
+## （64x48 の地形と拠点地と物語を丸ごと書くより、種 1 つのほうが安く確実）。
+## 書くのは「種から復元できないもの」だけ ―― どこに居て、何を解いて、
+## 何を持っているか。
+func to_suspend() -> Dictionary:
+	var broken: Array = []
+	for s in world.seals:
+		broken.append(bool(s.get("broken", false)))
+	var done: Array = []
+	for pos in event_done:
+		done.append([int(pos.x), int(pos.y)])
+	var run_members: Array = []
+	for m in active_party():
+		run_members.append(m.to_run_dict())
+	return {
+		"version": SUSPEND_VERSION,
+		"seed": run_seed,
+		"pos": [world_pos.x, world_pos.y],
+		"site": site.duplicate(),
+		"danger": floor_number,
+		"gold": gold, "steps": steps, "kills": kills, "gold_earned": gold_earned,
+		"inventory": inventory.duplicate(),
+		"gear_stock": gear_stock.duplicate(),
+		"runs_attempted": runs_attempted,
+		"seals_broken": broken,
+		"events_done": done,
+		"event_tags": event_tags.duplicate(),
+		"story_beat": world.story_beat,
+		"story_choice": world.story_choice,
+		"lifeline": lifeline_left,
+		"members": run_members,
+	}
+
+
+func save_suspend() -> bool:
+	if not can_suspend():
+		return false
+	var file := FileAccess.open(SUSPEND_PATH, FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(to_suspend(), "  "))
+	return true
+
+
+func has_suspend() -> bool:
+	return FileAccess.file_exists(SUSPEND_PATH)
+
+
+func clear_suspend() -> void:
+	if not has_suspend():
+		return
+	var dir := DirAccess.open("user://")
+	if dir != null:
+		dir.remove(SUSPEND_PATH)
+
+
+## 中断から再開する。**世界は種から作り直す。**
+func resume() -> bool:
+	if not has_suspend():
+		return false
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(SUSPEND_PATH))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		clear_suspend()
+		return false
+	var d: Dictionary = parsed
+
+	run_seed = int(d.get("seed", 0))
+	rng = DetRng.new(run_seed)
+	world = WorldGenerator.generate(DetRng.new(run_seed).fork("world"))
+	if world == null or world.seals.is_empty():
+		clear_suspend()
+		return false
+
+	var raw_pos: Array = d.get("pos", [0, 0])
+	world_pos = Vector2i(int(raw_pos[0]), int(raw_pos[1]))
+	site = d.get("site", {}).duplicate()
+	floor_number = int(d.get("danger", 1))
+	gold = int(d.get("gold", 0))
+	steps = int(d.get("steps", 0))
+	kills = int(d.get("kills", 0))
+	gold_earned = int(d.get("gold_earned", 0))
+	inventory = d.get("inventory", {}).duplicate()
+	gear_stock.assign(d.get("gear_stock", []))
+	runs_attempted = int(d.get("runs_attempted", runs_attempted))
+	lifeline_left = int(d.get("lifeline", 0))
+	event_tags = d.get("event_tags", {}).duplicate()
+
+	var broken: Array = d.get("seals_broken", [])
+	for i in mini(broken.size(), world.seals.size()):
+		world.seals[i]["broken"] = bool(broken[i])
+	event_done = {}
+	for raw in d.get("events_done", []):
+		var pair: Array = raw
+		if pair.size() == 2:
+			event_done[Vector2i(int(pair[0]), int(pair[1]))] = true
+	world.story_beat = int(d.get("story_beat", 0))
+	world.story_choice = String(d.get("story_choice", ""))
+
+	var run_members: Array = d.get("members", [])
+	var party := active_party()
+	for i in mini(run_members.size(), party.size()):
+		party[i].load_run_dict(run_members[i])
+
+	run_active = true
+	clear_suspend()   # 読んだら消す（同じ中断を二度使えないようにする）
+	run_started.emit(run_seed)
+	floor_changed.emit(floor_number)
+	return true
+
+
+## 開発用の名前付き保存。**中断と同じ書き出しを使い回す。**
+##
+## 「この世界のこの場面」を読み直せると、不具合の再現とバランス確認が一気に楽になる。
+## 別の書式を作ると中断と二重管理になるので、置き場だけ分ける。
+const DEV_DIR := "user://dev/"
+
+
+func dev_save(name: String) -> bool:
+	if not can_suspend():
+		return false
+	DirAccess.make_dir_recursive_absolute(DEV_DIR)
+	var file := FileAccess.open("%s%s.json" % [DEV_DIR, name], FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(to_suspend(), "  "))
+	return true
+
+
+## 名前付き保存を読む。中断の経路をそのまま通すため、いったん中断へ写す。
+func dev_load(name: String) -> bool:
+	var path := "%s%s.json" % [DEV_DIR, name]
+	if not FileAccess.file_exists(path):
+		push_warning("開発用の保存が無い: %s" % path)
+		return false
+	var body := FileAccess.get_file_as_string(path)
+	var out := FileAccess.open(SUSPEND_PATH, FileAccess.WRITE)
+	if out == null:
+		return false
+	out.store_string(body)
+	out.close()
+	return resume()
+
+
 func to_dict() -> Dictionary:
 	return {
 		"version": SAVE_VERSION,

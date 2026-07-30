@@ -29,8 +29,12 @@ SOURCE = ROOT / "docs" / "chara_image"
 
 MAX_COLORS = 15
 HERO_SIZE = (72, 128)
+NPC_SIZE = (24, 32)
+NPC_STRIP_SIZE = (144, 32)
 TILESET_SIZE = (144, 16)
 MONSTER_MAX = (64, 64)
+EVENT_EFFECT_SIZE = (192, 48)
+TRANSITION_SIZE = (512, 40)
 MIN_FLOOR_WALL_DISTANCE = 40.0
 
 
@@ -71,6 +75,23 @@ def check(path: Path) -> tuple[str, str]:
         if gap < MIN_FLOOR_WALL_DISTANCE:
             return "落", note + f" 床と壁の距離 {gap:.1f}（{MIN_FLOOR_WALL_DISTANCE:.0f} 必要）"
         return "通", note + f" 床と壁の距離 {gap:.1f}"
+    if name.startswith("candidate_npc_"):
+        expected = NPC_STRIP_SIZE if name == "candidate_npc_townsfolk" else NPC_SIZE
+        if (sheet.w, sheet.h) != expected:
+            return "落", note + f" 寸法が違う（{expected[0]}x{expected[1]} 必要）"
+        return "通", note
+    if name.startswith("candidate_event_fx_"):
+        if (sheet.w, sheet.h) != EVENT_EFFECT_SIZE:
+            return "落", note + (
+                f" 寸法が違う（{EVENT_EFFECT_SIZE[0]}x{EVENT_EFFECT_SIZE[1]} 必要）"
+            )
+        return "通", note
+    if name.startswith("candidate_transition_"):
+        if (sheet.w, sheet.h) != TRANSITION_SIZE:
+            return "落", note + (
+                f" 寸法が違う（{TRANSITION_SIZE[0]}x{TRANSITION_SIZE[1]} 必要）"
+            )
+        return "通", note
     if sheet.w > MONSTER_MAX[0] or sheet.h > MONSTER_MAX[1]:
         return "落", note + f" 大きすぎる（上限 {MONSTER_MAX[0]}x{MONSTER_MAX[1]}）"
     return "通", note

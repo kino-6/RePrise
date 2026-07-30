@@ -10,6 +10,8 @@ extends Node2D
 ## ローグライトは「前回の続き」が動機なので、始める前に見せる価値がある。
 
 signal started
+## 中断から再開する。
+signal resumed
 signal settings_requested
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
@@ -54,7 +56,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("confirm"):
 		Sound.play("confirm")
 		close()
-		started.emit()
+		# 中断があれば、決定はそちらへ。**続きがあるのに新しく始めさせない。**
+		if GameState.has_suspend():
+			resumed.emit()
+		else:
+			started.emit()
 	elif event.is_action_pressed("cancel"):
 		Sound.play("confirm")
 		close()
@@ -114,6 +120,8 @@ func _draw_prompt() -> void:
 	if fmod(_time, BLINK_CYCLE) > BLINK_CYCLE * 0.78:
 		return
 	var text := "Ｚキーで はじめる　　Ｘキーで せってい"
+	if GameState.has_suspend():
+		text = "Ｚキーで つづきから　　Ｘキーで せってい"
 	var width := PixelUI.text_width(text, PixelUI.SIZE_HEAD)
 	PixelUI.draw_text(
 		self, Vector2((PixelUI.SCREEN.x - width) * 0.5, 274), text, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
