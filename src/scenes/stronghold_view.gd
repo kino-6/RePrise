@@ -408,7 +408,7 @@ func _draw_header() -> void:
 	PixelUI.draw_text(self, inner.position + Vector2(6, 0), Terms.STRONGHOLD, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var record := "%s %d　%s %s　%s" % [
 		Terms.ECHO, GameState.echo,
-		Terms.DEEPEST, Terms.FLOOR % maxi(GameState.deepest_floor, 1),
+		Terms.DEEPEST, "%d" % maxi(GameState.deepest_floor, 1),
 		Terms.RUNS % (GameState.runs_attempted + 1),
 	]
 	PixelUI.draw_text_right(

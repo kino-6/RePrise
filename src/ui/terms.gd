@@ -16,10 +16,20 @@ const GOLD := "ゴールド"  ## ラン内資源。全滅で失う
 # --- 場所 ---
 const STRONGHOLD := "銀の砦"
 const SHOP := "みせ"
+const TOWN := "町"
+const CAVE := "洞"
+const CASTLE := "城"
+const GATE := "門"
 
 # --- 戦績 ---
-const DEEPEST := "最深"
-const FLOOR := "地下%d階"
+## 難度の軸。もとは「地下 N 階」だったが、世界を歩く形になったので
+## 「門からどれだけ離れたか」を表す数字になった。目盛りは 1..10 のまま
+## （data/*.json の floor_min もこの目盛りで書かれている）。
+const DANGER := "危険度"
+const DANGER_AT := "危険度 %d"
+const DEEPEST := "最も危険"
+const FLOOR := "危険度 %d"
+const CAVE_FLOOR := "洞 %d階"
 const RUNS := "%d回目"
 const RUNS_TOTAL := "%d回の潜行"
 

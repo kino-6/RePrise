@@ -73,6 +73,23 @@ var upgrades: Dictionary = {}
 # --- ラン中のみ（全滅で消える） ---
 var run_active: bool = false
 var run_seed: int = 0
+
+## その世界。ランごとに丸ごと作り直され、二度と同じものは出ない。
+## 拠点だけが世界の外にあるので、これを捨ててもメタ進行は残る。
+var world: WorldMap = null
+
+## 世界のどこに立っているか。町や洞から出たときに、ここへ戻す。
+var world_pos: Vector2i = Vector2i.ZERO
+
+## いま入っている拠点地（{} なら世界の上に立っている）。
+## {"kind": "town"/"cave"/"castle", "danger": int, "index": int}
+var site: Dictionary = {}
+
+## 難度の軸。**「地下 N 階」が担っていたものをそのまま引き継ぐ。**
+##
+## 世界の上では「門からの陸路距離」で決まり、洞の中では「その洞の危険度＋階」。
+## data/*.json の floor_min / floor_max もこの目盛りなので、名前だけ変えて
+## 中身は据え置きにしてある（実測で合わせた難度曲線を捨てないため）。
 var floor_number: int = 1
 var gold: int = 0
 var steps: int = 0
@@ -215,6 +232,11 @@ func _ensure_active_indices() -> void:
 func start_new_run(seed_value: int = -1) -> void:
 	run_seed = seed_value if seed_value >= 0 else _fresh_seed()
 	rng = DetRng.new(run_seed)
+	# 世界を先に作る。危険度は「門からの陸路距離」で決まるので、
+	# 地形が決まらないと難度も決まらない。
+	world = WorldGenerator.generate(DetRng.new(run_seed).fork("world"))
+	world_pos = world.start_pos
+	site = {}
 	floor_number = 1
 	gold = 0
 	steps = 0
@@ -265,14 +287,54 @@ func _fresh_seed() -> int:
 
 ## 系統ごとに独立した RNG。地形生成で乱数を余分に引いても
 ## 敵の出現や宝の中身がずれないようにする。
+## 系統ごとに独立した RNG。
+##
+## 場所も混ぜる。危険度だけでフォークすると、**同じ危険度の別の洞で
+## まったく同じ地形と同じ敵が出る**（世界が広くなったぶん、これは目に見える）。
 func rng_for(label: String) -> DetRng:
-	return DetRng.new(run_seed).fork("%s:%d" % [label, floor_number])
+	var place := "world" if site.is_empty() else "%s%d" % [site.get("kind", "site"), int(site.get("index", 0))]
+	return DetRng.new(run_seed).fork("%s:%s:%d" % [label, place, floor_number])
 
 
+## 洞の中で 1 階降りる。危険度はその洞のぶんに階を足す（上限 10）。
 func descend() -> void:
-	floor_number += 1
+	site["floor"] = int(site.get("floor", 1)) + 1
+	floor_number = mini(
+		int(site.get("danger", 1)) + int(site.get("floor", 1)) - 1, WorldMap.MAX_DANGER
+	)
 	deepest_floor = maxi(deepest_floor, floor_number)
 	floor_changed.emit(floor_number)
+
+
+## 世界の上を 1 歩。危険度は立っている場所で決まる。
+func stand_on_world(at: Vector2i) -> void:
+	world_pos = at
+	site = {}
+	if world != null:
+		floor_number = world.danger_at(at.x, at.y)
+	deepest_floor = maxi(deepest_floor, floor_number)
+	floor_changed.emit(floor_number)
+
+
+## 拠点地に入る。洞は 1 階から、町と城はその場の危険度のまま。
+func enter_site(at: Vector2i) -> Dictionary:
+	if world == null:
+		return {}
+	var found: Dictionary = world.site_at(at).duplicate()
+	if found.is_empty():
+		return {}
+	found["pos"] = at
+	found["floor"] = 1
+	site = found
+	floor_number = int(found.get("danger", 1))
+	deepest_floor = maxi(deepest_floor, floor_number)
+	floor_changed.emit(floor_number)
+	return site
+
+
+## 洞の何階まで降りられるか。深い土地の洞ほど階が多い（危険度が上限で頭打ちになる）。
+func cave_depth() -> int:
+	return clampi(1 + int(site.get("danger", 1)) / 3, 1, 3)
 
 
 ## ランの終了。ここで失うものを捨て、持ち帰るものだけを残して保存する。

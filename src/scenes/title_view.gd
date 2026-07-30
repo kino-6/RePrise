@@ -99,7 +99,7 @@ func _draw_record() -> void:
 	if GameState.runs_attempted <= 0:
 		return
 	var line := "%s %s　%s %d　%s" % [
-		Terms.DEEPEST, Terms.FLOOR % maxi(GameState.deepest_floor, 1),
+		Terms.DEEPEST, "%d" % maxi(GameState.deepest_floor, 1),
 		Terms.ECHO, GameState.echo,
 		Terms.RUNS_TOTAL % GameState.runs_attempted,
 	]

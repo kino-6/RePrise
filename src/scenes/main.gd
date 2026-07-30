@@ -2,7 +2,12 @@ extends Node2D
 
 ## 画面の切り替えとランの進行。
 ##
-## 拠点 → 探索 → 戦闘 → 探索 …… → 全滅 → 戦記 → 拠点、という輪を回すだけ。
+## 拠点 → 世界 → 戦闘 → 世界 …… → 城で主 → 戦記 → 拠点、という輪を回すだけ。
+##
+## 世界と洞の中は**同じ Mode.EXPLORE** で扱う。ExploreView は地図の中身に
+## 依存していないので、`explore.setup()` に渡す地図を差し替えるだけで
+## 縮尺が変わる。世界用にモードを増やすと、暗転・メニュー・HUD の分岐が
+## 全部 2 本になる（そして片方だけ直したバグが出る）。
 ## ゲームの中身はそれぞれの View と BattleSystem 側にある。
 ##
 ## 輪が拠点に戻るのが要点。失ったレベルと残った熟練度を並べて見せる場が無いと、
@@ -21,6 +26,8 @@ var settings: SettingsView
 var result: ResultScreen
 
 var _mode: Mode = Mode.EXPLORE
+
+## いま歩いている洞の 1 階ぶん（世界の上にいるときは null）。
 var _map: DungeonMap = null
 
 ## 階ごとに 1 本ずつ持つ乱数列。呼ぶたびに進むので、
@@ -83,7 +90,13 @@ func _ready() -> void:
 	explore.descended.connect(_on_descend)
 	explore.boss_reached.connect(_on_boss_reached)
 	explore.shop_entered.connect(_on_shop_entered)
-	shop.closed.connect(func() -> void: _set_mode(Mode.EXPLORE))
+	explore.site_entered.connect(_on_site_entered)
+	# 町を出たら世界へ戻る（世界の上に立ち直す）。洞の出店ならその階へ戻るだけ。
+	shop.closed.connect(func() -> void:
+		if String(GameState.site.get("kind", "")) == "town":
+			_leave_site()
+		else:
+			_set_mode(Mode.EXPLORE))
 	explore.chest_opened.connect(_on_chest)
 	battle.battle_finished.connect(_on_battle_finished)
 	explore.menu_requested.connect(_open_menu)
@@ -129,7 +142,15 @@ func dev_mode_name() -> String:
 ## 画面名だけだと「階を降りた」が記録に出てこない。
 func dev_status() -> String:
 	if _mode == Mode.EXPLORE or _mode == Mode.BATTLE or _mode == Mode.SHOP:
-		return "%s 地下%d階" % [dev_mode_name(), GameState.floor_number]
+		var place := "世界"
+		match String(GameState.site.get("kind", "")):
+			"town":
+				place = "町"
+			"cave":
+				place = "洞%d階" % int(GameState.site.get("floor", 1))
+			"castle":
+				place = "城"
+		return "%s %s 危険度%d" % [dev_mode_name(), place, GameState.floor_number]
 	return dev_mode_name()
 
 
@@ -141,19 +162,62 @@ func dev_equipped_count() -> int:
 	return total
 
 
-## 開発用。この階の出口（階段、最終階なら主の間の扉）へ向かう次の一歩。
-## 自動プレイがこれで階を降りる。届かなければ空文字。
+## 開発用。「先へ進む一歩」。世界では城へ、洞では階段へ向かう。
+## 自動プレイがこれで世界を横断する。届かなければ空文字。
 func dev_step_to_exit() -> String:
-	if _mode != Mode.EXPLORE or _map == null:
+	if _mode != Mode.EXPLORE:
 		return ""
+	if _map == null:
+		if GameState.world == null:
+			return ""
+		return explore.dev_step_toward(GameState.world.castle_pos)
 	return explore.dev_step_toward(_map.stairs_pos)
 
 
-## 開発用。この階に出店があればそこへ向かう一歩。無ければ空文字。
+## 開発用。近くの店へ向かう一歩。世界では町、洞では出店。無ければ空文字。
 func dev_step_to_shop() -> String:
-	if _mode != Mode.EXPLORE or _map == null or _map.shop_pos.x < 0:
+	if _mode != Mode.EXPLORE:
+		return ""
+	if _map == null:
+		var town := _nearest_town()
+		return "" if town.x < 0 else explore.dev_step_toward(town)
+	if _map.shop_pos.x < 0:
 		return ""
 	return explore.dev_step_toward(_map.shop_pos)
+
+
+## 開発用。その種類の拠点地のうち、門にいちばん近いもの。撮影に使う。
+func _first_site(kind: String) -> Vector2i:
+	if GameState.world == null:
+		return Vector2i(-1, -1)
+	var best := Vector2i(-1, -1)
+	var best_d := -1
+	for pos in GameState.world.sites:
+		if String(GameState.world.sites[pos].get("kind", "")) != kind:
+			continue
+		var at: Vector2i = pos
+		var d := absi(at.x - GameState.world.start_pos.x) + absi(at.y - GameState.world.start_pos.y)
+		if best_d < 0 or d < best_d:
+			best_d = d
+			best = at
+	return best
+
+
+## 世界でいちばん近い町。自動プレイが買い物を試すのに使う。
+func _nearest_town() -> Vector2i:
+	if GameState.world == null:
+		return Vector2i(-1, -1)
+	var best := Vector2i(-1, -1)
+	var best_d := -1
+	for pos in GameState.world.sites:
+		if String(GameState.world.sites[pos].get("kind", "")) != "town":
+			continue
+		var at: Vector2i = pos
+		var d := absi(at.x - explore.player_pos.x) + absi(at.y - explore.player_pos.y)
+		if best_d < 0 or d < best_d:
+			best_d = d
+			best = at
+	return best
 
 
 func _capture(which: String) -> void:
@@ -185,19 +249,24 @@ func _capture(which: String) -> void:
 					break
 			battle.debug_open_item_menu()
 		"shop":
+			# 町の品書きを撮る。世界の最初の町へ直に入る。
 			_start_run()
 			GameState.gold = 300
-			_enter_floor()
-			# 出店のある階に当たるまで降りる（出店は半分くらいの階にしか出ない）
-			while _map.shop_pos.x < 0 and GameState.floor_number < GameState.FINAL_FLOOR:
-				GameState.descend()
-				_enter_floor()
-			_on_shop_entered()
-		"deep":
-			# 深層の敵の見え方を確認する。
+			var town := _first_site("town")
+			if town.x >= 0:
+				_on_site_entered(town)
+		"world":
+			# 世界の全景。歩ける地形と拠点地の見分けを確かめる。
 			_start_run()
-			while GameState.floor_number < GameState.FINAL_FLOOR - 1:
-				GameState.descend()
+		"cave":
+			_start_run()
+			var cave := _first_site("cave")
+			if cave.x >= 0:
+				_on_site_entered(cave)
+		"deep":
+			# 終点近くの敵の見え方を確認する。
+			_start_run()
+			GameState.floor_number = GameState.FINAL_FLOOR - 1
 			_enter_floor()
 			for _i in 40:
 				_on_encounter()
@@ -216,9 +285,8 @@ func _capture(which: String) -> void:
 					m.gain_exp(m.exp_to_next())
 				m.hp = m.max_hp()
 				m.mp = m.max_mp()
-			while GameState.floor_number < GameState.FINAL_FLOOR:
-				GameState.descend()
-			_enter_floor()
+			GameState.floor_number = GameState.FINAL_FLOOR
+			_enter_world()
 			_on_boss_reached()
 			for _i in 60:
 				await get_tree().create_timer(0.1).timeout
@@ -252,8 +320,8 @@ func _capture(which: String) -> void:
 			# 記録の見え方を確かめたいので、それらしい戦績を入れておく
 			GameState.kills = 24
 			GameState.gold_earned = 380
-			while GameState.floor_number < GameState.FINAL_FLOOR:
-				GameState.descend()
+			GameState.floor_number = GameState.FINAL_FLOOR
+			GameState.deepest_floor = GameState.FINAL_FLOOR
 			result.show_summary(GameState.end_run(true))
 			_set_mode(Mode.RESULT)
 		"commands":
@@ -290,8 +358,8 @@ func _capture(which: String) -> void:
 			_start_run()
 			GameState.kills = 18
 			GameState.gold_earned = 240
-			while GameState.floor_number < 7:
-				GameState.descend()
+			GameState.floor_number = 7
+			GameState.deepest_floor = 7
 			result.show_summary(GameState.end_run(false))
 			_set_mode(Mode.RESULT)
 	# 戦記の撮影だけは、ローカル AI の文章が届くのを少し待つ。
@@ -327,23 +395,76 @@ func _start_run() -> void:
 	var applied := DevCheats.apply_to_run(GameState)
 	if not applied.is_empty():
 		print("開発指定: %s" % "　".join(applied))
-	_enter_floor()
+	_enter_world()
 
 
+func _leader_job() -> String:
+	var party := GameState.active_party()
+	return party[0].job_id if not party.is_empty() else "soldier"
+
+
+## 世界の上へ出る（門に着いたとき、町や洞から出たとき）。
+func _enter_world() -> void:
+	GameState.stand_on_world(GameState.world_pos)
+	_map = null
+	_door_warned = false
+	_encounter_rng = GameState.rng_for("encounter")
+	_battle_rng = GameState.rng_for("battle")
+	explore.setup(GameState.world, _encounter_rng, _leader_job(), GameState.world_pos)
+	Sound.play_bgm("descent")
+	_fade_to(Mode.EXPLORE)
+
+
+## 洞の 1 階ぶんへ入る。
 func _enter_floor() -> void:
 	_encounter_rng = GameState.rng_for("encounter")
 	_battle_rng = GameState.rng_for("battle")
-	_map = DungeonGenerator.generate(
-		GameState.rng_for("terrain"),
-		GameState.floor_number,
-		GameState.floor_number >= GameState.FINAL_FLOOR
-	)
+	# 洞に主の間は置かない。**主が居るのは世界の終点（城）だけ。**
+	# 寄り道の底にも主を置くと、寄り道が本筋と同じ重さになって
+	# 「寄るか急ぐか」の判断が消える。洞の見返りは宝箱と出店。
+	_map = DungeonGenerator.generate(GameState.rng_for("terrain"), GameState.floor_number, false)
 	_door_warned = false
-	var party := GameState.active_party()
-	var leader_job := party[0].job_id if not party.is_empty() else "soldier"
-	explore.setup(_map, _encounter_rng, leader_job)
+	explore.setup(_map, _encounter_rng, _leader_job())
 	Sound.play_bgm("descent")
 	_fade_to(Mode.EXPLORE)
+
+
+## 世界で拠点地を踏んだ。町・洞・城で行き先が変わる。
+func _on_site_entered(pos: Vector2i) -> void:
+	GameState.world_pos = pos
+	var entered := GameState.enter_site(pos)
+	match String(entered.get("kind", "")):
+		"town":
+			# 町は安全地帯。今の出店をそのまま宿つきの町として使う。
+			_open_town()
+		"cave":
+			_enter_floor()
+		"castle":
+			# 終点。ここが 1 ラン の終わり方（勝てば生還、負ければ全滅）。
+			hud.toast("城の門が ひらいた。ここから先は 戻れない。")
+			_on_boss_reached()
+		_:
+			# 門。踏んでも何も起きない（世界の上に立ったまま）。
+			GameState.site = {}
+
+
+## 町。出店と宿を兼ねる（世界の上にある安全地帯）。
+##
+## 在庫は町ごとに世界が覚える。出入りで戻ると買い占めができてしまうし、
+## 別の町では品が違ってほしい。
+func _open_town() -> void:
+	Sound.play("confirm")
+	var key := "town:%d" % int(GameState.site.get("index", 0))
+	if not GameState.world.visited.has(key):
+		GameState.world.visited[key] = {}
+	shop.open(GameState.world.visited[key], GameState.floor_number)
+	_set_mode(Mode.SHOP)
+
+
+## 拠点地から世界へ戻る。
+func _leave_site() -> void:
+	GameState.site = {}
+	_enter_world()
 
 
 ## 画面の切り替えに挟む暗転の長さ（片道）。
@@ -515,7 +636,20 @@ func _close_settings() -> void:
 
 
 func _refresh_hud() -> void:
-	hud.refresh(GameState.active_party(), GameState.floor_number, GameState.gold)
+	hud.refresh(
+		GameState.active_party(), GameState.floor_number, GameState.gold, _place_label()
+	)
+
+
+## HUD の左上に出す 1 行。居場所と危険度を並べる。
+func _place_label() -> String:
+	var danger := Terms.DANGER_AT % GameState.floor_number
+	match String(GameState.site.get("kind", "")):
+		"cave":
+			return "%s　%s" % [Terms.CAVE_FLOOR % int(GameState.site.get("floor", 1)), danger]
+		"castle":
+			return "%s　%s" % [Terms.CASTLE, danger]
+	return danger
 
 
 # --------------------------------------------------------------------------
@@ -530,7 +664,7 @@ func _on_boss_reached() -> void:
 	var foes := Encounter.build_boss(_battle_rng, GameState.floor_number)
 	if foes.is_empty():
 		# 主のデータが無い階に扉を置いてしまった場合の保険。詰ませない。
-		push_warning("地下 %d 階に主がいない" % GameState.floor_number)
+		push_warning("危険度 %d に主がいない" % GameState.floor_number)
 		hud.toast("扉は かたく とざされている…")
 		return
 	Sound.play("stairs")
@@ -577,15 +711,23 @@ func _finish_run(victory: bool) -> void:
 	_fade_to(Mode.RESULT)
 
 
+## 洞の階段。いちばん深い階まで来たら、次は下ではなく外へ出る。
 func _on_descend() -> void:
 	Sound.play("stairs")
+	if int(GameState.site.get("floor", 1)) >= GameState.cave_depth():
+		hud.toast("洞を ぬけた。")
+		_leave_site()
+		return
 	GameState.descend()
 	_enter_floor()
 
 
+## 洞の中の出店。在庫はその階が持つ（降りれば品が戻る）。
 func _on_shop_entered() -> void:
+	if _map == null:
+		return
 	Sound.play("confirm")
-	shop.open(_map, GameState.floor_number)
+	shop.open(_map.shop_stock, GameState.floor_number)
 	_set_mode(Mode.SHOP)
 
 

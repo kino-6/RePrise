@@ -266,7 +266,7 @@ func _report() -> void:
 		for line in _stuck_report:
 			print("  " + line)
 	print("---")
-	print("最深      : 地下 %d 階" % _deepest)
+	print("最も危険  : 危険度 %d" % _deepest)
 	print("戦闘      : %d 回" % _battles)
 	print("ランの終了 : %d 回" % _runs)
 	print("装備      : 最大 %d 個" % _equipped)

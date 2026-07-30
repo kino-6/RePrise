@@ -31,7 +31,12 @@ const INPUT_LOCK := 0.15
 ## 休息の値段は階層に比例させる。深いほど「もう一度整える」判断が重くなる。
 const REST_BASE_PRICE := 20
 
-var _map: DungeonMap = null
+## 在庫の入れ物。**地図ではなく辞書を受け取る。**
+##
+## 町（世界の上）と洞の中の出店で、同じ品書きを使いたい。地図を渡す形だと
+## 町には地図が無いので、店の側が場所を知っていることになってしまう。
+## 在庫を持っているのは呼び出し側（町なら世界、洞ならその階）。
+var _stock: Dictionary = {}
 var _floor := 1
 var _ids: Array = []
 var _index := 0
@@ -39,20 +44,20 @@ var _notice := Notice.new()
 var _input_lock := 0.0
 
 
-func open(map: DungeonMap, floor_number: int) -> void:
-	_map = map
+func open(stock: Dictionary, floor_number: int) -> void:
+	_stock = stock
 	_floor = floor_number
 	# 消耗品と装備を同じ品書きに並べる。店を 2 つに分けるほどの品数ではない。
 	_ids = Database.item_ids_for_floor(floor_number)
 	_ids.append_array(Database.gear_ids_for_floor(floor_number))
 	# 在庫はこのフロアで一度だけ用意する。出入りしても戻らない。
-	if _map.shop_stock.is_empty():
+	if _stock.is_empty():
 		# 「商いの伝手」を買っているぶんだけ品が多く並ぶ。
 		var extra := GameState.upgrade_value("shop_stock")
 		for id in _ids:
 			var base := int(_entry(String(id)).get("stock", 1))
 			# 装備は 1 点もの。伝手を買っても在庫は増やさない。
-			_map.shop_stock[id] = base if _is_gear(String(id)) else base + extra
+			_stock[id] = base if _is_gear(String(id)) else base + extra
 	_index = 0
 	_notice.clear()
 	_input_lock = INPUT_LOCK
@@ -92,7 +97,7 @@ func rest_price() -> int:
 
 
 func _stock_of(item_id: String) -> int:
-	return int(_map.shop_stock.get(item_id, 0))
+	return int(_stock.get(item_id, 0))
 
 
 ## 装備か消耗品か。品書きは 1 本だが、買った先の置き場所が違う。
@@ -153,7 +158,7 @@ func _buy(item_id: String) -> void:
 		Sound.play("cancel")
 		_notify("%sが たりない" % Terms.GOLD)
 		return
-	_map.shop_stock[item_id] = _stock_of(item_id) - 1
+	_stock[item_id] = _stock_of(item_id) - 1
 	if _is_gear(item_id):
 		GameState.add_gear(item_id)
 	else:

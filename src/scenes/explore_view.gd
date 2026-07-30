@@ -1,7 +1,14 @@
 class_name ExploreView
 extends Node2D
 
-## ダンジョン探索画面。タイル単位で歩き、階段で next floor、宝箱で金貨。
+## 歩く画面。**ワールドでも洞の中でも、これ 1 本を使う。**
+##
+## ここが持っているのは歩き・カメラ・描画・遭遇判定だけで、地図の中身には
+## 依存していない（`FieldMap`）。ワールド用にもう 1 本作ると、
+## 片方だけ直したバグが必ず出る。地図の型を揃えて 1 本に保つこと。
+##
+## 「踏んだら何が起きるか」は地図の種類ごとに違うので、
+## タイルを踏んだことだけを signal で外へ出し、判断は main.gd に持たせる。
 
 signal encounter_triggered
 signal descended
@@ -9,6 +16,8 @@ signal boss_reached
 signal shop_entered
 signal chest_opened(amount: int)
 signal menu_requested
+## ワールドで拠点地（町・洞・城）を踏んだ。中へ入れるかは main.gd が決める。
+signal site_entered(pos: Vector2i)
 ## 主の間の扉が隣にある。踏む前に知らせるためのもの。
 signal door_nearby
 ## 1 歩あるいた。毒の進行はここで解決する（歩数で削るのが DQ の作法）。
@@ -43,7 +52,7 @@ const CHAR_OFFSET := Vector2(-4, -16)
 # hero.png の行の並び
 enum { FACE_DOWN, FACE_LEFT, FACE_RIGHT, FACE_UP }
 
-var map: DungeonMap = null
+var map: FieldMap = null
 var player_pos := Vector2i.ZERO
 var facing := FACE_DOWN
 var rng: DetRng = null
@@ -56,11 +65,15 @@ var _active := true
 
 
 ## leader_job は先頭キャラの職業。職業ごとに差し色の違うスプライトがある。
-func setup(dungeon: DungeonMap, encounter_rng: DetRng, leader_job: String = "soldier") -> void:
-	map = dungeon
+## at を渡すと、そこから始める（町から出たとき、元の位置へ戻すのに使う）。
+func setup(
+	field: FieldMap, encounter_rng: DetRng, leader_job: String = "soldier",
+	at: Vector2i = Vector2i(-1, -1)
+) -> void:
+	map = field
 	rng = encounter_rng
 	hero_tex = _load_hero(leader_job)
-	player_pos = dungeon.start_pos
+	player_pos = field.start_pos if at.x < 0 else at
 	facing = FACE_DOWN
 	_frame = 0
 	_steps_since_encounter = 0
@@ -146,6 +159,41 @@ func _facing_for(dir: Vector2i) -> int:
 
 
 func _try_move(target: Vector2i) -> void:
+	if map is WorldMap:
+		_try_move_world(target)
+	else:
+		_try_move_dungeon(target)
+
+
+## ワールドを 1 歩。踏んだ拠点地を知らせるだけで、中へ入れるかは main.gd が決める。
+func _try_move_world(target: Vector2i) -> void:
+	if not map.is_walkable(target.x, target.y):
+		queue_redraw()  # 向きだけ変える
+		return
+
+	player_pos = target
+	_frame = (_frame + 1) % 3
+	_update_camera()
+	queue_redraw()
+
+	var world: WorldMap = map
+	if world.sites.has(target):
+		# 拠点地の上では遭遇しない。踏んだ歩数も数えない（門前で溜めるのを防ぐ）。
+		_steps_since_encounter = 0
+		site_entered.emit(target)
+		return
+
+	# 地形で歩きにくさが変わる。草原 1 / 丘 2 / 森 3。
+	# 通れる・通れない以外の意味を地形に持たせないと、ただの模様になる。
+	_steps_since_encounter += world.encounter_weight(target.x, target.y)
+	poison_ticked.emit()
+
+	if _should_encounter():
+		_steps_since_encounter = 0
+		encounter_triggered.emit()
+
+
+func _try_move_dungeon(target: Vector2i) -> void:
 	var tile := map.get_tile(target.x, target.y)
 
 	# 宝箱は「押し当てて開ける」。マスには乗らない。
@@ -228,9 +276,9 @@ func _draw() -> void:
 		for x in range(int(origin.x), int(origin.x + span.x)):
 			if not map.in_bounds(x, y):
 				continue
-			var t := map.render_tile(x, y)
-			if t == DungeonMap.T_VOID:
+			if map.is_void(x, y):
 				continue
+			var t := map.render_tile(x, y)
 			draw_texture_rect_region(
 				tileset_for(map.biome),
 				Rect2(x * TILE, y * TILE, TILE, TILE),

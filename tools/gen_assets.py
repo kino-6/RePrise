@@ -466,6 +466,295 @@ def build_tileset() -> None:
 
 
 # --------------------------------------------------------------------------
+# ワールドマップのタイル（16x16 x 9）
+#
+# 並び順は WorldMap の enum と一致させること。
+#   0 海 / 1 草原 / 2 森 / 3 丘 / 4 山 / 5 門 / 6 町 / 7 洞 / 8 城
+#
+# ここで一番大事なのは**通れる地形と通れない地形が一目で分かること**。
+# ダンジョンタイルで学んだのと同じ問題で、明度だけ変えても見分けが付かない。
+# 海と山（通れない）は寒色で暗く、草原・森・丘（通れる）は暖色寄りで明るく置く。
+# --------------------------------------------------------------------------
+
+# SFC の 1 サブパレットは透明を除き 15 色まで。9 枚を 1 枚のシートに載せるので、
+# 海・草原・森・丘・山・建物の全部をこの 15 色で賄う。
+#
+# 色の割り振りに意図がある。**通れない地形（海・山）は寒色、通れる地形
+# （草原・森・丘）は暖色寄り**にして、明度ではなく色相で見分けさせる。
+# ダンジョンタイルが読めなかったのは、明度だけ変えて色相を揃えたせいだった。
+WORLD = Palette(
+    "world",
+    {
+        "K": "#0E1220",  # 輪郭・洞の口・最暗部
+        # 海（通れない・寒色）
+        "S": "#1A3A6E",
+        "s": "#122A52",  # 山の影も兼ねる（どちらも通れない側）
+        "W": "#3A6AA8",  # 波
+        # 草原（通れる・黄緑）
+        "G": "#5C9A3A",
+        "H": "#7CBE52",  # 草の光。森の光も兼ねる
+        # 森（通れる・濃い緑）
+        "F": "#2E6A38",
+        "f": "#1E4A26",
+        # 丘（通れる・土）
+        "N": "#8A6A3A",
+        "n": "#6A4E28",  # 丘の影。真っ黒だと帯が強すぎて模様に見える
+        "M": "#A88A52",
+        # 山（通れない・灰と雪）
+        "R": "#5A5A6A",
+        "P": "#C8CCD8",  # 雪。建物の光にも使う
+        # 建物
+        "A": "#C03A32",  # 屋根 赤
+        "Y": "#E8C860",  # 灯り
+    },
+)
+
+TILE_WORLD_SEA = [
+    "SsSsSsSsSsSsSsSs",
+    "sSsSsSsSsSsSsSsS",
+    "SsSsWWsSsSsSsSsS",
+    "sSsSsSsSsSWWsSsS",
+    "SsSsSsSsSsSsSsSs",
+    "sSsSsSsSsSsSsSsS",
+    "SsWWsSsSsSsSsSsS",
+    "sSsSsSsSsSsWWsSs",
+    "SsSsSsSsSsSsSsSs",
+    "sSsSsSsSsSsSsSsS",
+    "SsSsSsWWsSsSsSsS",
+    "sSsSsSsSsSsSsSsS",
+    "SsSsSsSsSsSsWWsS",
+    "sSsSsSsSsSsSsSsS",
+    "SsWWsSsSsSsSsSsS",
+    "sSsSsSsSsSsSsSsS",
+]
+
+TILE_WORLD_PLAIN = [
+    "GGGGGGGGGGGGGGGG",
+    "GGHGGGGGGGGHGGGG",
+    "GGGGGGGFGGGGGGGG",
+    "GFGGGGGGGGGGGFGG",
+    "GGGGGHGGGGGGGGGG",
+    "GGGGGGGGGGFGGGGG",
+    "GGFGGGGGGGGGGGHG",
+    "GGGGGGGHGGGGGGGG",
+    "GGGGGFGGGGGGGFGG",
+    "GHGGGGGGGGGGGGGG",
+    "GGGGGGGGGFGGGGGG",
+    "GGGGFGGGGGGGHGGG",
+    "GGGGGGGHGGGGGGGG",
+    "GFGGGGGGGGFGGGGG",
+    "GGGGGGGGGGGGGGGG",
+    "GGGGHGGGGGGGGFGG",
+]
+
+TILE_WORLD_FOREST = [
+    "FfFFFFFfFFFFFFfF",
+    "FFHFFFFFFFHFFFFF",
+    "FHHHFFFHFFHHHFFF",
+    "HHHHHFFHHFHHHHHF",
+    "FfHfFFHHHHFfHfFF",
+    "FFfFFFHHHHFFfFFF",
+    "FFfFFFFfHfFFfFFF",
+    "fFFFfFFFfFFFFFfF",
+    "FFFHFFFFFFFFHFFF",
+    "FFHHHFFFfFFHHHFF",
+    "FHHHHHFFFFHHHHHF",
+    "FfHfFFFHFFfHfFFF",
+    "FFfFFFFHHHFFfFFF",
+    "FFfFFFFfHfFFfFFF",
+    "fFFFfFFFfFFFFFfF",
+    "FFFFFFFFFFFFFFFF",
+]
+
+TILE_WORLD_HILL = [
+    "NNNNNNNNNNNNNNNN",
+    "NNNMMNNNNNNNNNNN",
+    "NNMMMMNNNNMMNNNN",
+    "NMMMMMMNNMMMMNNN",
+    "MMMMMMMMMMMMMMNN",
+    "NnnnnnnnNnnnnnNN",
+    "NNnNNNnNNNnNNnNN",
+    "NNNNNNNNNNNNNNNN",
+    "NNNNNNNNMMNNNNNN",
+    "NNNMMNNMMMMNNNNN",
+    "NNMMMMMMMMMMNNNN",
+    "NMMMMMMMMMMMMMNN",
+    "NnnnnnnnnnnnnnNN",
+    "NNnNNNnNNNnNNNNN",
+    "NNNNNNNNNNNNNNNN",
+    "NNNNNNNNNNNNNNNN",
+]
+
+TILE_WORLD_MOUNTAIN = [
+    "ssssssssssssssss",
+    "sssssssPssssssss",
+    "ssssssPPPsssssss",
+    "sssssPPPPPssssss",
+    "ssssRPPPPPRsssss",
+    "sssRRRPPPRRRssss",
+    "ssRRRRRPRRRRRsss",
+    "sRRRRRRRRRRRRRss",
+    "RRRRRRRRRRRRRRRs",
+    "RRRRRsssssRRRRRR",
+    "RRRRsssssssRRRRR",
+    "RRRsssssssssRRRR",
+    "RRsssssssssssRRR",
+    "ssssssssssssssss",
+    "ssssssssssssssss",
+    "ssssssssssssssss",
+]
+
+# 門 — 砦から着く場所。石の枠に灯りを 2 つ。必ず草原の上に立つ。
+TILE_WORLD_GATE = [
+    "GGGGGGGGGGGGGGGG",
+    "GGGKKKKKKKKKKGGG",
+    "GGKRRRRRRRRRRKGG",
+    "GKRRPPRRRRPPRRKG",
+    "GKRYRRRRRRRRYRKG",
+    "GKRRRRRRRRRRRRKG",
+    "GKRRRKKKKKKRRRKG",
+    "GKRRKKKKKKKKRRKG",
+    "GKRRKKKKKKKKRRKG",
+    "GKRRKKKKKKKKRRKG",
+    "GKRRKKKKKKKKRRKG",
+    "GKRPKKKKKKKKPRKG",
+    "GKKKKKKKKKKKKKKG",
+    "GGGGGKKKKKKGGGGG",
+    "GGGGGGGGGGGGGGGG",
+    "GGGGGGGGGGGGGGGG",
+]
+
+# 町 — 赤い屋根 2 つ。どこにあっても「安全」と読めるよう明るく。
+TILE_WORLD_TOWN = [
+    "GGGGGGGGGGGGGGGG",
+    "GGGGGAAGGGGGGGGG",
+    "GGGGAAAAGGGGGGGG",
+    "GGGAAAAAAGGAAGGG",
+    "GGKKKKKKKKAAAAGG",
+    "GGKRRRRRKKKKKKKG",
+    "GGKRYYRRKKRRRRKG",
+    "GGKRYYRRKKRYYRKG",
+    "GGKRRRRRKKRYYRKG",
+    "GGKKKKKKKKRRRRKG",
+    "GGGGGGGGGGKKKKKG",
+    "GGGGGGGGGGGGGGGG",
+    "GGGGAAAAGGGGGGGG",
+    "GGGKKKKKKGGGGGGG",
+    "GGGKRRRRKGGGGGGG",
+    "GGGKRYYRKGGGGGGG",
+]
+
+# 洞 — 岩に空いた口。寄り道の目印なので町より小さく暗く。
+TILE_WORLD_CAVE = [
+    "NNNNNNNNNNNNNNNN",
+    "NNNNNMMMMNNNNNNN",
+    "NNNMMMMMMMNNNNNN",
+    "NNMMMMMMMMMNNNNN",
+    "NMMMKKKKKMMMNNNN",
+    "NMMKKKKKKKMMMNNN",
+    "NMMKKKKKKKKMMNNN",
+    "NMMKKKKKKKKMMNNN",
+    "NNNKKKKKKKKNNNNN",
+    "NNNKKKKKKKKNNNNN",
+    "NNNKKKKKKKKNNNNN",
+    "NNNNKKKKKKNNNNNN",
+    "NNNNNKKKKNNNNNNN",
+    "NNNNNNNNNNNNNNNN",
+    "NNNNNNNNNNNNNNNN",
+    "NNNNNNNNNNNNNNNN",
+]
+
+# 城 — 終点。主が居る。狭間を持つ塔で、他のどれとも間違えない形にする。
+TILE_WORLD_CASTLE = [
+    "NNNNNNNNNNNNNNNN",
+    "NRKRKNNRKRKNNNNN",
+    "NRRRRNNRRRRNNNNN",
+    "NRPPRNNRPPRNNNNN",
+    "NRRRRKKRRRRNNNNN",
+    "NRYRRKKRRYRNNNNN",
+    "NRRRRKKRRRRKRKRK",
+    "NKRKRKKRKRKKRRRR",
+    "NRRRRRRRRRRRPPRR",
+    "NRPPPPPPPPPRRRRR",
+    "NRRKKKKKKRRRRYRR",
+    "NRRKKKKKKRRKRKRK",
+    "NRRKKKKKKRRRRRRR",
+    "NPPKKKKKKPPRPPRR",
+    "NKKKKKKKKKKKRRRR",
+    "NNNNKKKKNNNNKKKK",
+]
+
+
+def build_world_tileset() -> None:
+    """ワールドマップのタイル 9 枚（144x16）。
+
+    外で描いたものがあれば採ることも考えたが、判定条件（床と壁の色距離）は
+    ダンジョン用に作ったもので、ワールドには 5 種類の地形がある。
+    ここは自前で描いたものを使い、差し替えは後で条件を作ってから考える。
+    """
+    tiles = [
+        from_ascii(TILE_WORLD_SEA, WORLD),
+        from_ascii(TILE_WORLD_PLAIN, WORLD),
+        from_ascii(TILE_WORLD_FOREST, WORLD),
+        from_ascii(TILE_WORLD_HILL, WORLD),
+        from_ascii(TILE_WORLD_MOUNTAIN, WORLD),
+        from_ascii(TILE_WORLD_GATE, WORLD),
+        from_ascii(TILE_WORLD_TOWN, WORLD),
+        from_ascii(TILE_WORLD_CAVE, WORLD),
+        from_ascii(TILE_WORLD_CASTLE, WORLD),
+    ]
+    sheet = Canvas(TILE * len(tiles), TILE)
+    for i, t in enumerate(tiles):
+        sheet.blit(t, i * TILE, 0)
+    sheet.to_png(ASSETS / "tiles" / "world.png")
+    sheet.scaled(6).to_png(PREVIEW / "tiles_world.png")
+    _report_world_contrast(tiles)
+
+
+def _report_world_contrast(tiles: list[Canvas]) -> None:
+    """通れる地形と通れない地形が見分けられるかを測って出す。
+
+    ダンジョンタイルで「床と壁が見分けられない」を経験しているので、
+    ここは黙って通さずに数字を出す。海・山（通れない）と草原・森・丘（通れる）
+    の代表色が近すぎたら、目で見る前に分かる。
+    """
+    names = ["海", "草原", "森", "丘", "山"]
+    blocked = {0, 4}
+    means = [_mean_rgb(t) for t in tiles[:5]]
+    worst = None
+    for i in range(5):
+        for j in range(i + 1, 5):
+            if (i in blocked) == (j in blocked):
+                continue  # 同じ側どうしは見分けが付かなくてよい
+            gap = math.dist(means[i], means[j])
+            if worst is None or gap < worst[0]:
+                worst = (gap, names[i], names[j])
+    if worst is not None:
+        mark = "OK" if worst[0] >= MIN_FLOOR_WALL_DISTANCE else "近い"
+        print(
+            "  ワールド地形の見分け: %s %s と %s が %.1f（基準 %.0f）"
+            % (mark, worst[1], worst[2], worst[0], MIN_FLOOR_WALL_DISTANCE)
+        )
+
+
+def _mean_rgb(c: Canvas) -> tuple[float, float, float]:
+    total = [0.0, 0.0, 0.0]
+    count = 0
+    for y in range(c.h):
+        for x in range(c.w):
+            px = c.get(x, y)
+            if px == TRANSPARENT:
+                continue
+            total[0] += px[0]
+            total[1] += px[1]
+            total[2] += px[2]
+            count += 1
+    if count == 0:
+        return (0.0, 0.0, 0.0)
+    return (total[0] / count, total[1] / count, total[2] / count)
+
+
+# --------------------------------------------------------------------------
 # 主人公（24x32 / 4 方向 x 3 フレーム）
 #
 # 16x16 では顔に使える画素が縦 6 行しかなく、どう描いてもファミコンの density に
@@ -1490,6 +1779,7 @@ def build_cursor() -> Canvas:
 
 def main() -> None:
     build_tileset()
+    build_world_tileset()
     build_biomes()
     build_heroes()
     build_blob("gel", GEL, width=24, height=40)

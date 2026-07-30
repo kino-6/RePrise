@@ -19,9 +19,9 @@ static func write(summary: Dictionary) -> PackedStringArray:
 	var members: Array = summary.get("members", [])
 
 	if bool(summary.get("victory", false)):
-		lines.append("一行は 地下 %d 階から 生還した。" % floor_no)
+		lines.append("一行は 世界の 終点から 生還した。")
 	else:
-		lines.append("一行は 地下 %d 階で ついえた。" % floor_no)
+		lines.append("一行は 危険度 %d の 地で ついえた。" % floor_no)
 
 	lines.append(
 		"%d 体を倒し、金貨 %d 枚を得た。" % [int(summary.get("kills", 0)), int(summary.get("gold_earned", gold))]
@@ -70,7 +70,7 @@ static func facts_for_llm(summary: Dictionary) -> Dictionary:
 		})
 	return {
 		"outcome": "生還" if bool(summary.get("victory", false)) else "全滅",
-		"floor": int(summary.get("floor", 1)),
+		"danger": int(summary.get("floor", 1)),
 		"gold": int(summary.get("gold", 0)),
 		"steps": int(summary.get("steps", 0)),
 		"party": members,

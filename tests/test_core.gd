@@ -31,6 +31,7 @@ func _initialize() -> void:
 	_test_field_poison()
 	_test_settings()
 	_test_dungeon_route()
+	_test_world_generation()
 	_test_text_wrap()
 	_test_database_loaded()
 	_test_final_floor()
@@ -575,6 +576,65 @@ func _test_save_to_disk() -> void:
 	state.free()
 	reloaded.free()
 	healed.free()
+
+
+## 世界の生成。**詰む世界を出さないこと**が最優先の不変条件。
+##
+## 城まで歩けない世界を 1 つ出すだけで、そのランは丸ごと無駄になる。
+## 生成物の到達性は目で見て確かめられないので、必ずここで測る。
+func _test_world_generation() -> void:
+	var seeds := [1, 7, 42, 4242, 99991, 123456]
+	var all_reachable := true
+	var gates_on_land := true
+	var danger_spans := true
+	var has_sites := true
+	for seed_value in seeds:
+		var w := WorldGenerator.generate(DetRng.new(seed_value))
+		if w.get_tile(w.start_pos.x, w.start_pos.y) != WorldMap.T_GATE:
+			gates_on_land = false
+		if w.get_tile(w.castle_pos.x, w.castle_pos.y) != WorldMap.T_CASTLE:
+			gates_on_land = false
+		# 城まで陸路で届くか
+		var dist := w.distance_field(w.start_pos)
+		if dist[w.castle_pos.y * w.width + w.castle_pos.x] < 0:
+			all_reachable = false
+		# 門は 1、城は上限。難度の軸がここで決まるので、端が合っていないと
+		# data/*.json の floor_min の目盛りと噛み合わなくなる。
+		if w.danger_at(w.start_pos.x, w.start_pos.y) != 1:
+			danger_spans = false
+		if w.danger_at(w.castle_pos.x, w.castle_pos.y) != WorldMap.MAX_DANGER:
+			danger_spans = false
+		var towns := 0
+		var caves := 0
+		for pos in w.sites:
+			match String(w.sites[pos].get("kind", "")):
+				"town":
+					towns += 1
+				"cave":
+					caves += 1
+		# 町が 1 つも無いと、道中で買い物ができないまま城へ着く
+		if towns < 2 or caves < 2:
+			has_sites = false
+
+	_check("どの世界でも城まで歩ける", all_reachable)
+	_check("門と城がその地形として置かれている", gates_on_land)
+	_check("危険度が門 1 から城 %d まで伸びる" % WorldMap.MAX_DANGER, danger_spans)
+	_check("町と洞が最低 2 つずつ置かれる", has_sites)
+
+	# 同じ種から同じ世界（決定性）。地形も拠点地の場所も揃うこと。
+	var a := WorldGenerator.generate(DetRng.new(555))
+	var b := WorldGenerator.generate(DetRng.new(555))
+	_check("同じ種から同じ世界が出る", a.to_ascii() == b.to_ascii())
+	_check("同じ種なら拠点地も同じ", a.sites.keys() == b.sites.keys())
+	_check("違う種なら違う世界", a.to_ascii() != WorldGenerator.generate(DetRng.new(556)).to_ascii())
+
+	# 通れない地形（海・山）の上には拠点地を置かない
+	var on_walkable := true
+	for pos in a.sites:
+		var at: Vector2i = pos
+		if not a.is_walkable(at.x, at.y):
+			on_walkable = false
+	_check("拠点地は必ず歩ける場所にある", on_walkable)
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。
