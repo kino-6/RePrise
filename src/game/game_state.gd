@@ -84,20 +84,11 @@ var upgrades: Dictionary = {}
 var cross_world: Dictionary = {}
 
 
-## またぐ物語の空の状態。形をここ 1 か所に置く。
+## またぐ物語の空の状態。**形は CrossWorldArc が持つ**
+## （オートロードは --headless --script から触れないので、形も進行も静的側に置く）。
 static func empty_cross_world() -> Dictionary:
-	return {
-		"schema": 1,
-		"active_id": "",
-		"phase_index": 0,
-		"skin": {},
-		"started_run": 0,
-		"next_due_run": 0,
-		"setbacks": [],
-		"history": [],
-		"completed": {},
-		"recent_ids": [],
-	}
+	return CrossWorldArc.empty_state()
+
 
 # --- ラン中のみ（全滅で消える） ---
 var run_active: bool = false
@@ -172,6 +163,8 @@ func step_event_effects() -> void:
 ## 「買ったものを持ち帰れる」ようにすると、出店が拠点の延長になって
 ## 道中の判断が薄まるので、ここは必ず捨てる側に置く。
 var inventory: Dictionary = {}
+
+
 
 
 func _ready() -> void:

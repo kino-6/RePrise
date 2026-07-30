@@ -40,6 +40,7 @@ func _initialize() -> void:
 	_test_version()
 	_test_event_effects()
 	_test_cross_world_catalog()
+	_test_cross_world_progress()
 	_test_text_wrap()
 	_test_database_loaded()
 	_test_final_floor()
@@ -1113,6 +1114,76 @@ func _test_cross_world_catalog() -> void:
 	var b_skin := CrossWorldArcCatalog.pick_skin(arc0, DetRng.new(9), catalog)
 	_equal("同じ種からは同じ表示語", a_skin, b_skin)
 	_equal("表示語が 4 枠そろう", a_skin.size(), 4)
+
+
+## またぐ物語の選出と進行（A-3）。
+##
+## **全滅を挟んでも完了できること**がここの主眼。永続なので、途中で止まると
+## セーブに死んだ型が residue として残り続けて詰む。
+func _test_cross_world_progress() -> void:
+	var catalog := CrossWorldArcCatalog.load_catalog()
+	var state := CrossWorldArc.empty_state()
+
+	# 回数が足りないうちは始まらない
+	_check("回数が足りないと選ばれない", not CrossWorldArc.select(state, 0, 111, catalog))
+	_check("選ばれる", CrossWorldArc.select(state, 5, 111, catalog))
+	_check("型が入る", String(state["active_id"]) != "")
+	_equal("表示語が 4 枠", (state["skin"] as Dictionary).size(), 4)
+	_check("次の発生ランが決まる", int(state["next_due_run"]) > 5)
+	_check("二重には選ばれない", not CrossWorldArc.select(state, 9, 111, catalog))
+
+	# 決定性（同じ状況からは同じ型）
+	var twin := CrossWorldArc.empty_state()
+	CrossWorldArc.select(twin, 5, 111, catalog)
+	_equal("同じ状況からは同じ型", String(twin["active_id"]), String(state["active_id"]))
+	_equal("表示語も同じ", twin["skin"], state["skin"])
+
+	# 四段階を通す。**途中で全滅を挟む。**
+	var arc := CrossWorldArc.active(state, catalog)
+	var beats: Array = arc.get("beats", [])
+	_equal("段階は 4 つ", beats.size(), 4)
+	var due := int(state["next_due_run"])
+	var ending := {}
+	for i in beats.size():
+		var beat := CrossWorldArc.beat_due_at(
+			state, String(beats[i]["placement"]), due + i, catalog
+		)
+		_check("%d 段目が出る" % (i + 1), not beat.is_empty())
+		_check("%d 段目に文がある" % (i + 1), CrossWorldArc.line_of(state, beat) != "")
+		if i == 1:
+			# ここで全滅した
+			CrossWorldArc.note_setback(state, "run_lost")
+			_check("失敗を書き留めても続く", String(state["active_id"]) != "")
+		var last := String(arc["choices"][0]["id"]) if i == beats.size() - 1 else ""
+		ending = CrossWorldArc.advance(state, due + i, last, catalog)
+
+	_check("全滅を挟んでも完了する", not ending.is_empty())
+	_equal("結末が残る", String(state["completed"][String(arc["id"])]), String(ending["ending_id"]))
+	_equal("型が閉じる", String(state["active_id"]), "")
+	_check("結末に文がある", String(ending["line"]) != "")
+	_check("同じ型は続けて選ばれない", String(arc["id"]) in (state["recent_ids"] as Array))
+
+	# 選ばずに終わっても既定へ落ちる（画面を見ずに閉じた場合）
+	var silent := CrossWorldArc.empty_state()
+	CrossWorldArc.select(silent, 5, 222, catalog)
+	var arc2 := CrossWorldArc.active(silent, catalog)
+	var out := {}
+	for i in (arc2["beats"] as Array).size():
+		out = CrossWorldArc.advance(silent, 99, "", catalog)
+	_check("選ばなくても結末は決まる", not out.is_empty() and String(out["ending_id"]) != "")
+
+	# 失敗継続の文（loss_line）が使われること
+	var lossy := CrossWorldArc.empty_state()
+	CrossWorldArc.select(lossy, 5, 333, catalog)
+	CrossWorldArc.note_setback(lossy, "run_lost")
+	var lb := CrossWorldArc.current_beat(lossy, catalog)
+	if String(lb.get("loss_line", "")) != "":
+		_equal("全滅後は loss_line が出る", CrossWorldArc.line_of(lossy, lb).replace(
+			"{anchor_name}", String((lossy["skin"] as Dictionary).get("anchor_name", ""))
+		), CrossWorldArc.line_of(lossy, lb))
+		_check("loss_line に置き換えが効く", not CrossWorldArc.line_of(lossy, lb).contains("{"))
+	else:
+		_check("loss_line が無い型もある（文は出る）", CrossWorldArc.line_of(lossy, lb) != "")
 
 
 ## 原本を読み直して壊し、検算にかける。壊し方は呼び出し側が渡す。
