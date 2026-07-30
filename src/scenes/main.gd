@@ -13,7 +13,7 @@ extends Node2D
 ## 輪が拠点に戻るのが要点。失ったレベルと残った熟練度を並べて見せる場が無いと、
 ## メタ進行が数字の裏側だけで進んでしまう。
 
-enum Mode { TITLE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS, RESULT }
+enum Mode { TITLE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS, RESULT, EVENT }
 
 var title: TitleView
 var stronghold: StrongholdView
@@ -24,6 +24,7 @@ var battle: BattleView
 var menu: FieldMenu
 var settings: SettingsView
 var result: ResultScreen
+var event_view: EventView
 
 var _mode: Mode = Mode.EXPLORE
 
@@ -90,6 +91,12 @@ func _ready() -> void:
 	result.visible = false
 	add_child(result)
 
+	event_view = EventView.new()
+	event_view.visible = false
+	add_child(event_view)
+	event_view.chosen.connect(_on_event_choice)
+	event_view.dismissed.connect(_on_event_dismissed)
+
 	# ローカル AI の窓口は 1 つだけ。戦記もクエスト文もここを通す。
 	_ai = LocalAI.new()
 	add_child(_ai)
@@ -102,6 +109,7 @@ func _ready() -> void:
 	explore.boss_reached.connect(_on_boss_reached)
 	explore.shop_entered.connect(_on_shop_entered)
 	explore.site_entered.connect(_on_site_entered)
+	explore.event_reached.connect(_on_event_reached)
 	explore.talked.connect(_on_talked)
 	explore.rumor = _rumor
 	explore.inn_entered.connect(_on_inn)
@@ -274,6 +282,12 @@ func _capture(which: String) -> void:
 		"world":
 			# 世界の全景。歩ける地形と拠点地の見分けを確かめる。
 			_start_run()
+		"event":
+			# イベントの選択画面。払うものが選ぶ前に見えているかを確かめる。
+			_start_run()
+			for pos in GameState.world.events:
+				_open_event(pos)
+				break
 		"town":
 			# 町の中の見え方（宿・店・人）を確かめる
 			_start_run()
@@ -485,6 +499,12 @@ func _enter_floor() -> void:
 ## 世界で拠点地を踏んだ。町・洞・城で行き先が変わる。
 func _on_site_entered(pos: Vector2i) -> void:
 	GameState.world_pos = pos
+	# 拠点地にイベントが重なっていれば、中へ入る前にそれを出す。
+	# 済んだら踏み直しで町や洞へ入れる。
+	if GameState.world != null and not GameState.world.event_at(pos).is_empty() 			and not GameState.event_done.has(pos):
+		GameState.stand_on_world(pos)
+		_open_event(pos)
+		return
 	var entered := GameState.enter_site(pos)
 	match String(entered.get("kind", "")):
 		"town":
@@ -700,6 +720,10 @@ func _apply_mode(mode: Mode) -> void:
 	hud.visible = mode == Mode.EXPLORE
 	battle.visible = mode == Mode.BATTLE
 	result.visible = mode == Mode.RESULT
+	# イベントは場面の上に開く窓。下の絵は残す。
+	event_view.visible = mode == Mode.EVENT
+	if mode == Mode.EVENT:
+		explore.visible = true
 	explore.set_active(mode == Mode.EXPLORE)
 	if mode != Mode.TITLE:
 		title.close()
@@ -711,12 +735,105 @@ func _apply_mode(mode: Mode) -> void:
 		menu.close()
 	if mode != Mode.SETTINGS:
 		settings.close()
+	if mode != Mode.EVENT:
+		event_view.close()
 	if mode == Mode.EXPLORE:
 		_refresh_hud()
 
 
+## 街道のイベントを踏んだ。
+func _on_event_reached(pos: Vector2i) -> void:
+	GameState.world_pos = pos
+	GameState.stand_on_world(pos)
+	_open_event(pos)
+
+
+## その場所のイベント（無ければ空）。一度きり。
+##
+## 立っている場所ではなく**渡された場所**を見る。GameState.world_pos に
+## 頼ると、まだそこへ立っていない呼び出し（撮影など）で空になる。
+func _event_at(at: Vector2i) -> Dictionary:
+	if GameState.world == null:
+		return {}
+	var found := GameState.world.event_at(at)
+	if found.is_empty() or GameState.event_done.has(at):
+		return {}
+	return found
+
+
+## イベントを開く。**払えない手は選べないようにしてから出す。**
+func _open_event(at: Vector2i) -> void:
+	var found := _event_at(at)
+	if found.is_empty():
+		return
+	_event_pos = at
+	event_view.open(found, GameState.floor_number)
+	event_view.set_blocked(_blocked_for(found))
+	Sound.play("confirm")
+	_set_mode(Mode.EVENT)
+
+
+## いま選んでいる手が払えるか。EventView は GameState を知らないので、ここで調べる。
+func _blocked_for(found: Dictionary) -> Array[String]:
+	var choices: Array = found.get("choices", [])
+	if choices.is_empty():
+		return []
+	# 先頭の手だけを見るのではなく、全部払えないときだけ止める。
+	# （1 つでも選べるなら画面は開いてよい）
+	var any_ok := false
+	for c in choices:
+		if EventEffects.unpayable(GameState, c.get("costs", []), GameState.floor_number).is_empty():
+			any_ok = true
+			break
+	if any_ok:
+		return []
+	return EventEffects.unpayable(
+		GameState, choices[0].get("costs", []), GameState.floor_number
+	)
+
+
+var _event_pos := Vector2i(-1, -1)
+
+
+## 手を選んだ。払って、得て、要るなら戦う。
+func _on_event_choice(choice: Dictionary) -> void:
+	GameState.event_done[_event_pos] = true
+	var danger := GameState.floor_number
+	var lines: Array[String] = []
+	lines.append_array(EventEffects.pay(GameState, choice.get("costs", []), danger))
+	lines.append_array(
+		EventEffects.grant(GameState, choice.get("rewards", []), danger, _battle_rng)
+	)
+	if GameState.event_shop_bonus > 0:
+		pass  # 町の品数は ShopView が読む
+	_refresh_hud()
+
+	# 戦いを含む手は、そのまま戦闘へ入る（払ったあとに逃げられない）。
+	var fights := _fight_token(choice.get("costs", [])) or _fight_token(choice.get("risks", []))
+	if not lines.is_empty():
+		hud.toast("　".join(lines))
+	if fights:
+		_set_mode(Mode.EXPLORE)
+		_on_encounter()
+		return
+	_set_mode(Mode.EXPLORE)
+
+
+func _fight_token(list: Array) -> bool:
+	for token in list:
+		if String(token) in ["normal_fight", "elite_fight"]:
+			return true
+	return false
+
+
+## 見送った。**必ず立ち去れる**（踏み直せばまた開く）。
+func _on_event_dismissed() -> void:
+	_set_mode(Mode.EXPLORE)
+
+
 ## 歩いたぶんの毒。倒れはしないが、削られながら出店へ急ぐことになる。
 func _on_poison_tick() -> void:
+	GameState.step_event_effects()
 	var hurt := 0
 	for m in GameState.active_party():
 		hurt += m.step_poison()

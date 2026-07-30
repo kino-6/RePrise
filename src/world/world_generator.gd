@@ -66,7 +66,61 @@ static func _build(rng: DetRng) -> WorldMap:
 	_paint_terrain(map, rng)
 	_place_sites(map, rng)
 	_place_seals(map, rng)
+	_place_events(map, rng)
 	return map
+
+
+## 任意イベントを世界へ置く。街道 1 / 町 1 / 洞 1。
+##
+## 骨格は Codex のカタログ（`data/world_events.json`）から抽き、表層だけを
+## `DetRng` が選ぶ。**選択肢もコストも見返りもここでは触らない。**
+## 街道は本筋の上（通れば必ず出会う）、町と洞はその拠点地のマスに重ねる。
+static func _place_events(map: WorldMap, rng: DetRng) -> void:
+	map.events = {}
+	var catalog := WorldEventCatalog.load_catalog()
+	if catalog.is_empty():
+		return
+
+	var from_gate := map.distance_field(map.start_pos)
+	var to_castle := map.distance_field(map.castle_pos)
+	var span := maxi(from_gate[map.castle_pos.y * map.width + map.castle_pos.x], 1)
+
+	# 街道 = 本筋の上で、門から少し離れたところ（1 歩目で出会わせない）。
+	var on_route: Array[Vector2i] = []
+	for y in map.height:
+		for x in map.width:
+			if not map.is_walkable(x, y) or map.sites.has(Vector2i(x, y)):
+				continue
+			var a := from_gate[y * map.width + x]
+			var b := to_castle[y * map.width + x]
+			if a < 0 or b < 0 or a + b - span > 0:
+				continue
+			if a < span / 5 or a > span * 4 / 5:
+				continue
+			on_route.append(Vector2i(x, y))
+
+	var slots := []
+	if not on_route.is_empty():
+		slots.append({"pos": on_route[rng.range_i(0, on_route.size() - 1)], "kind": "world"})
+	for kind in ["town", "cave"]:
+		var pool: Array[Vector2i] = []
+		for pos in map.sites:
+			if String(map.sites[pos].get("kind", "")) == kind:
+				pool.append(pos)
+		if not pool.is_empty():
+			slots.append({"pos": pool[rng.range_i(0, pool.size() - 1)], "kind": kind})
+
+	for slot in slots:
+		var at: Vector2i = slot["pos"]
+		var context := {
+			"site_kind": String(slot["kind"]),
+			"danger": map.danger_at(at.x, at.y),
+			"biome": map.biome_id_at(at.x, at.y),
+		}
+		var picked := WorldEventCatalog.select_for_world(rng, context, 1, catalog)
+		if picked.is_empty():
+			continue
+		map.events[at] = WorldEventCatalog.instantiate(picked[0], rng, context)
 
 
 # --------------------------------------------------------------------------
@@ -117,7 +171,16 @@ static func verify(map: WorldMap) -> Array[String]:
 	if map.seals.size() == SEAL_COUNT and seen_bands.size() != SEAL_COUNT:
 		problems.append("封の危険度が帯ごとに分かれていない")
 
-	# 5. 買い物ができること。町に 1 つも歩けないと、備えの手段が宝箱だけになる
+	# 5. 置いたイベントに歩いて行けること。
+	#    届かないイベントは、置いた手間がそのまま無駄になる。
+	for pos in map.events:
+		var at: Vector2i = pos
+		if not reachable.call(at):
+			problems.append("イベント（%s）に歩けない" % String(map.events[pos].get("event_id", "?")))
+		if String(map.events[pos].get("event_id", "")) == "":
+			problems.append("イベントに id が無い")
+
+	# 6. 買い物ができること。町に 1 つも歩けないと、備えの手段が宝箱だけになる
 	var towns := 0
 	for pos in map.sites:
 		if String(map.sites[pos].get("kind", "")) == "town" and reachable.call(pos):

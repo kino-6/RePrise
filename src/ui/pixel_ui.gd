@@ -305,5 +305,17 @@ static func draw_gradient(
 		)
 
 
+## 幅に収まるところまで切って、末尾に … を付ける。
+##
+## 折り返せない場所（一覧の 1 行）で使う。**溢れた文字は読めないので出さない。**
+static func clip(text: String, width: float, size: int = SIZE_TEXT) -> String:
+	if text_width(text, size) <= width:
+		return text
+	var cut := text
+	while cut.length() > 1 and text_width(cut + "…", size) > width:
+		cut = cut.substr(0, cut.length() - 1)
+	return cut + "…"
+
+
 static func hp_color(ratio: float) -> Color:
 	return C_HP_LOW if ratio <= 0.25 else C_HP_OK

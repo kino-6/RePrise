@@ -34,6 +34,7 @@ func _initialize() -> void:
 	_test_world_generation()
 	_test_town_generation()
 	_test_quest_text()
+	_test_event_effects()
 	_test_text_wrap()
 	_test_database_loaded()
 	_test_final_floor()
@@ -784,6 +785,67 @@ func _test_quest_text() -> void:
 	for s in w2.seals:
 		names[String(s["name"])] = true
 	_equal("同じ名前は 1 つしか採らない", names.size(), 3)
+
+
+## イベントの効果トークン。
+##
+## **知らないトークンを黙って無視しないこと**が唯一の不変条件。
+## 素通りさせると、選択肢が「押しても何も起きない」になり、しかも画面上は
+## 成功に見える。カタログ側の全トークンが解決表にあることを機械で突き合わせる。
+func _test_event_effects() -> void:
+	var catalog := WorldEventCatalog.load_catalog()
+	_check("カタログが読める", not catalog.is_empty())
+
+	var unknown: Array[String] = []
+	var counted := 0
+	for event in catalog.get("events", []):
+		for choice in event.get("choices", []):
+			for pair in [["costs", "cost"], ["risks", "risk"], ["rewards", "reward"]]:
+				for token in choice.get(String(pair[0]), []):
+					counted += 1
+					if not EventEffects.known(String(token), String(pair[1])):
+						var note := "%s/%s" % [String(pair[1]), String(token)]
+						if note not in unknown:
+							unknown.append(note)
+	_check(
+		"全 %d 件のトークンが解決表にある" % counted, unknown.is_empty(),
+		"(未登録: %s)" % str(unknown)
+	)
+
+	# 未実装のものは INFORMATIONAL に明示されていること（黙って無視でないこと）
+	_check("未実装のトークンは明示されている", EventEffects.INFORMATIONAL.size() > 0)
+	_check("効果があるトークンは INFORMATIONAL に無い", EventEffects.has_effect("gold"))
+	_check("未実装のトークンは has_effect が false", not EventEffects.has_effect("boss_intel"))
+
+	# 世界に置かれ、歩いて行けること
+	var placed := 0
+	var bad := []
+	for seed_value in range(1, 25):
+		var w := WorldGenerator.generate(DetRng.new(seed_value * 811))
+		placed += w.events.size()
+		var problems := WorldGenerator.verify(w)
+		if not problems.is_empty():
+			bad.append("種%d: %s" % [seed_value, "/".join(problems)])
+		for pos in w.events:
+			var inst: Dictionary = w.events[pos]
+			# 表層の 4 項目が埋まっていること（AI 無しでも成立する）
+			for key in ["title", "actor", "cause", "flavor"]:
+				if String(inst.get("skin", {}).get(key, "")) == "":
+					bad.append("種%d: skin の %s が空" % [seed_value, key])
+			if inst.get("choices", []).is_empty():
+				bad.append("種%d: 選択肢が無い" % seed_value)
+	_check("24 個の世界すべてが検算を通る（イベント込み）", bad.is_empty(), "(%s)" % str(bad.slice(0, 3)))
+	_check("イベントが世界に置かれる（%d 件）" % placed, placed >= 24 * 2)
+
+	# 同じ種からは同じイベント（決定性）
+	var a := WorldGenerator.generate(DetRng.new(606))
+	var b := WorldGenerator.generate(DetRng.new(606))
+	_check("同じ種から同じイベントが出る", a.events.keys() == b.events.keys())
+	var same_skin := true
+	for pos in a.events:
+		if a.events[pos]["skin"] != b.events[pos]["skin"]:
+			same_skin = false
+	_check("同じ種から同じ表層が出る", same_skin)
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。

@@ -16,6 +16,9 @@ signal boss_reached
 signal shop_entered
 signal chest_opened(amount: int)
 signal menu_requested
+## ワールドで任意イベントのマスを踏んだ。開くかは main.gd が決める
+## （一度きりかどうかを知っているのは向こう側）。
+signal event_reached(pos: Vector2i)
 ## ワールドで拠点地（町・洞・城）を踏んだ。中へ入れるかは main.gd が決める。
 signal site_entered(pos: Vector2i)
 ## 町の人に話しかけた。
@@ -220,6 +223,11 @@ func _try_move_world(target: Vector2i) -> void:
 	queue_redraw()
 
 	var world: WorldMap = map
+	# 街道のイベントは拠点地より先に見る（拠点地の上にも重なることがある）。
+	if world.events.has(target) and not world.sites.has(target):
+		_steps_since_encounter = 0
+		event_reached.emit(target)
+		return
 	if world.sites.has(target):
 		# 拠点地の上では遭遇しない。踏んだ歩数も数えない（門前で溜めるのを防ぐ）。
 		_steps_since_encounter = 0

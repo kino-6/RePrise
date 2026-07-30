@@ -44,6 +44,17 @@ var danger: PackedByteArray = PackedByteArray()
 ## 訪れた拠点地。町の在庫や洞の踏破を覚えておくのに使う。
 var visited: Dictionary = {}
 
+## 世界に置いたイベント（位置 -> instantiate() した 1 件）。
+##
+## 街道は世界のマス、町と洞はその拠点地のマスに置く。
+## 骨格は `data/world_events.json`、表層は `DetRng` が選んだもの。
+var events: Dictionary = {}
+
+
+func event_at(pos: Vector2i) -> Dictionary:
+	return events.get(pos, {})
+
+
 ## 城の主を守る封。**3 つ解くまで城の扉は開かない。**
 ##
 ## 各要素は {"pos": 洞の位置, "band": 帯の名, "danger": int, "name": String,

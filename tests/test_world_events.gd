@@ -1,6 +1,6 @@
 extends SceneTree
 
-## 任意イベント32型と AI 表層差し替えの境界を検査する。
+## 任意イベント64型と AI 表層差し替えの境界を検査する。
 ##
 ##   godot --headless --script res://tests/test_world_events.gd
 
@@ -35,7 +35,7 @@ func _test_catalog() -> void:
 	var errors := WEC.validate_catalog(catalog)
 	_check("カタログは検算を通る", errors.is_empty(), str(errors))
 	var events: Array = catalog.get("events", [])
-	_check("任意イベントを32型持つ", events.size() == 32)
+	_check("任意イベントを64型持つ", events.size() == WEC.EXPECTED_TOTAL)
 
 	var counts := {}
 	var minimum_combinations_ok := true
@@ -55,7 +55,8 @@ func _test_catalog() -> void:
 				and choice.has("rewards")
 			)
 	for category in WEC.CATEGORY_ORDER:
-		_check("%s は8型" % category, int(counts.get(category, 0)) == 8)
+		_check("%s は16型" % category,
+			int(counts.get(category, 0)) == WEC.EXPECTED_PER_CATEGORY)
 	_check("全型がAIなしでも81通り以上の表層を持つ", minimum_combinations_ok)
 	_check("全選択肢にコスト・危険・報酬が明示される", every_choice_has_tradeoff)
 
@@ -72,11 +73,28 @@ func _test_selection() -> void:
 		"road", "town", "cave", "faction"
 	], str(_categories(with_faction)))
 
+	var town_slot := WEC.select_for_world(
+		DetRng.new(31), {"site_kind": "town"}, 1
+	)
+	var cave_slot := WEC.select_for_world(
+		DetRng.new(32), {"site_kind": "cave"}, 1
+	)
+	var road_slot := WEC.select_for_world(
+		DetRng.new(33), {"site_kind": "world"}, 1
+	)
+	_check("町の枠には町イベントだけを置く",
+		_categories(town_slot) == ["town"], str(_categories(town_slot)))
+	_check("洞の枠には洞イベントだけを置く",
+		_categories(cave_slot) == ["cave"], str(_categories(cave_slot)))
+	_check("街道の枠には街道イベントを置く",
+		_categories(road_slot) == ["road"], str(_categories(road_slot)))
+
 	var seen := {}
-	for seed_value in range(1, 80):
+	for seed_value in range(1, 320):
 		for event_id in _ids(WEC.select_for_world(DetRng.new(seed_value), {}, 4)):
 			seen[event_id] = true
-	_check("種を変えると32型すべてが抽選対象になる", seen.size() == 32,
+	_check("種を変えると64型すべてが抽選対象になる",
+		seen.size() == WEC.EXPECTED_TOTAL,
 		str(seen.keys()))
 
 	var high_danger := WEC.select_for_world(

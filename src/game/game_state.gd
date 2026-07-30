@@ -106,6 +106,27 @@ var gold_earned: int = 0
 ## ゴールドと同じくラン内資源で、全滅で失う。
 var gear_stock: Array[String] = []
 
+## イベントが残す一時的な効果。**すべてラン内資源**（全滅で消える）。
+## 恒久資産には触らない、という決めごとを跨がないための置き場。
+var event_encounter_bias := 0   ## -1 で遭遇が減り、+1 で増える
+var event_bias_steps := 0       ## 効果が残る歩数
+var event_shop_bonus := 0       ## 町の品数に足す
+var event_boon := ""            ## temporary_* のうち 1 つ
+
+## 済んだイベント（同じものを二度出さない）。
+var event_done: Dictionary = {}
+
+
+## 一時効果を 1 歩ぶん進める。切れたら戻す。
+func step_event_effects() -> void:
+	if event_bias_steps <= 0:
+		return
+	event_bias_steps -= 1
+	if event_bias_steps <= 0:
+		event_encounter_bias = 0
+		event_boon = ""
+
+
 ## 持ち物（item_id -> 個数）。ゴールドと同じくランの中でしか存在しない。
 ## 「買ったものを持ち帰れる」ようにすると、出店が拠点の延長になって
 ## 道中の判断が薄まるので、ここは必ず捨てる側に置く。
@@ -243,6 +264,11 @@ func start_new_run(seed_value: int = -1) -> void:
 	kills = 0
 	gold_earned = 0
 	inventory = {}
+	event_encounter_bias = 0
+	event_bias_steps = 0
+	event_shop_bonus = 0
+	event_boon = ""
+	event_done = {}
 	run_active = true
 	runs_attempted += 1
 	for m in active_party():

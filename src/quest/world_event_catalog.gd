@@ -10,6 +10,8 @@ const DATA_PATH := "res://data/world_events.json"
 const CATEGORY_ORDER := ["road", "town", "cave", "faction"]
 const SKIN_KEYS := ["title", "actor", "cause", "flavor"]
 const SITE_KINDS := ["world", "town", "cave"]
+const EXPECTED_TOTAL := 64
+const EXPECTED_PER_CATEGORY := 16
 const BANNED := [
 	"ドラゴンクエスト", "ファイナルファンタジー", "クロノトリガー",
 	"メラゾーマ", "ベホマ", "ホイミ", "ケアル", "ファイガ",
@@ -54,13 +56,24 @@ static func select_for_world(
 	var selected: Array[Dictionary] = []
 	var selected_ids := {}
 	var wanted := clampi(count, 0, events.size())
+	var category_order: Array = CATEGORY_ORDER
+	match String(context.get("site_kind", "")):
+		"town":
+			category_order = ["town"]
+		"cave":
+			category_order = ["cave"]
+		"world":
+			category_order = ["road", "faction"]
+	var broad_context := {}
+	if context.has("site_kind"):
+		broad_context["site_kind"] = context["site_kind"]
 
-	for category in CATEGORY_ORDER:
+	for category in category_order:
 		if selected.size() >= wanted:
 			break
 		var pool := _eligible(events, category, context, selected_ids)
 		if pool.is_empty():
-			pool = _eligible(events, category, {}, selected_ids)
+			pool = _eligible(events, category, broad_context, selected_ids)
 		if not pool.is_empty():
 			var picked: Dictionary = rng.pick(pool)
 			selected.append(picked)
@@ -69,7 +82,7 @@ static func select_for_world(
 	if selected.size() < wanted:
 		var remainder := _eligible(events, "", context, selected_ids)
 		if remainder.size() < wanted - selected.size():
-			remainder = _eligible(events, "", {}, selected_ids)
+			remainder = _eligible(events, "", broad_context, selected_ids)
 		rng.shuffle(remainder)
 		for event in remainder:
 			if selected.size() >= wanted:
@@ -163,8 +176,10 @@ static func validate_catalog(catalog: Dictionary = {}) -> Array[String]:
 	if not events is Array:
 		errors.append("events が配列ではない")
 		return errors
-	if events.size() != 32:
-		errors.append("events は 32 件であること: %d" % events.size())
+	if events.size() != EXPECTED_TOTAL:
+		errors.append("events は %d 件であること: %d" % [
+			EXPECTED_TOTAL, events.size()
+		])
 
 	var allowed_costs := _as_set(source.get("allowed_costs", []))
 	var allowed_risks := _as_set(source.get("allowed_risks", []))
@@ -218,9 +233,9 @@ static func validate_catalog(catalog: Dictionary = {}) -> Array[String]:
 		)
 
 	for category in CATEGORY_ORDER:
-		if int(category_counts.get(category, 0)) != 8:
-			errors.append("%s は 8 件であること: %d" % [
-				category, int(category_counts.get(category, 0))
+		if int(category_counts.get(category, 0)) != EXPECTED_PER_CATEGORY:
+			errors.append("%s は %d 件であること: %d" % [
+				category, EXPECTED_PER_CATEGORY, int(category_counts.get(category, 0))
 			])
 	return errors
 
@@ -232,11 +247,14 @@ static func _eligible(
 	var danger_min := int(context.get("danger_min", 1))
 	var danger_max := int(context.get("danger_max", 10))
 	var wanted_tags: Array = context.get("tags", [])
+	var site_kind := String(context.get("site_kind", ""))
 	for raw_event in events:
 		if not raw_event is Dictionary:
 			continue
 		var event: Dictionary = raw_event
 		if category != "" and String(event.get("category", "")) != category:
+			continue
+		if site_kind != "" and String(event.get("site_kind", "")) != site_kind:
 			continue
 		if excluded.has(String(event.get("id", ""))):
 			continue
