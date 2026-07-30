@@ -45,6 +45,11 @@ var _ai: LocalAI = null
 ## いま頼んでいるのがイベントの表層か（封の名か）。
 var _awaiting_event_text := false
 
+## 封の番人と戦っているか / この洞の番人を倒したか。
+## **城の主とは別扱い**（勝ってもランは終わらない）。
+var _guardian_battle := false
+var _guardian_beaten := false
+
 ## 今の戦闘が主との戦いか。勝った時にランを閉じるかどうかがここで変わる。
 var _boss_battle := false
 
@@ -153,6 +158,7 @@ func _ready() -> void:
 	menu.closed.connect(_close_menu)
 	menu.settings_requested.connect(_open_settings)
 	menu.suspend_requested.connect(_suspend_run)
+	menu.escape_requested.connect(_escape_site)
 	title.settings_requested.connect(_open_settings)
 	settings.closed.connect(_close_settings)
 	result.dismissed.connect(_enter_stronghold)
@@ -614,6 +620,7 @@ func _enter_floor() -> void:
 	# 寄り道の底にも主を置くと、寄り道が本筋と同じ重さになって
 	# 「寄るか急ぐか」の判断が消える。洞の見返りは宝箱と出店。
 	# 洞の中の絵はその土地の生物相から来る（雪原の洞は雪原の絵）。
+	_guardian_battle = false
 	_map = DungeonGenerator.generate(GameState.rng_for("terrain"), GameState.floor_number, false)
 	_map.biome = String(GameState.site.get("tileset", "dungeon"))
 	_door_warned = false
@@ -655,6 +662,7 @@ func _on_site_entered(pos: Vector2i) -> void:
 			# 町は安全地帯。今の出店をそのまま宿つきの町として使う。
 			_open_town()
 		"cave":
+			_guardian_beaten = false
 			var seal := GameState.seal_here()
 			if not seal.is_empty() and not bool(seal.get("broken", false)):
 				hud.toast("%s の けはい。%s" % [
@@ -1146,6 +1154,20 @@ func _close_menu() -> void:
 	_set_mode(Mode.EXPLORE)
 
 
+## 洞から出る。**用が済んだ洞を最深部まで歩かせない。**
+##
+## 封を取ったあとの洞は用が無いので、入口へ戻る手を用意する。
+## まだ封が残っている洞では使わせない（それは近道になってしまう）。
+func _escape_site() -> void:
+	if not GameState.can_escape_site():
+		hud.toast("まだ ここには 用が ある。")
+		_set_mode(Mode.EXPLORE)
+		return
+	Sound.play("stairs")
+	hud.toast("洞を あとにした。")
+	_leave_site()
+
+
 ## ラン途中で保存して閉じる。
 ##
 ## **世界そのものは書かない。** 決定性があるので種から作り直せる。
@@ -1288,8 +1310,17 @@ func _finish_run(victory: bool) -> void:
 func _on_descend() -> void:
 	Sound.play("stairs")
 	if int(GameState.site.get("floor", 1)) >= GameState.cave_depth():
-		# 洞の底。封があればここで解ける。
+		# 洞の底。封があるなら、まず番人と戦う。
 		var seal := GameState.seal_here()
+		if not seal.is_empty() and not bool(seal.get("broken", false)) 				and not _guardian_beaten:
+			var keeper := Encounter.build_guardian(
+				_battle_rng, GameState.floor_number, GameState.biome_here()
+			)
+			if not keeper.is_empty():
+				hud.toast("%s が 封を まもっている。" % String(seal.get("name", "封")))
+				_guardian_battle = true
+				_begin_battle(keeper, false)
+				return
 		if not seal.is_empty() and not bool(seal.get("broken", false)):
 			GameState.break_seal()
 			Sound.play("seal_break")

@@ -447,6 +447,17 @@ func story_progress() -> String:
 	return "%d/%d" % [world.story_beat, world.story.get("beats", []).size()]
 
 
+## 洞から任意で出られるか。
+##
+## **用が済んでいるときだけ。** 封がまだ在る洞で使えると、番人を避けて
+## 出入りを繰り返す近道になる。
+func can_escape_site() -> bool:
+	if String(site.get("kind", "")) != "cave":
+		return false
+	var s := seal_here()
+	return s.is_empty() or bool(s.get("broken", false))
+
+
 ## いま入っている洞に封があるか（無ければ空）。
 func seal_here() -> Dictionary:
 	if world == null or String(site.get("kind", "")) != "cave":

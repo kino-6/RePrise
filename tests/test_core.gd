@@ -28,6 +28,7 @@ func _initialize() -> void:
 	_test_save_migration()
 	_test_save_to_disk()
 	_test_suspend()
+	_test_guardian_and_escape()
 	_test_roster()
 	_test_field_poison()
 	_test_settings()
@@ -947,6 +948,59 @@ func _fresh_roster() -> Array[PartyMember]:
 	for entry in [["ア", "soldier"], ["イ", "priest"], ["ウ", "mage"], ["エ", "thief"]]:
 		members.append(PartyMember.create(String(entry[0]), String(entry[1])))
 	return members
+
+
+## 封の番人と、洞からの脱出。
+##
+## **番人は城の主とは別格**でなければならない（同格にすると寄り道が本筋と
+## 同じ重さになる）。脱出は**用が済んだときだけ**（残っていると番人を避ける
+## 近道になる）。どちらも条件を外すと静かに壊れるので、ここで固定する。
+func _test_guardian_and_escape() -> void:
+	Database.reload()
+	var keeper := Encounter.build_guardian(DetRng.new(7), 5, "")
+	_equal("番人は 1 体だけ", keeper.size(), 1)
+	_check("番人に名が付く", keeper.is_empty() or keeper[0].name.contains("番人"))
+
+	# 同じ危険度の通常の敵より強いこと（別格である、の中身）
+	var plain := Encounter.build(DetRng.new(7), 5, 200, "")
+	var plain_hp := 0
+	for b in plain:
+		plain_hp = maxi(plain_hp, b.max_hp)
+	_check(
+		"番人は同じ危険度の通常の敵より硬い",
+		keeper.is_empty() or plain.is_empty() or keeper[0].max_hp > plain_hp
+	)
+
+	# 城の主より弱いこと（別格だが上ではない）
+	var boss := Encounter.build_boss(DetRng.new(7), WorldMap.MAX_DANGER)
+	_check(
+		"番人は城の主より弱い",
+		keeper.is_empty() or boss.is_empty() or keeper[0].max_hp < boss[0].max_hp
+	)
+
+	# 脱出の条件
+	var state: Node = load("res://src/game/game_state.gd").new()
+	state.use_save_paths("user://test_escape_save")
+	state.roster = _fresh_roster()
+	state.start_new_run(2024)
+	_check("世界の上では脱出できない", not state.can_escape_site())
+
+	var seal_pos: Vector2i = state.world.seals[0]["pos"]
+	state.enter_site(seal_pos)
+	_check("封が残る洞からは脱出できない", not state.can_escape_site())
+	state.world.seals[0]["broken"] = true
+	_check("封を解いた洞からは脱出できる", state.can_escape_site())
+
+	# 封の無い洞（寄り道）はいつでも出られる
+	var plain_cave := Vector2i(-1, -1)
+	for pos in state.world.sites:
+		if String(state.world.sites[pos].get("kind", "")) == "cave" 				and state.world.seal_at(pos).is_empty():
+			plain_cave = pos
+			break
+	if plain_cave.x >= 0:
+		state.enter_site(plain_cave)
+		_check("封の無い洞はいつでも出られる", state.can_escape_site())
+	state.free()
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。

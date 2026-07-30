@@ -241,9 +241,17 @@ func _simulate(seed_value: int, policy: Policy) -> Dictionary:
 			_delve(world, members, rng, state, goal)
 			if bool(state["dead"]):
 				return _result(members, state, false, false, span)
-			# 洞の底まで行けば封が解ける（遊ぶ側と同じ扱い）
+			# 洞の底には**封の番人**が居る（遊ぶ側と同じ扱い）。
+			# ここを飛ばすと、封を集める線が実際より楽に測れてしまう。
 			var seal := world.seal_at(goal)
 			if not seal.is_empty():
+				var keeper := Encounter.build_guardian(
+					rng, int(state["danger"]), world.biome_id_at(goal.x, goal.y)
+				)
+				if not keeper.is_empty():
+					if not _fight(members, keeper, rng, int(state["danger"]), state):
+						state["dead"] = true
+						return _result(members, state, false, false, span)
 				seal["broken"] = true
 
 	# 城に着いた。**封が残っていれば扉は開かない。**

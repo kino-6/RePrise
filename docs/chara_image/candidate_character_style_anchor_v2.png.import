@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cayy4kfj84atl"
-path="res://.godot/imported/png32_candidate_npc_townsfolk.png-fd1f03c95c225c99ce162e7abb3fe327.ctex"
+uid="uid://c0gvs520h7ry0"
+path="res://.godot/imported/candidate_character_style_anchor_v2.png-0b4b16a22f7b1aade80935572acdd777.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tmp/imagegen_asset_work/png32_candidate_npc_townsfolk.png"
-dest_files=["res://.godot/imported/png32_candidate_npc_townsfolk.png-fd1f03c95c225c99ce162e7abb3fe327.ctex"]
+source_file="res://docs/chara_image/candidate_character_style_anchor_v2.png"
+dest_files=["res://.godot/imported/candidate_character_style_anchor_v2.png-0b4b16a22f7b1aade80935572acdd777.ctex"]
 
 [params]
 

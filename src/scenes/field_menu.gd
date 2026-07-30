@@ -15,6 +15,8 @@ signal closed
 signal settings_requested
 ## ラン途中で保存して閉じる。**世界 1 周が 1 ランなので、途中で閉じられないと無理がある。**
 signal suspend_requested
+## 用が済んだ洞から出る。最深部まで歩かせないための逃げ道。
+signal escape_requested
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
@@ -24,7 +26,12 @@ const BODY_RECT := Rect2(166, 8, 338, 240)
 const HINT_RECT := Rect2(8, 256, 496, 56)
 const PARTY_RECT := Rect2(8, 168, 150, 80)
 
-const ROW := 24
+## 第 1 階層の行送り。
+##
+## 8 項目（どうぐ〜とじる）が窓の内側 138px に収まる値。
+## 24 のままだと「ぬけだす」と「とじる」が窓の外に出て、**選べるのに見えない**
+## 状態になっていた（画面の外に出た行は、はみ出し検出でも捕まらない）。
+const ROW := 17
 
 ## そうびの 3 スロット。順番は固定する。
 const SLOTS: Array[String] = ["weapon", "armor", "accessory"]
@@ -33,7 +40,7 @@ const SLOT_LABELS := {"weapon": "ぶき", "armor": "よろい", "accessory": "�
 enum State { ROOT, MEMBER, ITEM, ITEM_TARGET, STATUS, SLOT, GEAR, JOB }
 
 const ROOT_ITEMS: Array[String] = [
-	"どうぐ", "つよさ", "そうび", "てんしょく", "せってい", "ちゅうだん", "とじる",
+	"どうぐ", "つよさ", "そうび", "てんしょく", "せってい", "ちゅうだん", "ぬけだす", "とじる",
 ]
 
 ## てんしょくの一覧は 2 列。15 職あるので 1 列だと枠から出る。
@@ -181,6 +188,10 @@ func _input_root(event: InputEvent) -> void:
 				suspend_requested.emit()
 				return
 			6:
+				close()
+				escape_requested.emit()
+				return
+			7:
 				_leave()
 				return
 	queue_redraw()
@@ -449,7 +460,7 @@ func _draw() -> void:
 
 func _draw_root() -> void:
 	PixelUI.draw_window(self, ROOT_RECT, WINDOW_TEX)
-	var origin := PixelUI.content(ROOT_RECT).position + Vector2(16, 4)
+	var origin := PixelUI.content(ROOT_RECT).position + Vector2(16, 2)
 	for i in ROOT_ITEMS.size():
 		var at := origin + Vector2(0, i * ROW)
 		if i == _root_index:
@@ -501,6 +512,8 @@ func _draw_body() -> void:
 				_draw_job_notice()
 			elif _root_index == 5:
 				_draw_suspend_notice()
+			elif _root_index == 6:
+				_draw_escape_notice()
 
 
 ## てんしょくを選ぶ前の案内。押す前に読める位置に置く。
@@ -567,6 +580,19 @@ func _draw_suspend_notice() -> void:
 		"つぎに ひらくと ここから つづく。",
 		"世界も もちものも そのまま。",
 	]
+	for i in lines.size():
+		PixelUI.draw_text(self, origin + Vector2(0, 32 + i * 22), lines[i], PixelUI.C_TEXT_DIM)
+
+
+## 洞から出る案内。使えないときは理由を出す。
+func _draw_escape_notice() -> void:
+	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
+	PixelUI.draw_text(self, origin, "ぬけだす", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	var lines: Array[String] = []
+	if GameState.can_escape_site():
+		lines = ["ここでの 用は 済んでいる。", "入口へ もどって 世界へ 出る。"]
+	else:
+		lines = ["まだ ここには 用が ある。", "封を やぶるまでは ぬけだせない。"]
 	for i in lines.size():
 		PixelUI.draw_text(self, origin + Vector2(0, 32 + i * 22), lines[i], PixelUI.C_TEXT_DIM)
 

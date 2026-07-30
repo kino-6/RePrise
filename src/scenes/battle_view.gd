@@ -870,7 +870,13 @@ func _draw_message_or_command() -> void:
 		return
 
 	for i in _shown.size():
-		PixelUI.draw_text(self, origin + Vector2(0, i * 19), _shown[i], PixelUI.C_TEXT)
+		# オート中は右上に作戦を出しているので、その幅ぶん狭めて折り返す
+		# （切らずに置いたら 42px 重なった）。
+		var width := 300.0 if _auto != AutoTactic.Mode.OFF else 460.0
+		PixelUI.draw_text(
+			self, origin + Vector2(0, i * 19),
+			PixelUI.clip(_shown[i], width, PixelUI.SIZE_TEXT), PixelUI.C_TEXT
+		)
 
 	# オート中は止め方を出す。始め方だけ見えていて止め方が見えないのは不親切で、
 	# 「戻れなくなった」と思われる。

@@ -90,6 +90,25 @@ static func build_boss(rng: DetRng, floor_number: int, first_id: int = 100) -> A
 	return result
 
 
+## 封の番人。**城の主とは別格。**
+##
+## 洞の底に封を置いたのに守るものが居ないのは不自然だった。ただし城の主と
+## 同じ扱いにすると、寄り道が本筋と同じ重さになって「寄るか急ぐか」が消える。
+## そこで**通常の敵を 1 体だけ、はっきり強くして**置く（群れの割り引きを掛けず、
+## 危険度を 2 上げる）。1 体なので範囲技が効かず、単体技の出番になる。
+static func build_guardian(rng: DetRng, floor_number: int, biome: String = "") -> Array[Battler]:
+	var pool := Database.monster_ids_for_floor(mini(floor_number + 2, WorldMap.MAX_DANGER), biome)
+	if pool.is_empty():
+		pool = Database.monster_ids_for_floor(floor_number, "")
+	var result: Array[Battler] = []
+	if pool.is_empty():
+		return result
+	var b := _to_battler(String(rng.pick(pool)), mini(floor_number + 2, WorldMap.MAX_DANGER), 100, 1)
+	b.name = "封の番人 %s" % b.name
+	result.append(b)
+	return result
+
+
 @warning_ignore("integer_division")
 static func _to_battler(
 	monster_id: String, floor_number: int, battler_id: int, pack: int = 1
