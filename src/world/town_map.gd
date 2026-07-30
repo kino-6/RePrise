@@ -38,6 +38,14 @@ var shop_stock: Dictionary = {}
 ## 町の名。生成時に決める。
 var town_name: String = ""
 
+## 間取りより先に決めた町の設定と、その設定を読める形にした構造。
+var profile: TownProfile = null
+var plaza_pos: Vector2i = Vector2i(-1, -1)
+var landmark_pos: Vector2i = Vector2i(-1, -1)
+var main_street: Array[Vector2i] = []
+var facility_paths: Array[Vector2i] = []
+var plaza_tiles: Array[Vector2i] = []
+
 
 func _init(w: int = 0, h: int = 0, _fill: int = 0) -> void:
 	super(w, h, T_VOID)

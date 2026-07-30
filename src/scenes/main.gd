@@ -1225,7 +1225,9 @@ func _open_town() -> void:
 	_dev_last_talk_line = ""
 	_town = TownGenerator.generate(
 		GameState.rng_for("town"), GameState.floor_number,
-		String(GameState.site.get("tileset", "dungeon"))
+		String(GameState.site.get("tileset", "dungeon")),
+		int(GameState.site.get("index", 0)),
+		posmod(GameState.run_seed, TownProfile.cycle_size())
 	)
 	_map = null
 	_encounter_rng = GameState.rng_for("encounter")
