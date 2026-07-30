@@ -608,6 +608,10 @@ func _capture(which: String) -> void:
 		else:
 			for note in bad:
 				print("  はみ出し: %s" % note)
+		# **詰めた文字も見せる。** 横のはみ出しは draw_text が自動で `…` に
+		# するので遊ぶ側には見えないが、詰まっていること自体が割り付けの誤り。
+		for note in PixelUI.clipped():
+			print("  詰めた: %s" % note)
 	get_tree().quit()
 
 
@@ -987,13 +991,20 @@ func _rumor() -> String:
 ## 宿。**取り上げるものは無いので、ゴールドも取らない。**
 ## 町まで戻ってきた手間がそのまま代金、という扱いにする。
 func _on_inn() -> void:
+	var service := EventEffects.consume_inn(GameState, GameState.rng_for("event_inn"))
+	if bool(service.get("blocked", false)):
+		Sound.play("cancel")
+		hud.toast(" ".join(service.get("lines", [])))
+		return
 	for m in GameState.active_party():
 		m.hp = m.max_hp()
 		m.mp = m.max_mp()
 		m.cure_poison()
 	Sound.play("learn")
 	_refresh_hud()
-	hud.toast("ゆっくり やすんだ。みな 元気に なった。")
+	var lines: Array = ["ゆっくり やすんだ。みな 元気に なった。"]
+	lines.append_array(service.get("lines", []))
+	hud.toast(" ".join(lines))
 
 
 ## 町を出て世界へ戻る。
@@ -1262,7 +1273,8 @@ var _event_pos := Vector2i(-1, -1)
 
 ## 手を選んだ。払って、得て、要るなら戦う。
 func _on_event_choice(choice: Dictionary) -> void:
-	GameState.event_done[_event_pos] = true
+	if EventEffects.choice_completes_event(choice):
+		GameState.event_done[_event_pos] = true
 	var danger := GameState.floor_number
 	var lines: Array[String] = []
 	lines.append_array(EventEffects.pay(GameState, choice.get("costs", []), danger))
@@ -1293,10 +1305,18 @@ func _on_event_choice(choice: Dictionary) -> void:
 	_refresh_hud()
 
 	# 戦いを含む手は、そのまま戦闘へ入る（払ったあとに逃げられない）。
-	var fights := _fight_token(choice.get("costs", [])) or _fight_token(choice.get("risks", []))
-	if fights:
+	var fight_grade := maxi(
+		_fight_grade(choice.get("costs", [])),
+		_fight_grade(fired)
+	)
+	if fight_grade > 0:
 		lines.append("身がまえる 間もなく、敵が 来た。")
-	_pending_fight = fights
+		_pending_fight_grade = fight_grade
+	if bool(choice.get("defer", false)):
+		lines.append("いまは手を出さず離れた。戻れば、まだ選べる。")
+	if lines.is_empty():
+		# この行へ来た選択肢は品質 Gate の漏れ。無言で成功に見せない。
+		lines.append("何も起きなかった。この選択肢は未解決だ。")
 	# **結果は同じ窓で読ませる。** toast だと流れて、選んだ意味が確かめられない。
 	_story_beat = {}
 	event_view.open_outcome(String(choice.get("label", "")), lines, danger)
@@ -1307,7 +1327,7 @@ func _on_event_choice(choice: Dictionary) -> void:
 ## 危険が実際に起きる確率。**並べておいて起きないなら飾りになる。**
 const RISK_ODDS := 45
 
-var _pending_fight := false
+var _pending_fight_grade := 0
 var _outcome_open := false
 
 
@@ -1328,16 +1348,20 @@ func _remember_choice() -> String:
 func _close_outcome() -> void:
 	_outcome_open = false
 	_set_mode(Mode.EXPLORE)
-	if _pending_fight:
-		_pending_fight = false
-		_on_encounter()
+	if _pending_fight_grade > 0:
+		var grade := _pending_fight_grade
+		_pending_fight_grade = 0
+		_on_event_encounter(grade)
 
 
-func _fight_token(list: Array) -> bool:
+func _fight_grade(list: Array) -> int:
+	var grade := 0
 	for token in list:
-		if String(token) in ["normal_fight", "elite_fight"]:
-			return true
-	return false
+		if String(token) == "elite_fight":
+			grade = 2
+		elif String(token) == "normal_fight":
+			grade = maxi(grade, 1)
+	return grade
 
 
 ## 見送った。**必ず立ち去れる**（踏み直せばまた開く）。
@@ -1466,6 +1490,20 @@ func _on_encounter() -> void:
 	)
 
 
+## イベントが約束した戦闘。強敵を選んだのに通常遭遇へ落とさない。
+func _on_event_encounter(grade: int) -> void:
+	var foes := (
+		Encounter.build_elite(
+			_battle_rng, GameState.floor_number, 100, GameState.biome_here()
+		)
+		if grade >= 2 else
+		Encounter.build(
+			_battle_rng, GameState.floor_number, 100, GameState.biome_here()
+		)
+	)
+	_begin_battle(foes, false)
+
+
 ## 主の間へ踏み込んだ。ここで勝てばランが「生還」で終わる。
 func _on_boss_reached() -> void:
 	var foes := Encounter.build_boss(_battle_rng, GameState.floor_number)
@@ -1488,6 +1526,7 @@ func _begin_battle(foes: Array[Battler], is_boss: bool) -> void:
 		party.append(members[i].to_battler(i))
 
 	_boss_battle = is_boss
+	EventEffects.prepare_battle(GameState, party, foes, is_boss)
 	var system := BattleSystem.new()
 	system.start(party, foes, _battle_rng, GameState.floor_number)
 	Sound.play("encounter")

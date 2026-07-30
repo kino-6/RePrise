@@ -67,24 +67,14 @@ func _draw() -> void:
 	PixelUI.ui_frame()
 	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color8(0x08, 0x0A, 0x14), true)
 
-	var head := Rect2(16, 18, 480, 36)
-	PixelUI.draw_window(self, head, WINDOW_TEX)
-	PixelUI.draw_text(
-		self, PixelUI.content(head).position + Vector2(8, 0),
-		"―― %s ――" % title, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
-	)
+	UiPanel.begin(
+		self, Rect2(16, 18, 480, 36), WINDOW_TEX, "―― %s ――" % title)
 
-	var body := Rect2(16, 62, 480, 218)
-	PixelUI.draw_window(self, body, WINDOW_TEX)
-	var inner := PixelUI.content(body)
-
-	# 戦記は覚えた技を全部並べるので、1 行が窓を越える。必ず折り返す。
-	var drawn: PackedStringArray = []
+	# 戦記は覚えた技を全部並べるので、1 行が窓を越える。
+	# `paragraph()` が折り返し、入らない行は捨てて数える（外へは描かない）。
+	var body := UiPanel.begin(self, Rect2(16, 62, 480, 218), WINDOW_TEX)
 	for line in lines:
-		drawn.append_array(PixelUI.wrap(line, inner.size.x - 26.0))
-	var room := int((inner.size.y - 8.0) / LINE_STEP)
-	for i in mini(drawn.size(), room):
-		PixelUI.draw_text(self, inner.position + Vector2(8, 4 + i * LINE_STEP), drawn[i], PixelUI.C_TEXT)
+		body.paragraph(line)
 
 	if _ready_to_dismiss:
 		var tail := "Ｚキーで つぎの たびへ"

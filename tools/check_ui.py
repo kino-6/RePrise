@@ -24,7 +24,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # `_capture()` が知っている画面を全部。増えたらここに足す。
 SCREENS = [
-    "title", "stronghold", "job", "depart", "upgrade", "party",
+    "title", "prologue", "prologue_shatter", "prologue_worlds", "prologue_oath",
+    "stronghold", "job", "depart", "upgrade", "party",
     "world", "town", "cave", "shop", "event",
     "battle", "commands", "items", "deep", "boss",
     "menu", "status", "equip", "jobmenu", "settings",
@@ -51,6 +52,14 @@ def _check_one(name: str) -> tuple[str, list[str]]:
             line.split("はみ出し:", 1)[1].strip()
             for line in out.splitlines()
             if "はみ出し:" in line and "なし" not in line
+        ]
+        # **詰めた文字も違反として数える。** `draw_text` が窓の内側へ収めるので
+        # 遊ぶ側にはみ出しは見えなくなったが、詰まっているのは割り付けの誤り。
+        # 見えなくなった代わりに黙るのでは、関門を外したのと同じ。
+        hits += [
+            "詰めた " + line.split("詰めた:", 1)[1].strip()
+            for line in out.splitlines()
+            if "詰めた:" in line
         ]
         if "撮影:" in out:
             return name, hits

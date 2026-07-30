@@ -95,15 +95,52 @@ static func ui_violations() -> Array[String]:
 ## 開きかけの窓で学んだのと同じで、**推測より印**。
 ## 呼び忘れても壊れない（前のフレームの文字が残るだけで、誤報が増える方向）。
 static func ui_frame() -> void:
+	# **窓も捨てる。** 溜めたままだと前の画面の窓に収まっていると誤認するし、
+	# 同じ矩形が毎フレーム積み上がる。窓は自分の `_draw()` の中で
+	# 文字より先に描かれるので、フレーム頭で捨てて困らない。
+	_windows.clear()
 	if ui_check_enabled():
 		_texts.clear()
 
 
 static func ui_check_reset() -> void:
+	_clipped.clear()
 	_windows.clear()
 	_violations.clear()
 	_animating.clear()
 	_texts.clear()
+
+
+## その位置を含むいちばん小さい窓（無ければ空）。
+##
+## 窓が重なっている画面があるので、**始点を含む最小のもの**を相手にする。
+static func _host_window(top_left: Vector2) -> Rect2:
+	var host := Rect2()
+	var found := false
+	for w in _windows:
+		if not w.has_point(top_left + Vector2(1, 1)):
+			continue
+		if not found or w.get_area() < host.get_area():
+			host = w
+			found = true
+	return host if found else Rect2()
+
+
+## 窓の右端に収まるよう詰める。窓の外に置いた文字（HUD の見出しなど）は触らない。
+static func _fit(top_left: Vector2, text: String, size: int) -> String:
+	if text == "":
+		return text
+	var host := _host_window(top_left)
+	if host.size == Vector2.ZERO:
+		return text
+	var room := host.end.x - top_left.x
+	if room <= 0.0 or text_width(text, size) <= room + OVERFLOW_SLACK:
+		return text
+	var cut := clip(text, room, size)
+	var note := "「%s」を詰めた（窓 %s）" % [text.substr(0, 18), str(host)]
+	if note not in _clipped:
+		_clipped.append(note)
+	return cut
 
 
 ## 文字が窓の内側に収まっているかを見る。
@@ -182,10 +219,32 @@ static func font() -> Font:
 ## 影付きの文字。位置は**左上**で指定する。
 ##
 ## SFC の UI はほぼ必ず 1px の影が入っていて、これがあるだけで背景に負けず読める。
+## 窓の外へ文字が出た回数。**切り詰めた回数**であって、はみ出した回数ではない。
+##
+## 横のはみ出しは `draw_text` が自動で `…` に詰めるので、遊ぶ側には見えない。
+## だが**詰まっていること自体が割り付けの誤り**なので、数えて関門に見せる。
+static var _clipped: Array[String] = []
+
+
+static func clipped() -> Array[String]:
+	return _clipped
+
+
+## 文字を置く。**窓からはみ出す分は自動で `…` に詰める。**
+##
+## 以前は幅を取らず、151 か所の呼び出しのうち幅で切っていたのは 7 か所だけだった。
+## つまり**内容が長ければ枠を突き抜けるのが既定**で、「銀の砦で枠から文字が
+## はみ出る」「転職の画面がはみ出る」はどちらもそれが素で出たもの。
+## 呼ぶ側の注意に頼るのをやめ、ここで収める。
+##
+## 縦は詰められない（下へ溢れた文字は消すしかなく、消すと黙って欠ける）ので、
+## そちらは `_note_text` が違反として挙げたまま。縦は `UiPanel` が
+## 「入らない行は描かずに数える」ことで構造的に防ぐ。
 static func draw_text(
 	canvas: CanvasItem, top_left: Vector2, text: String,
 	color: Color = C_TEXT, size: int = SIZE_TEXT
 ) -> void:
+	text = _fit(top_left, text, size)
 	_note_text(top_left, text, size)
 	var at := Vector2(top_left.x, top_left.y + font().get_ascent(size)).floor()
 	canvas.draw_string(font(), at + Vector2.ONE, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, C_SHADOW)
@@ -286,7 +345,7 @@ const WINDOW_SHADOW := Vector2(3, 3)
 static func draw_window(
 	canvas: CanvasItem, rect: Rect2, texture: Texture2D, alpha: float = WINDOW_ALPHA
 ) -> void:
-	if ui_check_enabled():
+	if true:
 		# **開きかけの窓は測らない。** `opening()` が縦に縮めた矩形を渡してくるので、
 		# その最中の文字は必ず外に出る（誤検出になる）。開き終わった窓は
 		# 高さが整数なので、端数のものを除けば見分けられる。
