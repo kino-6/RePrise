@@ -41,7 +41,9 @@ if hasattr(sys.stdout, "reconfigure"):
 GROUPS = [
     ("職業",          "candidate_hero_",       "sprites",     "hero_"),
     ("NPC",           "candidate_npc_",        "sprites",     "npc_"),
-    ("敵",            "candidate_enemy_",      "sprites",     "enemy_"),
+    # 敵だけは接頭辞が無い（`assets/sprites/<敵id>.png`）。
+    # 接頭辞で探して 0 と誤報していた。**嘘をつく関門は無いより悪い。**
+    ("敵",            "candidate_enemy_",      "sprites",     "@monster"),
     ("戦闘背景",      "candidate_battle_bg_",  "backgrounds", "battle_bg_"),
     ("イベントFX",    "candidate_fx_",         "effects",     "fx_"),
     ("イベント演出",  "candidate_event_",      "effects",     "event_"),
@@ -58,9 +60,25 @@ KNOWN_PENDING = {
 }
 
 
+def _monster_sprites() -> set[str]:
+    """`data/monsters.json` が使う絵の名前。敵の絵は接頭辞を持たない。"""
+    import json
+    path = ROOT / "data" / "monsters.json"
+    if not path.exists():
+        return set()
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        str(v.get("sprite", "")) for v in data.values()
+        if isinstance(v, dict) and v.get("sprite")
+    }
+
+
 def _stems(folder: Path, prefix: str) -> set[str]:
     if not folder.exists():
         return set()
+    if prefix == "@monster":
+        wanted = _monster_sprites()
+        return {p.stem for p in folder.glob("*.png") if p.stem in wanted}
     return {
         p.stem for p in folder.glob("*.png")
         if prefix == "" or p.stem.startswith(prefix)
@@ -109,7 +127,7 @@ def main() -> int:
         # 幹そのもの、または接頭辞を除いた**名前**が表に載っているかで見る。
         referenced = set()
         for stem in made:
-            key = stem[len(asset_prefix):] if asset_prefix else stem
+            key = stem if asset_prefix in ("", "@monster") else stem[len(asset_prefix):]
             if stem in text or (key and re.search(r'"%s"' % re.escape(key), text)):
                 referenced.add(stem)
         note = ""

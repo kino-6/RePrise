@@ -302,9 +302,12 @@ func _should_encounter() -> bool:
 func _update_camera() -> void:
 	var focus := Vector2(player_pos * TILE) + Vector2(TILE, TILE) * 0.5
 	var cam := focus - Vector2(PixelUI.SCREEN) * 0.5
-	var limit := Vector2(map.width * TILE, map.height * TILE) - Vector2(PixelUI.SCREEN)
-	cam.x = clampf(cam.x, 0.0, maxf(limit.x, 0.0))
-	cam.y = clampf(cam.y, 0.0, maxf(limit.y, 0.0))
+	var span := Vector2(map.width * TILE, map.height * TILE)
+	var limit := span - Vector2(PixelUI.SCREEN)
+	# **画面より狭い地図は中央へ寄せる。** 端に寄せると片側だけ余白になり、
+	# 「地図が途中で切れている」ように見える（町がそうだった）。
+	cam.x = clampf(cam.x, 0.0, maxf(limit.x, 0.0)) if limit.x > 0.0 else limit.x * 0.5
+	cam.y = clampf(cam.y, 0.0, maxf(limit.y, 0.0)) if limit.y > 0.0 else limit.y * 0.5
 	position = -cam.floor()
 
 
@@ -312,6 +315,13 @@ func _draw() -> void:
 	PixelUI.ui_frame()
 	if map == null:
 		return
+
+	# **地図の外を先に塗りつぶす。** 町は 20〜30 タイルで画面（32 タイル）より
+	# 狭いことがあり、余った右側に前の場面の絵が残って見えていた。
+	# 町を 32 タイルへ水増しすると歩く距離が増えるだけなので、塗りで解く。
+	draw_rect(
+		Rect2(-position, Vector2(PixelUI.SCREEN)), Color8(0x06, 0x07, 0x10), true
+	)
 
 	# 画面に映る範囲だけ描く
 	var origin := (-position / TILE).floor()
@@ -355,22 +365,18 @@ func _draw() -> void:
 	)
 
 
-## 町の人の見た目。**専用の絵を使う（主人公の絵を借りない）。**
+## 町の人の見た目。**役の名前がそのまま絵の名前**（`npc_<役>.png`）。
 ##
-## 借りていたときは、町の中に自分と同じ姿が 4 人立っていた。
-## 原本は docs/chara_image/candidate_npc_*.png。
-const FOLK_LOOKS := {
-	"keeper": "innkeeper", "trader": "merchant", "elder": "elder",
-	"child": "scout", "guard": "guard",
-}
-
+## もとは 4 役を主人公の絵に割り当てていた（町に自分と同じ姿が 4 人立っていた）。
+## 17 種そろっているので、対応表を持たずに名前で引く ―― 表を挟むと、
+## 絵を足すたびに表を直す必要があり、また「絵はあるのに出ない」が起きる。
 static var _folk_tex: Dictionary = {}
 
 
 func _folk_texture(kind: String) -> Texture2D:
 	if _folk_tex.has(kind):
 		return _folk_tex[kind]
-	var path := "res://assets/sprites/npc_%s.png" % String(FOLK_LOOKS.get(kind, "innkeeper"))
+	var path := "res://assets/sprites/npc_%s.png" % kind
 	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
 	_folk_tex[kind] = tex
 	return tex

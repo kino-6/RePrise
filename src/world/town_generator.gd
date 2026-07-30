@@ -24,13 +24,21 @@ static var NAME_TAIL: Array = Vocabulary.nested(
 ##
 ## **同じ人物像を並べない。** 全員が世間話をすると町が背景になる。
 ## 宿の主・店番・物知り・子ども、と役を散らすと、町が人の居る場所になる。
+## 町の人の一言。**役ごとに言うことを変える。**
+##
+## 全員が世間話をすると町が背景になる。役が 17 になったので、
+## 「その役だから言えること」を書き分けた ―― 鍛冶は道具の話、船頭は水路の話、
+## 難民は外の世界の話。**同じ人物像を並べない**のがここの狙い。
+##
+## 物知り（elder）だけは決まり文句ではなく、そのときの手掛かりを話す
+## （封の在り処。`ExploreView.rumor` から差し込む）。
 const LINES := {
-	"keeper": [
+	"innkeeper": [
 		"よく来た。やどは いつでも あいている。",
 		"ゆっくり やすんでいくと いい。",
 		"となりの みせで そなえを ととのえな。",
 	],
-	"trader": [
+	"merchant": [
 		"ここらの しなは そろえてある。",
 		"おくへ 行くなら やくそうは 多めにな。",
 		"かねは 使ってこそ 意味が ある。",
@@ -38,17 +46,105 @@ const LINES := {
 	"elder": [
 		"おくの 地は 生きものの たちが ちがう。",
 		"ゆきの 地では こおりに つよい ものが 出る。",
-		"ほのおの 地の ものに 火は きかんよ。",
 		"いそぐ者ほど はやく たおれる。",
 	],
-	"child": [
+	"scout": [
 		"ほら穴の おくに なにか あるって。",
-		"おおきくなったら たびに 出るんだ。",
-		"しろの ほうは 見ちゃ だめって いわれてる。",
+		"north の道は 山で ふさがっている。",
+		"人の 通らぬ 道ほど はやい。",
+	],
+	"guard": [
+		"門の そとは わしらの 手に あまる。",
+		"夜に 出るなら 灯りを 持て。",
+		"この町で もめごとは 起こすな。",
+	],
+	"blacksmith": [
+		"重い得物は つよいが 手番が おそくなる。",
+		"刃は 使うほど 手に なじむ。",
+		"鉄は うそを つかん。",
+	],
+	"healer": [
+		"どくは 歩くたびに 身を けずる。",
+		"たおれる前に 手を 打て。",
+		"やくそうを 惜しんで 死ぬ者を 何人も 見た。",
+	],
+	"farmer": [
+		"ことしは 実りが すくない。",
+		"畑の むこうに 光る ものを 見た。",
+		"雨が 降らんのは 地が 変わったからだ。",
+	],
+	"miner": [
+		"洞の 底には 古い ものが ねむっている。",
+		"岩の 音を 聞け。ちがう音が したら もどれ。",
+		"掘るほど 空気が わるくなる。",
+	],
+	"ferryman": [
+		"水は わたれん。まわり道を さがしな。",
+		"沼は 見た目より 深い。",
+		"むかしは この先に 橋が あった。",
+	],
+	"mechanic": [
+		"からくりは 直せば また 動く。",
+		"あの 音は 帝国の ものだ。",
+		"歯車が 合わねば 力は 出ん。",
+	],
+	"scribe": [
+		"記録に のこらぬ ものは 無かったことに なる。",
+		"この町の 名も、いずれ わすれられる。",
+		"あんたの 旅も 書きとめておこう。",
+	],
+	"pilgrim": [
+		"封は 世界の ふたを おさえている。",
+		"どこへ 行っても 空は おなじだ。",
+		"歩くことが いのりに なる。",
+	],
+	"refugee": [
+		"むこうの 町は もう ない。",
+		"にげてきた。それだけだ。",
+		"帰る場所が ないのは、道が ないより つらい。",
+	],
+	"performer": [
+		"うたは 世界を こえて のこるらしい。",
+		"銭を くれたら もう一節。",
+		"かなしい話ほど よく はやる。",
+	],
+	"beastkeeper": [
+		"けものにも 帰る場所が ある。",
+		"こいつは 人より よく 道を おぼえる。",
+		"むやみに 手を 出すな。かむぞ。",
+	],
+	"imperial_officer": [
+		"通行の 記録を 取らせてもらう。",
+		"帝国の 道は 帝国の ものだ。",
+		"詮索は せぬ。おまえも するな。",
 	],
 }
 
-const FOLK_ROLES := ["keeper", "trader", "elder", "child"]
+## 町に立つ役。**その町の生物相と危険度で顔ぶれが変わる。**
+## 全部の町に同じ 4 人が立っていると、町が変わった気がしない。
+const FOLK_ROLES := [
+	"innkeeper", "merchant", "elder", "scout", "guard", "blacksmith",
+	"healer", "farmer", "miner", "ferryman", "mechanic", "scribe",
+	"pilgrim", "refugee", "performer", "beastkeeper", "imperial_officer",
+]
+
+## どの町にも必ず居る役（宿・店・物知り）。用が足せることを保証する。
+const CORE_ROLES := ["innkeeper", "merchant", "elder"]
+
+## 生物相に合う役。土地の顔を出すためのもの。
+const BIOME_ROLES := {
+	"wetland": ["ferryman", "healer"],
+	"snowfield": ["pilgrim", "refugee"],
+	"volcano": ["blacksmith", "mechanic"],
+	"badland": ["miner", "refugee"],
+	"desert": ["ferryman", "pilgrim"],
+	"grassland": ["farmer", "performer"],
+	"forest": ["beastkeeper", "scout"],
+}
+
+## 何人立たせるか。町の広さで変える。
+const FOLK_MIN := 4
+const FOLK_MAX := 7
 
 
 ## 町の広さ。生物相と危険度で少し振る（辺境の町は小さい）。
@@ -186,11 +282,28 @@ static func _place_building(map: TownMap, plot: Rect2i, entrance: int) -> Vector
 	return door
 
 
-## 町人を置く。役を散らし、**必ず歩ける場所の隣**に立たせる。
+## 町人を置く。
+##
+## **必ず居る役 → 土地に合う役 → 残りから**の順で選ぶ。
+## 用（宿・店・手掛かり）が足せることを先に保証し、そのうえで顔ぶれを振る。
 static func _place_folk(map: TownMap, rng: DetRng, danger: int) -> void:
+	var biome := String(map.biome)
+	var roles: Array[String] = []
+	roles.append_array(CORE_ROLES)
+	for role in BIOME_ROLES.get(biome, []):
+		if String(role) not in roles:
+			roles.append(String(role))
+	var rest: Array = FOLK_ROLES.filter(func(r: String) -> bool: return r not in roles)
+	rng.shuffle(rest)
+	var wanted := rng.range_i(FOLK_MIN, FOLK_MAX)
+	for r in rest:
+		if roles.size() >= wanted:
+			break
+		roles.append(String(r))
+
 	var spots: Array[Vector2i] = []
-	for _i in 60:
-		if spots.size() >= FOLK_ROLES.size():
+	for _i in 120:
+		if spots.size() >= roles.size():
 			break
 		var at := Vector2i(rng.range_i(2, map.width - 3), rng.range_i(2, map.height - 3))
 		if map.get_tile(at.x, at.y) not in [TownMap.T_GROUND, TownMap.T_GROUND_ALT]:
@@ -199,7 +312,7 @@ static func _place_folk(map: TownMap, rng: DetRng, danger: int) -> void:
 			continue
 		var near := false
 		for other in spots:
-			if absi(other.x - at.x) + absi(other.y - at.y) < 4:
+			if absi(other.x - at.x) + absi(other.y - at.y) < 3:
 				near = true
 				break
 		if near:
@@ -207,8 +320,8 @@ static func _place_folk(map: TownMap, rng: DetRng, danger: int) -> void:
 		spots.append(at)
 
 	for i in spots.size():
-		var role := String(FOLK_ROLES[i % FOLK_ROLES.size()])
-		var pool: Array = LINES[role]
+		var role := String(roles[i % roles.size()])
+		var pool: Array = LINES.get(role, ["……"])
 		map.folk[spots[i]] = {
 			"kind": role,
 			"line": String(pool[rng.range_i(0, pool.size() - 1)]),

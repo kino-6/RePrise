@@ -169,16 +169,18 @@ func _ready() -> void:
 	result.dismissed.connect(_enter_stronghold)
 
 	_make_curtain()
-	_handle_debug_args()
-	# 開発用の保存から立ち上げたときは、その場面のままにする。
-	if not _loaded_from_dev and _mode == Mode.EXPLORE:
+	# **引数を捌いたかどうかで分ける。** `_capture()` は await を含むので、
+	# 呼んだ直後に制御が戻る。そこでタイトルを出すと、撮ろうとした画面を
+	# 上書きしてしまう（`--shot=town` がタイトルを撮っていた）。
+	if not _handle_debug_args():
 		_enter_title()
 
 
 ## 開発用。画面を 1 枚撮って終了する。
 ##   godot --path . -- --shot=explore
 ## GUI を触らずに見た目を確認できるので、ドット絵の調整に効く。
-func _handle_debug_args() -> void:
+## 開発用の引数を捌く。**何か捌いたら true**（呼び出し側がタイトルを出さない）。
+func _handle_debug_args() -> bool:
 	# **先に全部の引数を見る。** 下の輪は最初に当たった指定で return するので、
 	# 「--play=12 --dev-save=probe」のように後ろへ書くと読まれなかった。
 	for arg in OS.get_cmdline_user_args():
@@ -198,10 +200,11 @@ func _handle_debug_args() -> void:
 			continue
 		if arg.begins_with("--shot="):
 			_capture(arg.trim_prefix("--shot="))
-			return
+			return true
 		if arg.begins_with("--play="):
 			_start_autoplay(float(arg.trim_prefix("--play=")))
-			return
+			return true
+	return _loaded_from_dev
 
 
 ## 開発用。人と同じ入力だけを流し込んで通しを確認する（src/dev/autoplay.gd）。
@@ -375,8 +378,10 @@ func _capture(which: String) -> void:
 				_open_event(pos)
 				break
 		"town":
-			# 町の中の見え方（宿・店・人）を確かめる
+			# 町の中の見え方（宿・店・人）を確かめる。
+			# 物語の拍は町より先に出るので、撮影では飛ばす。
 			_start_run()
+			GameState.world.story_beat = 99
 			var town_at := _first_site("town")
 			if town_at.x >= 0:
 				_on_site_entered(town_at)
