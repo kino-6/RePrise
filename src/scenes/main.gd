@@ -412,8 +412,10 @@ func _capture(which: String) -> void:
 					m.gain_exp(m.exp_to_next())
 				m.hp = m.max_hp()
 				m.mp = m.max_mp()
+			# **世界へ入り直さない。** `_enter_world()` の暗転と主戦の閃光が
+			# かち合って、撮影が世界のままになる。戦闘だけを立てる。
 			GameState.floor_number = GameState.FINAL_FLOOR
-			_enter_world()
+			_battle_rng = GameState.rng_for("battle")
 			_on_boss_reached()
 			for _i in 60:
 				await get_tree().create_timer(0.1).timeout

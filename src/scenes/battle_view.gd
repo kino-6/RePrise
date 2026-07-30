@@ -795,16 +795,38 @@ const GROUND_BOTTOM := {
 }
 
 
+## 敵を描く。
+##
+## **等倍で出していたので、顔も装備も主の格も潰れていた。**
+## 48x48 や 64x64 を 512x320 にそのまま置くと、SFC 期の敵より小さい。
+## 最近傍の 2 倍で出す ―― **半端な倍率は使わない**（ドットが滲む）。
+##
+## 位置・影・カーソル・状態・数字は**すべて表示矩形から計算する**。
+## 絵の元寸から計算していると、倍率を変えるたびに全部がずれる。
+const ENEMY_SCALE := 2.0
+
+## 奥の段の持ち上げ（表示寸法に対する割合ではなく固定）。
+## 真上に重ねると 1 体に見えるので、上へ逃がして右へずらす。
+const BACK_ROW_LIFT := 30.0
+const BACK_ROW_SHIFT := 22.0
+
+
 func _draw_enemies() -> void:
 	var foes := system.enemies
 	if foes.is_empty():
 		return
-	# 画面の幅に等間隔で置く。1 体なら中央に来る。
-	# **5 体以上は 2 段に分ける。** 1 列に詰めると 64px の絵が重なって
-	# どれを狙っているか分からなくなる（上限を 6 へ上げたときに重なった）。
-	var per_row := foes.size() if foes.size() <= 4 else int(ceil(foes.size() / 2.0))
+
+	# 1 行に何体置けるかは**表示寸法**から決める。いちばん広い絵に合わせる。
+	var widest := 0.0
+	for b in foes:
+		widest = maxf(widest, sprite_of(b.sprite).get_width() * ENEMY_SCALE)
+	var fit := maxi(int(PixelUI.SCREEN.x / maxf(widest + 8.0, 1.0)), 1)
+	var per_row := mini(foes.size(), maxi(fit, 1))
+	if foes.size() > fit:
+		per_row = int(ceil(foes.size() / 2.0))
 	var spacing := float(PixelUI.SCREEN.x) / (per_row + 1)
 	var highlighted := _highlighted_targets()
+
 	for i in foes.size():
 		var b := foes[i]
 		if not b.is_alive():
@@ -813,44 +835,53 @@ func _draw_enemies() -> void:
 		# ダメージの数字が出るより先に「どこに効いたか」が分かる。
 		if _blink > 0.0 and b.id in system.last_hit_ids and fmod(_blink, 0.12) > 0.06:
 			continue
+
 		var tex: Texture2D = sprite_of(b.sprite)
+		var size := tex.get_size() * ENEMY_SCALE
 		@warning_ignore("integer_division")
 		var tier := i / per_row
 		var slot := i % per_row
-		# 奥の段は少し上げて右へずらす（真上に重ねると 1 体に見える）。
-		var pos := Vector2(
-			spacing * (slot + 1) - tex.get_width() * 0.5 + tier * 18.0,
-			ENEMY_BASELINE - tex.get_height() - tier * 26.0
+		var rect := Rect2(
+			Vector2(
+				spacing * (slot + 1) - size.x * 0.5 + tier * BACK_ROW_SHIFT,
+				ENEMY_BASELINE - size.y - tier * BACK_ROW_LIFT
+			).floor(),
+			size
 		)
-		# 足元の影。これが無いと敵が宙に浮いて見える（浮遊しているわけではない）。
-		# 楕円ひとつで「地面に立っている」が伝わる。
-		_draw_ground_shadow(
-			Vector2(pos.x + tex.get_width() * 0.5, pos.y + tex.get_height() - 1.0),
-			tex.get_width() * 0.42
-		)
-		draw_texture(tex, pos.floor())
+
+		# 足元の影。これが無いと敵が宙に浮いて見える。
+		_draw_ground_shadow(Vector2(rect.get_center().x, rect.end.y - 1.0), size.x * 0.40)
+		# 最近傍で 2 倍。整数倍なのでドットは崩れない。
+		draw_texture_rect(tex, rect, false)
 
 		# 受けたダメージを相手の上に出す。メッセージ窓の文字だけだと
 		# 「どこに何が起きたか」が数字と場所で結び付かない。
 		if _blink > 0.0 and system.last_hit_amount.has(b.id):
-			var amount := int(system.last_hit_amount[b.id])
-			var text := "%d" % amount
+			var text := "%d" % int(system.last_hit_amount[b.id])
 			var lift := (0.3 - _blink) * 26.0
 			PixelUI.draw_text(
-				self, Vector2(pos.x + tex.get_width() * 0.5 - PixelUI.text_width(text) * 0.5,
-				pos.y - 24 - lift), text, PixelUI.C_ACTIVE
+				self,
+				Vector2(rect.get_center().x - PixelUI.text_width(text) * 0.5, rect.position.y - 22 - lift),
+				text, PixelUI.C_ACTIVE
 			)
 
 		# 状態異常は敵にも出す。眠らせた相手が分からないと意味が無い。
 		var tag := b.status_tag()
 		if tag != "":
 			PixelUI.draw_text(
-				self, Vector2(pos.x, pos.y - 16), tag, PixelUI.C_MP, PixelUI.SIZE_SUB
+				self, Vector2(rect.position.x, rect.position.y - 14), tag,
+				PixelUI.C_MP, PixelUI.SIZE_SUB
 			)
 
 		if b in highlighted:
-			draw_texture(CURSOR_TEX, Vector2(pos.x + tex.get_width() * 0.5 - 4, pos.y - 12).floor())
-			PixelUI.draw_text(self, Vector2(pos.x, pos.y - 32), b.name, PixelUI.C_ACTIVE)
+			draw_texture(
+				CURSOR_TEX, Vector2(rect.get_center().x - 4, rect.position.y - 12).floor()
+			)
+			PixelUI.draw_text(
+				self,
+				Vector2(rect.get_center().x - PixelUI.text_width(b.name) * 0.5, rect.position.y - 30),
+				b.name, PixelUI.C_ACTIVE
+			)
 
 
 ## いま狙っている相手。グループ技なら同じ種族をまとめて光らせる。

@@ -4,7 +4,11 @@
 
 終わった項目は tasks.md から消して docs/tasks_archive.md へ移す運用なので、
 tasks.md だけを見ると「ずっと [ ] のまま」に見えて、進んでいないように読める。
-済んだ件数と直近の 5 件を先頭に置いて、動いていることがファイル内で分かるようにする。
+完了記録の行数と直近の 5 行を先頭に置いて、動いていることがファイル内で分かるようにする。
+
+`docs/tasks_archive.md` は現状「1 タスク = 1 行」ではない。ここで数える `- ` は
+完了タスク数ではなく、完了記録の箇条書き行数である。タスクIDから正しい件数を
+出せるようになるまでは、完了件数とは呼ばない。
 
 棚卸し（項目を控えへ移す）をしたら、これを回してヘッダを更新すること。
 """
@@ -20,13 +24,14 @@ done = [ln for ln in archive_text.split("\n") if ln.startswith("- ")]
 recent = done[-5:][::-1]
 
 body = tasks.read_text(encoding="utf-8")
-# 既存のヘッダ（進み具合）を捨ててから付け直す
-body = re.sub(r"## 進み具合.*?(?=## 次にやる)", "", body, flags=re.S)
+# 既存のヘッダ（進み具合）だけを捨ててから付け直す。
+# 完了Gateは進み具合と次の仕事の間にあるので、そこまで消さない。
+body = re.sub(r"## 進み具合.*?(?=## 完了Gate|## 次にやる)", "", body, flags=re.S)
 open_items = len(re.findall(r"^- \[ \]", body, flags=re.M))
 
 header = f"""## 進み具合
 
-**済んだこと {len(done)} 件 / 残り {open_items} 件。**
+**完了記録 {len(done)} 行（実タスク数は再集計待ち） / 残り {open_items} 件。**
 
 終わった項目はここから消して `docs/tasks_archive.md` へ移すので、
 このファイルに `[x]` は残らない。**動いているかどうかは下の「直近に済んだこと」で見る。**
@@ -40,5 +45,10 @@ for line in recent:
 header += "\n"
 
 body = body.replace("## 次にやる", header + "## 次にやる", 1)
-tasks.write_text(body, encoding="utf-8")
-print("済 %d / 残 %d, tasks.md %d 行" % (len(done), open_items, len(body.split("\n"))))
+# Windows でも Markdown は LF に固定する。既存ファイルへ CRLF を混ぜると、
+# `git diff --check` が全追記行を末尾空白として誤検出する。
+with tasks.open("w", encoding="utf-8", newline="\n") as handle:
+    handle.write(body)
+print("完了記録 %d 行 / 残 %d 件, tasks.md %d 行" % (
+    len(done), open_items, len(body.split("\n"))
+))
