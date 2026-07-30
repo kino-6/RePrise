@@ -38,6 +38,13 @@ const OUT_TIME := 0.20
 const COVER_IN_TIME := 0.32
 const COVER_OUT_TIME := 0.26
 
+## 全滅専用。覆い絵を突然出さず、戦場そのものを暗くして一拍置く。
+## 戦記へ切り替わったあとも黒を少し保ち、結果画面をゆっくり戻す。
+const DEFEAT_DIM_TIME := 0.58
+const DEFEAT_HOLD_TIME := 0.42
+const DEFEAT_RESULT_HOLD := 0.16
+const DEFEAT_REVEAL_TIME := 0.54
+
 var _tween: Tween = null
 
 ## 場面転換の覆い（B-3）。遭遇のモザイクとは別物なので、別の子に描かせる。
@@ -182,6 +189,27 @@ func play(apply: Callable) -> bool:
 	return true
 
 
+## 全滅から戦記への専用遷移。
+##
+## ページやシャッターの絵は使わない。倒れた戦場を16段階で暗くし、無音の黒を
+## 挟んでから戦記を開く。「突然なにかが出て終わる」見え方を避けるための経路。
+func play_defeat(apply: Callable) -> bool:
+	if not available():
+		apply.call()
+		return false
+	cancel()
+	_apply(1.0, 1.0)
+	visible = true
+	_tween = create_tween()
+	_tween.tween_method(_set_defeat_in, 0.0, 1.0, DEFEAT_DIM_TIME)
+	_tween.tween_interval(DEFEAT_HOLD_TIME)
+	_tween.tween_callback(apply)
+	_tween.tween_interval(DEFEAT_RESULT_HOLD)
+	_tween.tween_method(_set_defeat_out, 0.0, 1.0, DEFEAT_REVEAL_TIME)
+	_tween.tween_callback(_finish)
+	return true
+
+
 ## 進行中の演出を止める。**あとから来た切り替えが必ず勝つ**ようにするため、
 ## 幕（`_curtain`）を消すときに一緒に呼ぶ。
 func cancel() -> void:
@@ -206,6 +234,16 @@ func _set_in(t: float) -> void:
 
 func _set_out(t: float) -> void:
 	_apply(_block_at(1.0 - t), t)
+
+
+func _set_defeat_in(t: float) -> void:
+	# 画面を崩さず、輝度だけを段階的に落とす。後半ほど暗くなる余韻。
+	_apply(1.0, 1.0 - t * t)
+
+
+func _set_defeat_out(t: float) -> void:
+	# 結果はすでに黒の裏で開いている。粒を出さず、記録だけを戻す。
+	_apply(1.0, t)
 
 
 func _block_at(t: float) -> float:

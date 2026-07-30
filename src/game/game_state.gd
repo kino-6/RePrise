@@ -637,7 +637,7 @@ func _story_ending() -> String:
 	return line if line != "" else "%s との約束は果たされた。" % who
 
 
-func end_run(victory: bool) -> Dictionary:
+func end_run(victory: bool, outcome: String = "") -> Dictionary:
 	# 道中スコアは失う側の値（階・撃破・稼ぎ）から作り、残響だけを残す側へ移す。
 	# 全滅でも必ず何かが増えるので、失敗したランも次のランの足しになる。
 	var score := run_score(victory)
@@ -646,6 +646,11 @@ func end_run(victory: bool) -> Dictionary:
 
 	var summary := {
 		"victory": victory,
+		# defeat と abandoned はどちらもラン失敗だが、戦記の意味は違う。
+		# 指定なしは旧呼び出しと同じ勝敗へ落とし、セーブ互換を壊さない。
+		"outcome": (
+			"victory" if victory else "defeat"
+		) if outcome == "" else outcome,
 		"seed": run_seed,
 		# 物語の結末。選ばなかった（途中で終わった）ときは、たどり着いた拍までで
 		# 締める。**六拍を回収しないと、物語を出した意味が無い。**

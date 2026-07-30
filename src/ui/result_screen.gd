@@ -22,7 +22,14 @@ var _ai: ChronicleAI = null
 
 
 func show_summary(summary: Dictionary) -> void:
-	title = "生還" if bool(summary.get("victory", false)) else "全滅"
+	var outcome := String(summary.get(
+		"outcome", "victory" if bool(summary.get("victory", false)) else "defeat"
+	))
+	title = (
+		Terms.RUN_ABANDON_RESULT if outcome == "abandoned"
+		else "生還" if bool(summary.get("victory", false))
+		else "全滅"
+	)
 	# まずテンプレート版を出す。生成はそのあとで差し替えるだけ。
 	lines = Chronicle.write(summary)
 	_request_ai(summary)

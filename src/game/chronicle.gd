@@ -17,8 +17,13 @@ static func write(summary: Dictionary) -> PackedStringArray:
 	var floor_no := int(summary.get("floor", 1))
 	var gold := int(summary.get("gold", 0))
 	var members: Array = summary.get("members", [])
+	var outcome := String(summary.get(
+		"outcome", "victory" if bool(summary.get("victory", false)) else "defeat"
+	))
 
-	if bool(summary.get("victory", false)):
+	if outcome == "abandoned":
+		lines.append(Terms.RUN_ABANDON_CHRONICLE % floor_no)
+	elif bool(summary.get("victory", false)):
 		lines.append("一行は 世界の 終点から 生還した。")
 	else:
 		lines.append("一行は 危険度 %d の 地で ついえた。" % floor_no)
@@ -79,8 +84,15 @@ static func facts_for_llm(summary: Dictionary) -> Dictionary:
 			"level": int(m.get("level", 1)),
 			"mastery_rank": int(m.get("mastery_rank", 0)),
 		})
+	var outcome := String(summary.get(
+		"outcome", "victory" if bool(summary.get("victory", false)) else "defeat"
+	))
 	return {
-		"outcome": "生還" if bool(summary.get("victory", false)) else "全滅",
+		"outcome": (
+			Terms.RUN_ABANDON_RESULT if outcome == "abandoned"
+			else "生還" if bool(summary.get("victory", false))
+			else "全滅"
+		),
 		"danger": int(summary.get("floor", 1)),
 		"gold": int(summary.get("gold", 0)),
 		"steps": int(summary.get("steps", 0)),

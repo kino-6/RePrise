@@ -560,6 +560,17 @@ func _draw_detail() -> void:
 		)).line(_mastery_text(member, job_id), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 
+## 出撃の名簿と、アップグレードの一覧の列幅。
+## いずれも固定のオフセットで置いていたので、名が長い行だけ隣へ食い込んでいた。
+const DEPART_NAME_W := 58.0
+const DEPART_JOB_W := 112.0
+const UPGRADE_NAME_W := 144.0
+const UPGRADE_LEVEL_W := 56.0
+const UPGRADE_PRICE_W := 60.0
+const PARTY_NAME_W := 110.0
+## 技名と職業名を並べる格子の列幅。
+const ABILITY_COL_W := 118.0
+
 ## 熟練の一覧の列幅。**合計は立ち絵の左端（208）に収める。**
 ## 固定のオフセットで置いていた頃の 96 / 148 と同じ位置だが、
 ## いまは幅として渡すので、長い職名はその列の中で詰まる。
@@ -569,36 +580,49 @@ const MASTERY_TEXT_W := 58.0
 
 
 func _draw_departure_note() -> void:
-	var origin := PixelUI.content(DETAIL_RECT).position
-	PixelUI.draw_text(self, origin + Vector2(6, 2), "地下へ もぐる", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	var inner := PixelUI.content(DETAIL_RECT)
+	var origin := inner.position
+	var width := inner.size.x - 12.0
+	UiPanel.inside(self, Rect2(origin + Vector2(6, 2), Vector2(width, PixelUI.LINE))).line(
+		"地下へ もぐる", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	# 1 行目が「なぜもぐるか」、残りが「何を失い、何が残るか」。
-	# 文言は Lore 側（根拠は docs/premise.md）。3 行を超えると名簿と重なる。
+	# 文言は Lore 側（根拠は docs/premise.md）。**外部化した文なので長さを前提にしない** ――
+	# `data/vocabulary.json` で差し替えられるので、はみ出しは呼ぶ側で防ぐ。
 	for i in Lore.DEPART_LINES.size():
-		PixelUI.draw_text(
-			self, origin + Vector2(6, 26 + i * 19), Lore.DEPART_LINES[i], PixelUI.C_TEXT_DIM
-		)
+		UiPanel.inside(self, Rect2(
+			origin + Vector2(6, 26 + i * 19), Vector2(width, PixelUI.LINE)
+		)).line(Lore.DEPART_LINES[i], PixelUI.C_TEXT_DIM)
 
 	for i in members.size():
 		var m := members[i]
 		# 前提の 3 行を入れたぶん、名簿を下げて行間を詰める。
 		# 窓の内側は 150px しかないので、4 人目（84+48+文字高）でちょうど収まる。
 		var row := origin + Vector2(6, 84 + i * 16)
-		PixelUI.draw_text(self, row, m.name, PixelUI.C_TEXT)
-		PixelUI.draw_text(self, row + Vector2(58, 0), _job_name(m.job_id), PixelUI.C_TEXT_DIM)
-		PixelUI.draw_text(
-			self, row + Vector2(170, 2),
-			_stars(m.mastery_rank(), _max_rank(m.job_id)), PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
+		# 名前・職・星の 3 列。列ごとに幅を持つので、名前が長くても職に食い込まない。
+		UiPanel.inside(self, Rect2(row, Vector2(DEPART_NAME_W, PixelUI.LINE))).line(
+			m.name, PixelUI.C_TEXT)
+		UiPanel.inside(self, Rect2(
+			row + Vector2(DEPART_NAME_W, 0), Vector2(DEPART_JOB_W, PixelUI.LINE)
+		)).line(_job_name(m.job_id), PixelUI.C_TEXT_DIM)
+		UiPanel.inside(self, Rect2(
+			row + Vector2(DEPART_NAME_W + DEPART_JOB_W, 2),
+			Vector2(width - DEPART_NAME_W - DEPART_JOB_W, PixelUI.LINE)
+		)).line(
+			_stars(m.mastery_rank(), _max_rank(m.job_id)),
+			PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
 		)
 
 
 ## 編成。名簿の全員を並べ、連れて行く者に印を付ける。
 func _draw_party_note() -> void:
-	var origin := PixelUI.content(DETAIL_RECT).position
-	PixelUI.draw_text(self, origin + Vector2(6, 2), Terms.PARTY, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
-	PixelUI.draw_text(
-		self, origin + Vector2(6, 26),
-		"%d 人まで 連れて行ける。" % GameState.PARTY_SIZE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
+	var inner := PixelUI.content(DETAIL_RECT)
+	var origin := inner.position
+	var width := inner.size.x - 12.0
+	UiPanel.inside(self, Rect2(origin + Vector2(6, 2), Vector2(width, PixelUI.LINE))).line(
+		Terms.PARTY, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	UiPanel.inside(self, Rect2(origin + Vector2(6, 26), Vector2(width, PixelUI.LINE))).line(
+		"%d 人まで 連れて行ける。" % GameState.PARTY_SIZE,
+		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	var all_members := GameState.all_members()
 	var rows := all_members.size() + 1
@@ -613,20 +637,20 @@ func _draw_party_note() -> void:
 			var label := "なかまを 迎える（%s %d）" % [Terms.ECHO, price]
 			if not GameState.can_recruit():
 				label = "これで 全員"
-			PixelUI.draw_text(
-				self, at, label, PixelUI.C_ACTIVE if on else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-			)
+			UiPanel.inside(self, Rect2(at, Vector2(width, PixelUI.LINE))).line(
+				label, PixelUI.C_ACTIVE if on else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 			continue
 		var m := all_members[row]
 		var mark := "●" if GameState.is_active(row) else "○"
-		PixelUI.draw_text(
-			self, at, "%s %s" % [mark, m.name],
-			PixelUI.C_TEXT if GameState.is_active(row) else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		# 印つきの名前と職の 2 列。名が長くても職に食い込まない。
+		UiPanel.inside(self, Rect2(at, Vector2(PARTY_NAME_W, PixelUI.LINE))).line(
+			"%s %s" % [mark, m.name],
+			PixelUI.C_TEXT if GameState.is_active(row) else PixelUI.C_TEXT_DIM,
+			PixelUI.SIZE_SUB
 		)
-		PixelUI.draw_text(
-			self, at + Vector2(110, 0), _job_name(m.job_id),
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+		UiPanel.inside(self, Rect2(
+			at + Vector2(PARTY_NAME_W, 0), Vector2(width - PARTY_NAME_W, PixelUI.LINE)
+		)).line(_job_name(m.job_id), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	MenuList.draw_position(self, PixelUI.content(DETAIL_RECT), _party_index, rows, 6)
 
 
@@ -653,14 +677,20 @@ func _draw_upgrade_note() -> void:
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		if on:
 			MenuList.draw_cursor(self, CURSOR_TEX, row)
-		PixelUI.draw_text(self, row, String(u.get("name", id)), tint)
-		PixelUI.draw_text(
-			self, row + Vector2(144, 0),
+		# 名・段・値段の 3 列。名が長い行だけ段へ食い込むのを止める。
+		UiPanel.inside(self, Rect2(row, Vector2(UPGRADE_NAME_W, PixelUI.LINE))).line(
+			String(u.get("name", id)), tint)
+		UiPanel.inside(self, Rect2(
+			row + Vector2(UPGRADE_NAME_W, 0), Vector2(UPGRADE_LEVEL_W, PixelUI.LINE)
+		)).line(
 			"%d/%d" % [level, int(u.get("levels", 0))],
 			PixelUI.C_ACTIVE if level > 0 else PixelUI.C_TEXT_DIM
 		)
 		var price := Terms.MAXED if maxed else "%d" % GameState.upgrade_price(id)
-		PixelUI.draw_text(self, row + Vector2(200, 0), price, PixelUI.C_TEXT_DIM)
+		UiPanel.inside(self, Rect2(
+			row + Vector2(UPGRADE_NAME_W + UPGRADE_LEVEL_W, 0),
+			Vector2(UPGRADE_PRICE_W, PixelUI.LINE)
+		)).line(price, PixelUI.C_TEXT_DIM)
 
 
 func _draw_menu() -> void:
@@ -708,27 +738,30 @@ func _draw_learned() -> void:
 	var member := _selected()
 	if member == null:
 		return
-	var origin := PixelUI.content(MENU_RECT).position
-	PixelUI.draw_text(self, origin + Vector2(8, 0), "おぼえた わざ", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	var menu := PixelUI.content(MENU_RECT)
+	var origin := menu.position
+	var panel := UiPanel.inside(self, Rect2(
+		origin + Vector2(8, 0), Vector2(menu.size.x - 16.0, menu.size.y)))
+	panel.line("おぼえた わざ", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	if member.learned.is_empty():
-		PixelUI.draw_text(
-			self, origin + Vector2(8, 22), "まだ なにも おぼえていない。", PixelUI.C_TEXT_DIM
-		)
-		PixelUI.draw_text(
-			self, origin + Vector2(8, 46), "たたかって じゅくれんを あげると おぼえる。",
-			PixelUI.C_TEXT_DIM
-		)
+		panel.skip(4.0)
+		panel.line("まだ なにも おぼえていない。", PixelUI.C_TEXT_DIM)
+		panel.line("たたかって じゅくれんを あげると おぼえる。", PixelUI.C_TEXT_DIM)
 		return
 
+	# 技名は格子に並べる。**列に幅を渡す**ので、長い技名が隣へ食い込まない
+	# （技は外部化の対象なので、名前が伸びうる）。
 	for i in member.learned.size():
 		var ability_id := String(member.learned[i])
 		var col := i % ABILITY_COLUMNS
+		@warning_ignore("integer_division")
 		var row := i / ABILITY_COLUMNS
-		var at := origin + Vector2(8 + col * 118, 22 + row * 20)
-		PixelUI.draw_text(
-			self, at, String(Database.ability(ability_id).get("name", ability_id)), PixelUI.C_TEXT
-		)
+		UiPanel.inside(self, Rect2(
+			origin + Vector2(8 + col * ABILITY_COL_W, 22 + row * 20),
+			Vector2(ABILITY_COL_W - 4.0, PixelUI.LINE)
+		)).line(
+			String(Database.ability(ability_id).get("name", ability_id)), PixelUI.C_TEXT)
 
 
 func _draw_hint() -> void:
@@ -749,14 +782,14 @@ func _draw_job_menu() -> void:
 
 	# まだ就けない職業は、説明の代わりに「あと何が要るか」を出す。
 	# 選べない理由が見えないと、上級職はただ灰色の行になってしまう。
+	var head := UiPanel.inside(self, Rect2(
+		origin + Vector2(8, 0),
+		Vector2(PixelUI.content(MENU_RECT).size.x - 16.0, PixelUI.LINE)
+	))
 	if member.can_take_job(highlighted):
-		PixelUI.draw_text(
-			self, origin + Vector2(8, 0),
-			String(Database.job(highlighted).get("desc", "")), PixelUI.C_TEXT
-		)
+		head.line(String(Database.job(highlighted).get("desc", "")), PixelUI.C_TEXT)
 	else:
-		PixelUI.draw_text(
-			self, origin + Vector2(8, 0),
+		head.line(
 			"つくには %s が いる" % "　".join(member.unmet_requirements(highlighted)),
 			PixelUI.C_HP_LOW
 		)

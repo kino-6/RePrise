@@ -8,15 +8,17 @@ extends Node2D
 
 signal closed
 signal save_erase_requested
+signal run_abandon_requested
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
 
 const PANEL_RECT := Rect2(56, 40, 400, 200)
 const HINT_RECT := Rect2(56, 248, 400, 56)
-const ROW := 26
+## 6行を窓へ収める。26pxのまま1行足すと「とじる」が内枠を越える。
+const ROW := 23
 
-enum Row { VOLUME, SPEED, KEYS, ERASE_SAVE, CLOSE }
+enum Row { VOLUME, SPEED, KEYS, ERASE_SAVE, ABANDON_RUN, CLOSE }
 
 var _index := 0
 var _keys_open := false
@@ -29,9 +31,18 @@ var _has_save_data := false
 var _erase_open := false
 ## 確認窓は必ず「やめる」から始める。
 var _erase_index := 0
+## ラン放棄は探索メニューから設定を開いた場合だけ許す。
+var _allow_run_abandon := false
+## 0=閉じている / 1=最初の確認 / 2=最終確認。
+var _abandon_stage := 0
+## 各確認とも「もどる」から始める。決定連打だけでは絶対に終わらない。
+var _abandon_index := 0
 
 
-func open(allow_save_erase: bool = false, has_save_data: bool = false) -> void:
+func open(
+	allow_save_erase: bool = false, has_save_data: bool = false,
+	allow_run_abandon: bool = false
+) -> void:
 	Settings.ensure_loaded()
 	_index = 0
 	_keys_open = false
@@ -40,6 +51,9 @@ func open(allow_save_erase: bool = false, has_save_data: bool = false) -> void:
 	_has_save_data = has_save_data
 	_erase_open = false
 	_erase_index = 0
+	_allow_run_abandon = allow_run_abandon
+	_abandon_stage = 0
+	_abandon_index = 0
 	_notice = ""
 	set_process_unhandled_input(true)
 	queue_redraw()
@@ -98,6 +112,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _erase_open:
 		_input_erase(event)
 		return
+	if _abandon_stage > 0:
+		_input_abandon(event)
+		return
 	_input_root(event)
 
 
@@ -154,6 +171,10 @@ func _input_root(event: InputEvent) -> void:
 					_erase_index = 0
 					_notice = ""
 					Sound.play("confirm")
+			Row.ABANDON_RUN:
+				if not begin_run_abandon():
+					_notice = Terms.RUN_ABANDON_IN_RUN
+					Sound.play("cancel")
 			Row.CLOSE:
 				Sound.play("confirm")
 				close()
@@ -162,6 +183,60 @@ func _input_root(event: InputEvent) -> void:
 			_:
 				_nudge(+1)
 	queue_redraw()
+
+
+## 放棄確認を開く。タイトルの設定からは開けない。
+func begin_run_abandon() -> bool:
+	if not _allow_run_abandon:
+		return false
+	_abandon_stage = 1
+	_abandon_index = 0
+	_notice = ""
+	Sound.play("confirm")
+	queue_redraw()
+	return true
+
+
+## 二段階確認の本体。入力処理とテストが同じ経路を使う。
+##
+## confirmed=false はその場で閉じる。true は1回目なら最終確認へ進み、
+## 2回目で初めて signal を出す。
+func confirm_run_abandon(confirmed: bool) -> bool:
+	if _abandon_stage <= 0:
+		return false
+	if not confirmed:
+		_abandon_stage = 0
+		_abandon_index = 0
+		Sound.play("cancel")
+		queue_redraw()
+		return false
+	if _abandon_stage == 1:
+		_abandon_stage = 2
+		_abandon_index = 0
+		Sound.play("confirm")
+		queue_redraw()
+		return false
+	_abandon_stage = 0
+	_abandon_index = 0
+	Sound.play("confirm")
+	close()
+	run_abandon_requested.emit()
+	return true
+
+
+func run_abandon_stage() -> int:
+	return _abandon_stage
+
+
+func _input_abandon(event: InputEvent) -> void:
+	if event.is_action_pressed("cancel"):
+		confirm_run_abandon(false)
+	elif event.is_action_pressed("ui_down") or event.is_action_pressed("ui_up"):
+		_abandon_index = 1 - _abandon_index
+		Sound.play("cursor")
+		queue_redraw()
+	elif event.is_action_pressed("confirm"):
+		confirm_run_abandon(_abandon_index == 1)
 
 
 ## 左右で値を動かす。決定でも 1 つ進む（どちらでも触れるほうが迷わない）。
@@ -219,6 +294,14 @@ func debug_open_save_erase() -> void:
 	queue_redraw()
 
 
+## 撮影用。実際にランを終わらせず、二つ目の確認を開く。
+func debug_open_run_abandon() -> void:
+	_allow_run_abandon = true
+	begin_run_abandon()
+	confirm_run_abandon(true)
+	queue_redraw()
+
+
 func _input_keys(event: InputEvent) -> void:
 	if event.is_action_pressed("cancel"):
 		Sound.play("cancel")
@@ -251,6 +334,8 @@ func _draw() -> void:
 		_draw_keys(origin)
 	elif _erase_open:
 		_draw_erase(origin)
+	elif _abandon_stage > 0:
+		_draw_abandon(origin)
 	else:
 		_draw_root(origin)
 
@@ -262,6 +347,8 @@ func _draw() -> void:
 		PixelUI.draw_text(self, hint, "Ｚ で 割り当て　Ｘ で もどる", PixelUI.C_TEXT_DIM)
 	elif _erase_open:
 		PixelUI.draw_text(self, hint, Terms.SAVE_ERASE_HINT, PixelUI.C_TEXT_DIM)
+	elif _abandon_stage > 0:
+		PixelUI.draw_text(self, hint, Terms.RUN_ABANDON_HINT, PixelUI.C_TEXT_DIM)
 	elif _notice != "":
 		PixelUI.draw_text(self, hint, _notice, PixelUI.C_ACTIVE)
 	else:
@@ -279,13 +366,20 @@ func _draw_root(origin: Vector2) -> void:
 				else Terms.SAVE_ERASE_NONE if _allow_save_erase
 				else Terms.SAVE_ERASE_TITLE_ONLY,
 		],
+		[
+			Terms.RUN_ABANDON,
+			"" if _allow_run_abandon else Terms.RUN_ABANDON_IN_RUN,
+		],
 		["とじる", ""],
 	]
 	for i in rows.size():
 		var at := origin + Vector2(0, 34 + i * ROW)
 		if i == _index:
 			MenuList.draw_cursor(self, CURSOR_TEX, at)
-		var enabled := i != Row.ERASE_SAVE or (_allow_save_erase and _has_save_data)
+		var enabled := (
+			(i != Row.ERASE_SAVE or (_allow_save_erase and _has_save_data))
+			and (i != Row.ABANDON_RUN or _allow_run_abandon)
+		)
 		var tint := PixelUI.C_TEXT if i == _index and enabled else PixelUI.C_TEXT_DIM
 		# 項目と値を 1 行に。**値は消えては困る**ので、詰まるのは項目名のほう。
 		UiPanel.inside(self, Rect2(at, Vector2(340.0, PixelUI.LINE))).row(
@@ -307,6 +401,30 @@ func _draw_erase(origin: Vector2) -> void:
 		var label := Terms.SAVE_ERASE_CANCEL if i == 0 else Terms.SAVE_ERASE_EXECUTE
 		PixelUI.draw_text(
 			self, at, label, PixelUI.C_TEXT if i == _erase_index else PixelUI.C_TEXT_DIM
+		)
+
+
+func _draw_abandon(origin: Vector2) -> void:
+	var final := _abandon_stage == 2
+	PixelUI.draw_text(
+		self, origin + Vector2(0, 36),
+		Terms.RUN_ABANDON_FINAL_QUESTION if final else Terms.RUN_ABANDON_FIRST_QUESTION,
+		PixelUI.C_TEXT, PixelUI.SIZE_HEAD
+	)
+	PixelUI.draw_text(
+		self, origin + Vector2(0, 66),
+		Terms.RUN_ABANDON_FINAL_WARNING if final else Terms.RUN_ABANDON_FIRST_WARNING,
+		PixelUI.C_ACTIVE
+	)
+	for i in 2:
+		var at := origin + Vector2(0, 100 + i * ROW)
+		if i == _abandon_index:
+			MenuList.draw_cursor(self, CURSOR_TEX, at)
+		var label := Terms.RUN_ABANDON_CANCEL
+		if i == 1:
+			label = Terms.RUN_ABANDON_EXECUTE if final else Terms.RUN_ABANDON_NEXT
+		PixelUI.draw_text(
+			self, at, label, PixelUI.C_TEXT if i == _abandon_index else PixelUI.C_TEXT_DIM
 		)
 
 
