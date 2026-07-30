@@ -80,9 +80,23 @@ def envelope_variation(samples: list[float], rate: int) -> float:
 
 # 各 BGM の冒頭小節で鳴っているはずの音（和音の構成音）
 EXPECTED = {
+    "bgm/title.wav": ["a2", "a3", "c4", "e4"],
     "bgm/stronghold.wav": ["c3", "g4", "c5", "e5"],
+    "bgm/world.wav": ["a3", "c4", "e4"],
+    "bgm/town.wav": ["c3", "c4", "e4", "g4"],
+    "bgm/cave.wav": ["d3", "f3", "a3"],
+    "bgm/story.wav": ["a2", "a3", "c4", "e4"],
     "bgm/descent.wav": ["a2", "a3", "c4", "e4", "a4"],
     "bgm/battle.wav": ["a2", "a3", "c4", "e4"],
+    "bgm/boss.wav": ["a2", "a3", "c4", "e4"],
+    "bgm/chronicle.wav": ["a2", "a3", "c4", "e4"],
+}
+
+REQUIRED_SFX = {
+    "boss_gate", "cancel", "chest", "confirm", "cursor", "defeat", "depart",
+    "encounter", "event", "fire", "heal", "hit", "ice", "learn", "magic",
+    "poison", "seal_break", "sleep", "stairs", "story_choice", "story_open",
+    "victory",
 }
 
 failures = 0
@@ -104,6 +118,13 @@ def main() -> None:
         sys.exit(1)
 
     print("=== 音声の検算 ===")
+    actual = {path.relative_to(AUDIO).as_posix() for path in files}
+    required = set(EXPECTED)
+    required.update("sfx/%s.wav" % name for name in REQUIRED_SFX)
+    missing_files = sorted(required - actual)
+    check("必要な音声が揃っている", not missing_files,
+          "不足 %s" % (", ".join(missing_files) if missing_files else "なし"))
+
     for path in files:
         rel = path.relative_to(AUDIO).as_posix()
         samples, rate = read_mono(path)

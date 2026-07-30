@@ -13,9 +13,13 @@ const SFX_DIR := "res://assets/audio/sfx/"
 const SFX_VOICES := 6
 
 const BGM_VOLUME_DB := -9.0
+const BGM_SILENT_DB := -42.0
+const BGM_FADE_SECONDS := 0.34
 const SFX_VOLUME_DB := -5.0
 
-var _bgm: AudioStreamPlayer = null
+var _bgm_players: Array[AudioStreamPlayer] = []
+var _active_bgm := 0
+var _bgm_tween: Tween = null
 var _voices: Array[AudioStreamPlayer] = []
 var _next_voice := 0
 var _cache: Dictionary = {}
@@ -24,10 +28,12 @@ var _warned := false
 
 
 func _ready() -> void:
-	_bgm = AudioStreamPlayer.new()
-	_bgm.volume_db = BGM_VOLUME_DB
-	_bgm.bus = "Master"
-	add_child(_bgm)
+	for _i in 2:
+		var bgm_player := AudioStreamPlayer.new()
+		bgm_player.volume_db = BGM_VOLUME_DB
+		bgm_player.bus = "Master"
+		add_child(bgm_player)
+		_bgm_players.append(bgm_player)
 
 	for _i in SFX_VOICES:
 		var player := AudioStreamPlayer.new()
@@ -40,20 +46,47 @@ func _ready() -> void:
 
 
 func play_bgm(name: String) -> void:
-	if _current_bgm == name and _bgm.playing:
+	var current := _bgm_players[_active_bgm]
+	if _current_bgm == name and current.playing:
 		return
 	var stream := _load(BGM_DIR + name + ".wav")
 	if stream == null:
 		return
 	_apply_loop(stream)
 	_current_bgm = name
-	_bgm.stream = stream
-	_bgm.play()
+
+	if _bgm_tween != null:
+		_bgm_tween.kill()
+	var previous := current
+	_active_bgm = 1 - _active_bgm
+	var incoming := _bgm_players[_active_bgm]
+	incoming.stop()
+	incoming.stream = stream
+	incoming.volume_db = BGM_SILENT_DB if previous.playing else BGM_VOLUME_DB
+	incoming.play()
+	if not previous.playing:
+		return
+
+	_bgm_tween = create_tween()
+	_bgm_tween.set_parallel(true)
+	_bgm_tween.tween_property(previous, "volume_db", BGM_SILENT_DB, BGM_FADE_SECONDS)
+	_bgm_tween.tween_property(incoming, "volume_db", BGM_VOLUME_DB, BGM_FADE_SECONDS)
+	_bgm_tween.finished.connect(_finish_bgm_crossfade.bind(previous))
 
 
 func stop_bgm() -> void:
 	_current_bgm = ""
-	_bgm.stop()
+	if _bgm_tween != null:
+		_bgm_tween.kill()
+	for player in _bgm_players:
+		player.stop()
+		player.volume_db = BGM_VOLUME_DB
+
+
+func _finish_bgm_crossfade(previous: AudioStreamPlayer) -> void:
+	previous.stop()
+	previous.volume_db = BGM_VOLUME_DB
+	_bgm_tween = null
 
 
 ## 効果音。空いている再生枠を順に使い回す。

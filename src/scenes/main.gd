@@ -95,14 +95,20 @@ func _ready() -> void:
 	event_view.visible = false
 	add_child(event_view)
 	# 同じ窓を拍とイベントで使い回すので、返り先はここで振り分ける。
+	# 同じ窓を 3 通りに使い回すので、返り先はここで振り分ける
+	# （結果の窓 / 物語の拍 / イベントの選択）。
 	event_view.chosen.connect(func(c: Dictionary) -> void:
-		if _story_beat.is_empty():
+		if _outcome_open:
+			_close_outcome()
+		elif _story_beat.is_empty():
 			_on_event_choice(c)
 		else:
 			_on_story_choice(c))
 	event_view.dismissed.connect(func() -> void:
-		# **物語の拍は見送れない**（見送れると話が飛ぶ）。同じ手で進める。
-		if _story_beat.is_empty():
+		# **物語の拍と結果は見送れない**（飛ばせると話が飛ぶ／読めない）。
+		if _outcome_open:
+			_close_outcome()
+		elif _story_beat.is_empty():
 			_on_event_dismissed()
 		else:
 			_on_story_choice({}))
@@ -470,7 +476,7 @@ func _capture(which: String) -> void:
 
 
 func _enter_title() -> void:
-	Sound.play_bgm("stronghold")
+	Sound.play_bgm("title")
 	title.open()
 	_set_mode(Mode.TITLE)
 
@@ -503,6 +509,7 @@ const QUEST_PROMPT := """あなたは SFC 期の日本語 RPG の名づけ役で
 
 func _start_run() -> void:
 	GameState.start_new_run()
+	Sound.play("depart")
 	_ask_quest_text()
 	# 開発用の状態指定（--dev-level=8 など）。指定が無ければ何もしない。
 	var applied := DevCheats.apply_to_run(GameState)
@@ -525,7 +532,7 @@ func _enter_world() -> void:
 	_encounter_rng = GameState.rng_for("encounter")
 	_battle_rng = GameState.rng_for("battle")
 	explore.setup(GameState.world, _encounter_rng, _leader_job(), GameState.world_pos)
-	Sound.play_bgm("descent")
+	Sound.play_bgm("world")
 	_fade_to(Mode.EXPLORE)
 
 
@@ -541,8 +548,18 @@ func _enter_floor() -> void:
 	_map.biome = String(GameState.site.get("tileset", "dungeon"))
 	_door_warned = false
 	explore.setup(_map, _encounter_rng, _leader_job())
-	Sound.play_bgm("descent")
+	Sound.play_bgm("cave")
 	_fade_to(Mode.EXPLORE)
+
+
+## 戦闘や物語のあと、いま立っている場所の曲へ戻す。
+func _play_field_bgm() -> void:
+	if _town != null:
+		Sound.play_bgm("town")
+	elif _map != null:
+		Sound.play_bgm("cave")
+	else:
+		Sound.play_bgm("world")
 
 
 ## 世界で拠点地を踏んだ。町・洞・城で行き先が変わる。
@@ -631,6 +648,7 @@ func _open_town() -> void:
 	_map = null
 	_encounter_rng = GameState.rng_for("encounter")
 	explore.setup(_town, _encounter_rng, _leader_job())
+	Sound.play_bgm("town")
 	hud.toast(_town.town_name)
 	_fade_to(Mode.EXPLORE)
 
@@ -809,7 +827,8 @@ func _open_story(beat: Dictionary) -> void:
 	_story_beat = beat
 	event_view.open_story(beat, GameState.world.story, GameState.floor_number)
 	event_view.set_blocked([])
-	Sound.play("confirm")
+	Sound.play_bgm("story")
+	Sound.play("story_open")
 	_set_mode(Mode.EVENT)
 
 
@@ -822,11 +841,13 @@ func _on_story_choice(choice: Dictionary) -> void:
 	if id != "":
 		# 選んだ手は世界が覚える。終幕でこれを回収する。
 		GameState.world.story_choice = id
+		Sound.play("story_choice")
 		hud.toast(String(choice.get("label", "")))
 	GameState.advance_story()
 	_story_beat = {}
 	# 拍が済んだら、その場所の続き（イベント／町／洞）へそのまま進む。
 	var at := GameState.world_pos
+	_play_field_bgm()
 	_set_mode(Mode.EXPLORE)
 	if not _event_at(at).is_empty():
 		_open_event(at)
@@ -862,7 +883,7 @@ func _open_event(at: Vector2i) -> void:
 	_event_pos = at
 	event_view.open(found, GameState.floor_number)
 	event_view.set_blocked(_blocked_for(found))
-	Sound.play("confirm")
+	Sound.play("event")
 	_set_mode(Mode.EVENT)
 
 
@@ -903,13 +924,27 @@ func _on_event_choice(choice: Dictionary) -> void:
 
 	# 戦いを含む手は、そのまま戦闘へ入る（払ったあとに逃げられない）。
 	var fights := _fight_token(choice.get("costs", [])) or _fight_token(choice.get("risks", []))
-	if not lines.is_empty():
-		hud.toast("　".join(lines))
 	if fights:
-		_set_mode(Mode.EXPLORE)
-		_on_encounter()
-		return
+		lines.append("身がまえる 間もなく、敵が 来た。")
+	_pending_fight = fights
+	# **結果は同じ窓で読ませる。** toast だと流れて、選んだ意味が確かめられない。
+	_story_beat = {}
+	event_view.open_outcome(String(choice.get("label", "")), lines, danger)
+	_outcome_open = true
+	_set_mode(Mode.EVENT)
+
+
+var _pending_fight := false
+var _outcome_open := false
+
+
+## 結果の窓を閉じた。戦いが要るならここで入る。
+func _close_outcome() -> void:
+	_outcome_open = false
 	_set_mode(Mode.EXPLORE)
+	if _pending_fight:
+		_pending_fight = false
+		_on_encounter()
 
 
 func _fight_token(list: Array) -> bool:
@@ -1024,7 +1059,7 @@ func _on_boss_reached() -> void:
 		push_warning("危険度 %d に主がいない" % GameState.floor_number)
 		hud.toast("扉は かたく とざされている…")
 		return
-	Sound.play("stairs")
+	Sound.play("boss_gate")
 	_begin_battle(foes, true)
 
 
@@ -1040,7 +1075,7 @@ func _begin_battle(foes: Array[Battler], is_boss: bool) -> void:
 	var system := BattleSystem.new()
 	system.start(party, foes, _battle_rng, GameState.floor_number)
 	Sound.play("encounter")
-	Sound.play_bgm("battle")
+	Sound.play_bgm("boss" if is_boss else "battle")
 	battle.start(system, members)
 	_flash_into_battle()
 
@@ -1049,17 +1084,18 @@ func _on_battle_finished(victory: bool) -> void:
 	if victory and _boss_battle:
 		# 主を倒した。ランが「生還」で終わる唯一の経路。
 		_boss_battle = false
-		Sound.play_bgm("stronghold")
+		Sound.play("victory")
+		Sound.play_bgm("chronicle")
 		_finish_run(true)
 		return
 	if victory:
-		Sound.play_bgm("descent")
+		_play_field_bgm()
 		_set_mode(Mode.EXPLORE)
 		return
 	# 全滅。ここでランが終わり、熟練度だけが拠点に残る。
 	_boss_battle = false
 	Sound.play("defeat")
-	Sound.play_bgm("stronghold")
+	Sound.play_bgm("chronicle")
 	_finish_run(false)
 
 
@@ -1076,7 +1112,7 @@ func _on_descend() -> void:
 		var seal := GameState.seal_here()
 		if not seal.is_empty() and not bool(seal.get("broken", false)):
 			GameState.break_seal()
-			Sound.play("learn")
+			Sound.play("seal_break")
 			var left := GameState.seals_remaining()
 			if left > 0:
 				hud.toast("%s が やぶれた。のこり %d。" % [String(seal.get("name", "封")), left])

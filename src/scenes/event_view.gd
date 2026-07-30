@@ -61,6 +61,22 @@ func open_story(beat: Dictionary, story: Dictionary, danger_here: int) -> void:
 	}, danger_here)
 
 
+## 選んだあとの結果を、同じ窓で読ませる。
+##
+## **toast では流れて読めない。** 何を払って何を得たかは選択の答えなので、
+## 消える表示に置くと、選んだ意味が確かめられないまま次へ進むことになる。
+## 決定キーひとつで閉じる（読み終わるまで待つ）。
+func open_outcome(title: String, lines: Array[String], danger_here: int) -> void:
+	var body := lines.duplicate()
+	if body.is_empty():
+		body.append("なにも 起こらなかった。")
+	open({
+		"outcome": true,
+		"skin": {"title": title, "actor": "", "cause": "　".join(body), "flavor": ""},
+		"choices": [{"label": "とじる", "costs": [], "risks": [], "rewards": []}],
+	}, danger_here)
+
+
 func open(instance: Dictionary, danger_here: int) -> void:
 	event = instance
 	danger = danger_here
@@ -139,7 +155,7 @@ func _draw_head() -> void:
 		)
 	# 何が起きているか。原因と情景を 2 行で。
 	var lines := PixelUI.wrap(_skin("cause") + " " + _skin("flavor"), 470.0, PixelUI.SIZE_TEXT)
-	for i in mini(lines.size(), 3):
+	for i in mini(lines.size(), 4 if bool(event.get("outcome", false)) else 3):
 		PixelUI.draw_text(self, origin + Vector2(6, 26 + i * 20), lines[i], PixelUI.C_TEXT)
 
 
@@ -167,6 +183,8 @@ func _draw_list() -> void:
 ## 全部並べると窓から溢れた（実際に溢れた）。行では「払う → 得るものの数」まで、
 ## 中身は下の詳細窓に出す。溢れた文字は読めないので、出さないほうがよい。
 func _summary(choice: Dictionary) -> String:
+	if bool(event.get("outcome", false)):
+		return ""
 	# 物語の手は数値を持たない。守るものだけを添える。
 	if bool(event.get("story", false)):
 		var keeps := String(choice.get("keeps", ""))
@@ -205,6 +223,12 @@ func _draw_detail() -> void:
 	if _choices().is_empty():
 		return
 	var c: Dictionary = _choices()[_index]
+
+	if bool(event.get("outcome", false)):
+		PixelUI.draw_text(
+			self, origin + Vector2(8, 0), "Ｚで とじる", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
+		return
 
 	# 物語の拍は、払う・失う・のこす を文で出す（トークンではない）。
 	if bool(event.get("story", false)):

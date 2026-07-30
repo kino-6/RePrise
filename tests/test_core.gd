@@ -708,6 +708,14 @@ func _test_town_generation() -> void:
 	_check("町に名前が付く", named)
 	_check("町の人は通り抜けられない", folk_blocked)
 
+	# **町ごとに形が違うこと。** 固定座標で作っていたころは、名前と人の位置
+	# 以外がすべて同じで「街ぜんぶ一緒」になっていた。
+	var shapes := {}
+	for seed_value in range(1, 13):
+		var m := TownGenerator.generate(DetRng.new(seed_value * 977), 3, "dungeon")
+		shapes["%dx%d:%s" % [m.width, m.height, str(m.exit_pos)]] = true
+	_check("12 個の町が 10 通り以上の形になる（%d 通り）" % shapes.size(), shapes.size() >= 10)
+
 	var a := TownGenerator.generate(DetRng.new(555), 3, "dungeon")
 	var b := TownGenerator.generate(DetRng.new(555), 3, "dungeon")
 	_check("同じ種から同じ町が出る", a.to_ascii() == b.to_ascii())

@@ -937,9 +937,17 @@ def build_sfx() -> None:
 def main() -> None:
     jobs = [
         ("効果音", build_sfx),
+        ("BGM 題名", bgm_title),
         ("BGM 拠点", bgm_stronghold),
-        ("BGM 潜行", bgm_descent),
+        ("BGM 世界", bgm_world),
+        ("BGM 町", bgm_town),
+        ("BGM 洞窟", bgm_cave),
+        ("BGM 物語", bgm_story),
         ("BGM 戦闘", bgm_battle),
+        ("BGM 主", bgm_boss),
+        ("BGM 戦記", bgm_chronicle),
+        # 古いセーブや作業中の画面から参照されても鳴るように残す。
+        ("BGM 潜行（旧）", bgm_descent),
     ]
     for label, job in jobs:
         started = time.time()
