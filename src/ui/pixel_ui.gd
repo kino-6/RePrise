@@ -88,6 +88,17 @@ static func ui_violations() -> Array[String]:
 	return _violations
 
 
+## 1 フレームの始まり。**各 View の `_draw()` 冒頭で呼ぶ。**
+##
+## もとは「最初の窓が再登場したら次のフレーム」と推測していたが、画面によって
+## 取りこぼした（戦記でテンプレート文と AI 文が重なっていると誤報した）。
+## 開きかけの窓で学んだのと同じで、**推測より印**。
+## 呼び忘れても壊れない（前のフレームの文字が残るだけで、誤報が増える方向）。
+static func ui_frame() -> void:
+	if ui_check_enabled():
+		_texts.clear()
+
+
 static func ui_check_reset() -> void:
 	_windows.clear()
 	_violations.clear()

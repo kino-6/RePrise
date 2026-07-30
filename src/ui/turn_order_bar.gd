@@ -32,6 +32,7 @@ func set_telegraph(text: String) -> void:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	if order.is_empty():
 		return
 

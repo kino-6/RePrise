@@ -64,6 +64,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color8(0x08, 0x0A, 0x14), true)
 
 	var head := Rect2(16, 18, 480, 36)

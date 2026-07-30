@@ -708,6 +708,7 @@ func _telegraph() -> String:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	if system == null:
 		return
 	_draw_backdrop()

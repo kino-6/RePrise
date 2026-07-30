@@ -207,6 +207,7 @@ func _rest() -> void:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color8(0x14, 0x0E, 0x10), true)
 	_draw_header()
 	_draw_list()

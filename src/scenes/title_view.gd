@@ -68,6 +68,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color8(0x08, 0x0A, 0x14), true)
 
 	# 床の高さに横線を 2 本。奥行きだけ示して、絵は増やさない。

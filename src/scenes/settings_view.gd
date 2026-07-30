@@ -174,6 +174,7 @@ func _input_keys(event: InputEvent) -> void:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	# 下の画面を残したまま暗くする（設定は場面ではなく、上に開く窓）。
 	draw_rect(Rect2(Vector2.ZERO, PixelUI.SCREEN), Color(0.02, 0.03, 0.06, 0.72), true)
 	PixelUI.draw_window(self, PANEL_RECT, WINDOW_TEX)

@@ -1323,6 +1323,48 @@ NPC_ROLES = [
 ]
 
 
+## 職業どうしが見分けられる最小の差。
+##
+## タイルの床と壁で使った基準（RGB 距離 40）と同じ考え方。
+## **色だけ変えて同じ人に見える**のが一度あった（差し色で描き分けようとした）ので、
+## いまはシルエットで分ける方針。ここは「取り込んだ絵が似すぎていないか」を測る。
+MIN_HERO_DISTANCE = 26.0
+
+
+def _report_hero_similarity(sheets: dict) -> None:
+    """職業の絵が似すぎている組を出す。
+
+    **描き換えるのはこちらの仕事ではない**（docs/chara_image/ は外の領分）。
+    だが似ていることは測れるので、気づける形にしておく。
+    目で 15 枚を見比べるのは現実的でなく、実際にとうぞくと忍者が
+    ほぼ同じ絵のまま通っていた。
+    """
+    names = sorted(sheets)
+    pairs = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            gap = math.dist(_mean_rgb(sheets[a]), _mean_rgb(sheets[b]))
+            ink = abs(_ink_ratio(sheets[a]) - _ink_ratio(sheets[b])) * 100.0
+            # 平均色と「塗られている面積」の両方が近いと、並べて見分けが付かない
+            if gap < MIN_HERO_DISTANCE and ink < 6.0:
+                pairs.append((gap, ink, a, b))
+    if not pairs:
+        print("  職業の描き分け: OK（似すぎている組は無い）")
+        return
+    pairs.sort()
+    for gap, ink, a, b in pairs:
+        print(
+            "  職業の描き分け: 近い %s と %s（色の距離 %.1f / 面積差 %.1f%%、基準 %.0f）"
+            % (a, b, gap, ink, MIN_HERO_DISTANCE)
+        )
+
+
+def _ink_ratio(c: Canvas) -> float:
+    """透明でない画素の割合。シルエットの太さの目安。"""
+    drawn = sum(1 for px in c.px if px[3])
+    return drawn / float(max(len(c.px), 1))
+
+
 def build_npcs() -> None:
     for role in NPC_ROLES:
         sheet = _load_sheet(f"candidate_npc_{role}", (24, 32))
@@ -1372,6 +1414,7 @@ def build_transitions() -> None:
 
 
 def build_heroes() -> None:
+    made: dict = {}
     """職業ごとに 1 枚。歩行 3 フレーム x 4 方向を 72x128 のシートにまとめる。
 
     脚だけを 1px 持ち上げて歩きを作る。描き足さずに動きが出る、
@@ -1392,6 +1435,7 @@ def build_heroes() -> None:
         imported = _load_sheet(f"candidate_hero_{job}", HERO_SHEET_SIZE)
         if imported is not None:
             imported.to_png(ASSETS / "sprites" / f"hero_{job}.png")
+            made[job] = imported
             imported.scaled(4).to_png(PREVIEW / f"hero_{job}.png")
             print(f"  取り込み: hero_{job}.png（{HERO_SOURCE_DIR.name}/candidate_hero_{job}.png）")
             continue
@@ -1408,8 +1452,9 @@ def build_heroes() -> None:
             for col, frame in enumerate([base, _step(base, +1), _step(base, -1)]):
                 sheet.blit(frame, col * CHAR_W, row * CHAR_H)
         sheet.to_png(ASSETS / "sprites" / f"hero_{job}.png")
+        made[job] = sheet
         sheet.scaled(4).to_png(PREVIEW / f"hero_{job}.png")
-
+    _report_hero_similarity(made)
 
 def _step(base: Canvas, side: int) -> Canvas:
     """片脚だけを 1px 持ち上げる。side<0 で左脚、side>0 で右脚。

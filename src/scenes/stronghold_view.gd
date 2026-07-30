@@ -398,6 +398,7 @@ func _portrait_of(job_id: String) -> Texture2D:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color8(0x10, 0x0E, 0x1C), true)
 	_draw_header()
 	_draw_roster()

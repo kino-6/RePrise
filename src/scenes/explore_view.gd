@@ -309,6 +309,7 @@ func _update_camera() -> void:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	if map == null:
 		return
 

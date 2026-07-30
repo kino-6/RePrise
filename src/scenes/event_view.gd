@@ -136,6 +136,7 @@ func _skin(key: String) -> String:
 
 
 func _draw() -> void:
+	PixelUI.ui_frame()
 	# 下の画面を暗く沈ませる。イベントは場面の上に開く窓。
 	draw_rect(Rect2(Vector2.ZERO, Vector2(PixelUI.SCREEN)), Color(0, 0, 0.02, 0.55), true)
 	_draw_head()
