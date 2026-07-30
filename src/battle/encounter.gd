@@ -35,8 +35,10 @@ static func should_meet(rng: DetRng, weighted_steps: int) -> bool:
 const SUFFIX := ["・｡", "・｢", "・｣"]
 
 
-static func build(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[Battler]:
-	var pool := Database.monster_ids_for_floor(floor_number)
+static func build(
+	rng: DetRng, floor_number: int, first_id: int = 100, biome: String = ""
+) -> Array[Battler]:
+	var pool := Database.monster_ids_for_floor(floor_number, biome)
 	var result: Array[Battler] = []
 	if pool.is_empty():
 		return result

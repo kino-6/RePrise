@@ -298,6 +298,14 @@ func _capture(which: String) -> void:
 			GameState.add_gear("short_sword")
 			GameState.add_gear("leather_vest")
 			_open_menu()
+		"jobmenu":
+			# てんしょくの一覧と代償の表示を確かめる
+			_start_run()
+			for m in GameState.active_party():
+				while m.level < 7:
+					m.gain_exp(m.exp_to_next())
+			_open_menu()
+			menu.debug_open_jobs()
 		"equip":
 			_start_run()
 			GameState.add_gear("war_axe")
@@ -422,7 +430,9 @@ func _enter_floor() -> void:
 	# 洞に主の間は置かない。**主が居るのは世界の終点（城）だけ。**
 	# 寄り道の底にも主を置くと、寄り道が本筋と同じ重さになって
 	# 「寄るか急ぐか」の判断が消える。洞の見返りは宝箱と出店。
+	# 洞の中の絵はその土地の生物相から来る（雪原の洞は雪原の絵）。
 	_map = DungeonGenerator.generate(GameState.rng_for("terrain"), GameState.floor_number, false)
+	_map.biome = String(GameState.site.get("tileset", "dungeon"))
 	_door_warned = false
 	explore.setup(_map, _encounter_rng, _leader_job())
 	Sound.play_bgm("descent")
@@ -642,21 +652,32 @@ func _refresh_hud() -> void:
 
 
 ## HUD の左上に出す 1 行。居場所と危険度を並べる。
+##
+## 世界の上では**生物相の名**を出す（「雪原 危険度 7」）。
+## そこに何が出るかは生物相で決まるので、名前が見えていれば備えられる。
 func _place_label() -> String:
 	var danger := Terms.DANGER_AT % GameState.floor_number
 	match String(GameState.site.get("kind", "")):
 		"cave":
-			return "%s　%s" % [Terms.CAVE_FLOOR % int(GameState.site.get("floor", 1)), danger]
+			return "%s%s　%s" % [
+				String(GameState.site.get("place", "")),
+				Terms.CAVE_FLOOR % int(GameState.site.get("floor", 1)), danger,
+			]
 		"castle":
 			return "%s　%s" % [Terms.CASTLE, danger]
-	return danger
+	var place := GameState.place_name()
+	return danger if place == "" else "%s　%s" % [place, danger]
 
 
 # --------------------------------------------------------------------------
 
 
 func _on_encounter() -> void:
-	_begin_battle(Encounter.build(_battle_rng, GameState.floor_number), false)
+	# その土地の生物相で敵が変わる。雪原なら氷に強いもの、火山なら火に強いもの。
+	# 地形を見て備えられる、というのが生物相を持たせた理由。
+	_begin_battle(
+		Encounter.build(_battle_rng, GameState.floor_number, 100, GameState.biome_here()), false
+	)
 
 
 ## 主の間へ踏み込んだ。ここで勝てばランが「生還」で終わる。

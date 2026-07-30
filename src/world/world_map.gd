@@ -22,6 +22,10 @@ enum {
 	T_TOWN = 6,
 	T_CAVE = 7,
 	T_CASTLE = 8,   ## 終点。踏むと主戦
+	T_SNOW = 9,
+	T_DESERT = 10,
+	T_SWAMP = 11,
+	T_LAVA = 12,    ## 通れない。世界で赤いのはここだけなので遠目でも危険と読める
 }
 
 ## 危険度の上限。今の 10 階ぶんの難度曲線をそのまま使うための数字。
@@ -40,18 +44,90 @@ var danger: PackedByteArray = PackedByteArray()
 ## 訪れた拠点地。町の在庫や洞の踏破を覚えておくのに使う。
 var visited: Dictionary = {}
 
+## マスごとの生物相（`BIOMES` の添字）。
+##
+## **地形を「模様」から「情報」に変えるのがこれの役目。**
+## 危険度だけだと、遠くが危ないことしか分からない。生物相を持たせると
+## 「雪原だから氷の敵が出る」まで読めるようになり、見た目が備えに繋がる。
+## 洞の中の地形もここから決まる（雪原の洞は雪原の絵になる）。
+var biomes: PackedByteArray = PackedByteArray()
+
+## 生物相の定義。
+##
+## `tiles` は塗りに使う候補（重複させると出やすくなる）。
+## `danger` はその生物相が現れてよい危険度の帯。
+## `element` はそこに出る敵の傾向で、`data/monsters.json` の `biomes` と噛み合う。
+## `tileset` は洞の中の絵（`assets/tiles/<名前>.png`。無ければ既定に落ちる）。
+const BIOMES := [
+	{
+		"id": "grassland", "name": "草原", "danger": [1, 4],
+		"tiles": [T_PLAIN, T_PLAIN, T_PLAIN, T_FOREST], "tileset": "grassland",
+	},
+	{
+		"id": "forest", "name": "森林", "danger": [2, 6],
+		"tiles": [T_FOREST, T_FOREST, T_PLAIN, T_HILL], "tileset": "grassland",
+	},
+	{
+		"id": "wetland", "name": "湿地", "danger": [3, 7],
+		"tiles": [T_SWAMP, T_SWAMP, T_FOREST, T_PLAIN], "tileset": "wetland",
+	},
+	{
+		"id": "badland", "name": "荒地", "danger": [4, 8],
+		"tiles": [T_HILL, T_HILL, T_DESERT, T_MOUNTAIN], "tileset": "dungeon",
+	},
+	{
+		"id": "desert", "name": "砂漠", "danger": [5, 9],
+		"tiles": [T_DESERT, T_DESERT, T_HILL, T_MOUNTAIN], "tileset": "dungeon",
+	},
+	{
+		"id": "snowfield", "name": "雪原", "danger": [6, 10],
+		"tiles": [T_SNOW, T_SNOW, T_HILL, T_MOUNTAIN], "tileset": "snowfield",
+	},
+	{
+		"id": "volcano", "name": "火山", "danger": [7, 10],
+		"tiles": [T_LAVA, T_HILL, T_MOUNTAIN, T_DESERT], "tileset": "volcano",
+	},
+]
+
+
+func biome_index_at(x: int, y: int) -> int:
+	if not in_bounds(x, y):
+		return 0
+	return clampi(int(biomes[y * width + x]), 0, BIOMES.size() - 1)
+
+
+func biome_at(x: int, y: int) -> Dictionary:
+	return BIOMES[biome_index_at(x, y)]
+
+
+func biome_id_at(x: int, y: int) -> String:
+	return String(biome_at(x, y).get("id", "grassland"))
+
+
+func biome_name_at(x: int, y: int) -> String:
+	return String(biome_at(x, y).get("name", ""))
+
+
+func set_biome(x: int, y: int, index: int) -> void:
+	if in_bounds(x, y):
+		biomes[y * width + x] = clampi(index, 0, BIOMES.size() - 1)
+
 
 func _init(w: int = 0, h: int = 0, _fill: int = 0) -> void:
 	super(w, h, T_SEA)
 	danger = PackedByteArray()
 	danger.resize(w * h)
 	danger.fill(0)
+	biomes = PackedByteArray()
+	biomes.resize(w * h)
+	biomes.fill(0)
 
 
-## 海は渡れない。山も越えられない（世界に形を与えるのは通れない場所のほう）。
+## 海は渡れない。山と溶岩も越えられない
+## （世界に形を与えるのは通れない場所のほう）。
 func is_walkable(x: int, y: int) -> bool:
 	var t := get_tile(x, y)
-	return t != T_SEA and t != T_MOUNTAIN
+	return t != T_SEA and t != T_MOUNTAIN and t != T_LAVA
 
 
 func is_void(x: int, y: int) -> bool:
@@ -81,14 +157,21 @@ func encounter_weight(x: int, y: int) -> int:
 	match get_tile(x, y):
 		T_PLAIN:
 			return 1
-		T_FOREST:
-			return 3
+		T_DESERT:
+			return 2
 		T_HILL:
 			return 2
+		T_SNOW:
+			return 3
+		T_FOREST:
+			return 3
+		T_SWAMP:
+			return 4  # いちばん歩きにくい。沼を通る道は近くても高くつく
 		_:
 			return 0  # 拠点地の上は安全
 
 
 func glyphs() -> Dictionary:
 	return { T_SEA: "~", T_PLAIN: ".", T_FOREST: "f", T_HILL: "n", T_MOUNTAIN: "^",
-		T_GATE: "G", T_TOWN: "T", T_CAVE: "o", T_CASTLE: "C" }
+		T_GATE: "G", T_TOWN: "T", T_CAVE: "o", T_CASTLE: "C",
+		T_SNOW: "*", T_DESERT: ":", T_SWAMP: "%", T_LAVA: "!" }

@@ -28,9 +28,14 @@ const ROW := 24
 const SLOTS: Array[String] = ["weapon", "armor", "accessory"]
 const SLOT_LABELS := {"weapon": "ぶき", "armor": "よろい", "accessory": "かざり"}
 
-enum State { ROOT, MEMBER, ITEM, ITEM_TARGET, STATUS, SLOT, GEAR }
+enum State { ROOT, MEMBER, ITEM, ITEM_TARGET, STATUS, SLOT, GEAR, JOB }
 
-const ROOT_ITEMS: Array[String] = ["どうぐ", "つよさ", "そうび", "せってい", "とじる"]
+const ROOT_ITEMS: Array[String] = [
+	"どうぐ", "つよさ", "そうび", "てんしょく", "せってい", "とじる",
+]
+
+## てんしょくの一覧は 2 列。15 職あるので 1 列だと枠から出る。
+const JOB_COLS := 2
 
 var _state: State = State.ROOT
 var _root_index := 0
@@ -91,11 +96,6 @@ func _party() -> Array[PartyMember]:
 	return GameState.active_party()
 
 
-func _selected() -> PartyMember:
-	var party := _party()
-	return party[clampi(_member_index, 0, party.size() - 1)] if not party.is_empty() else null
-
-
 func _items() -> Array:
 	return GameState.inventory_ids()
 
@@ -128,6 +128,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				queue_redraw()
 		State.SLOT:
 			_input_slot(event)
+		State.JOB:
+			_input_job(event)
 		State.GEAR:
 			_input_gear(event)
 
@@ -166,10 +168,13 @@ func _input_root(event: InputEvent) -> void:
 				_after_member = State.SLOT
 				_state = State.MEMBER
 			3:
+				_after_member = State.JOB
+				_state = State.MEMBER
+			4:
 				close()
 				settings_requested.emit()
 				return
-			4:
+			5:
 				_leave()
 				return
 	queue_redraw()
@@ -185,8 +190,88 @@ func _input_member(event: InputEvent) -> void:
 	if event.is_action_pressed("confirm"):
 		Sound.play("confirm")
 		_slot_index = 0
+		if _after_member == State.JOB:
+			_job_ids = Database.job_ids()
+			_job_index = maxi(_job_ids.find(_selected().job_id), 0)
 		_state = _after_member
 	queue_redraw()
+
+
+var _job_ids: Array = []
+var _job_index := 0
+
+
+func _selected() -> PartyMember:
+	var party := _party()
+	return party[clampi(_member_index, 0, party.size() - 1)] if not party.is_empty() else null
+
+
+## てんしょく。**代償を必ず先に見せる。**
+## レベルが戻ることを知らずに押せる位置に置いてはいけない。
+## 開発用。てんしょくの一覧を撮るために使う。
+func debug_open_jobs() -> void:
+	_root_index = 3
+	_member_index = 0
+	_after_member = State.JOB
+	_job_ids = Database.job_ids()
+	_job_index = maxi(_job_ids.find(_selected().job_id), 0)
+	_state = State.JOB
+	queue_redraw()
+
+
+func _input_job(event: InputEvent) -> void:
+	if event.is_action_pressed("cancel"):
+		Sound.play("cancel")
+		_state = State.MEMBER
+		queue_redraw()
+		return
+	if _job_ids.is_empty():
+		return
+	var rows := int(ceil(_job_ids.size() / float(JOB_COLS)))
+	if event.is_action_pressed("ui_down"):
+		_job_index = (_job_index + 1) % _job_ids.size()
+		Sound.play("cursor")
+	elif event.is_action_pressed("ui_up"):
+		_job_index = (_job_index - 1 + _job_ids.size()) % _job_ids.size()
+		Sound.play("cursor")
+	elif event.is_action_pressed("ui_right"):
+		_job_index = (_job_index + rows) % _job_ids.size()
+		Sound.play("cursor")
+	elif event.is_action_pressed("ui_left"):
+		_job_index = (_job_index - rows + _job_ids.size()) % _job_ids.size()
+		Sound.play("cursor")
+	elif event.is_action_pressed("confirm"):
+		_apply_job()
+	queue_redraw()
+
+
+func _apply_job() -> void:
+	var member := _selected()
+	if member == null:
+		return
+	var job_id := String(_job_ids[_job_index])
+	if job_id == member.job_id:
+		Sound.play("cancel")
+		_notify("すでに %s だ" % _job_name(job_id))
+		return
+	if not member.can_take_job(job_id):
+		Sound.play("cancel")
+		_notify("つくには %s が いる" % "　".join(member.unmet_requirements(job_id)))
+		return
+	var lost := GameState.job_change_cost_levels(member)
+	if not GameState.change_job(member, job_id):
+		Sound.play("cancel")
+		return
+	Sound.play("learn")
+	if lost > 0:
+		_notify("%sは %s になった（レベルを %d 返した）" % [member.name, _job_name(job_id), lost])
+	else:
+		_notify("%sは %s になった" % [member.name, _job_name(job_id)])
+	_state = State.MEMBER
+
+
+func _job_name(job_id: String) -> String:
+	return String(Database.job(job_id).get("name", job_id))
 
 
 func _input_item(event: InputEvent) -> void:
@@ -395,11 +480,69 @@ func _draw_body() -> void:
 			_draw_status()
 		State.SLOT, State.GEAR:
 			_draw_equip()
+		State.JOB:
+			_draw_jobs()
 		_:
 			if _root_index == 0:
 				_draw_items()
 			elif _root_index == 1 or _root_index == 2:
 				_draw_status()
+			elif _root_index == 3:
+				_draw_job_notice()
+
+
+## てんしょくを選ぶ前の案内。**代償を押す前に読める位置に置く。**
+func _draw_job_notice() -> void:
+	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
+	PixelUI.draw_text(self, origin, "てんしょく", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	var lines := [
+		"じゅくれんと おぼえた わざは のこる。",
+		"だが **レベルは 1 に もどる。**",
+		"技を 入れかえるかわりに 強さを 捨てる。",
+	]
+	for i in lines.size():
+		PixelUI.draw_text(self, origin + Vector2(0, 32 + i * 22), lines[i], PixelUI.C_TEXT_DIM)
+
+
+## 職業の一覧。2 列。選べない職業は理由を下に出す。
+func _draw_jobs() -> void:
+	var member := _selected()
+	if member == null or _job_ids.is_empty():
+		return
+	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 2)
+	var lost := GameState.job_change_cost_levels(member)
+	PixelUI.draw_text(
+		self, origin, "%s を てんしょく" % member.name, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
+	)
+	# 何を失うかを常に見せる。数字が出ていないと押した後に驚くことになる。
+	var cost := "いま Lv%d。てんしょくで Lv1 に もどる" % member.level if lost > 0 else "いま Lv1。失うものは ない"
+	PixelUI.draw_text(
+		self, origin + Vector2(0, 24), cost,
+		PixelUI.C_HP_LOW if lost > 0 else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+	)
+
+	var rows := int(ceil(_job_ids.size() / float(JOB_COLS)))
+	for i in _job_ids.size():
+		var job_id := String(_job_ids[i])
+		@warning_ignore("integer_division")
+		var col := i / rows
+		var row := i % rows
+		var at := origin + Vector2(16 + col * 156, 46 + row * 17)
+		var on := i == _job_index
+		var locked := not member.can_take_job(job_id)
+		if on:
+			MenuList.draw_cursor(self, CURSOR_TEX, at)
+		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
+		if job_id == member.job_id:
+			tint = PixelUI.C_ACTIVE
+		elif locked:
+			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
+		var label := _job_name(job_id) if not locked else _job_name(job_id) + "×"
+		PixelUI.draw_text(self, at, label, tint)
+		PixelUI.draw_text(
+			self, at + Vector2(104, 2),
+			"★".repeat(member.mastery_rank(job_id)), tint, PixelUI.SIZE_SUB
+		)
 
 
 func _draw_items() -> void:

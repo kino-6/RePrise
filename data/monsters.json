@@ -1,5 +1,5 @@
 {
-  "_comment": "floor_min / floor_max で出現階層を絞る。cost_scale で敵にもテンポの個性を持たせる。boss:true は通常の出現表から外れ、主の間でしか出ない（階層補正もかからず、ここの数値がそのまま最終試験の難度になる）。weak / resist は属性（fire / ice / bolt / dark）で、weak は 2 倍、resist は半減、null は無効。steal は ぬすむ の戦利品で、common が高確率・rare が低確率。docs/battle_design.md を参照。",
+  "_comment": "floor_min / floor_max で出現階層を絞る。cost_scale で敵にもテンポの個性を持たせる。boss:true は通常の出現表から外れ、主の間でしか出ない（階層補正もかからず、ここの数値がそのまま最終試験の難度になる）。weak / resist は属性（fire / ice / bolt / dark）で、weak は 2 倍、resist は半減、null は無効。steal は ぬすむ の戦利品で、common が高確率・rare が低確率。docs/battle_design.md を参照。 biomes を持つ敵はその生物相にしか出ない（火に強いものは火山、氷に強いものは雪原、毒に強いものは湿地）。持たない敵はどこにでも出るので、抽選プールが空になることはない。",
   "gel": {
     "name": "ゲル",
     "sprite": "gel",
@@ -24,7 +24,10 @@
     ],
     "steal": {
       "common": "herb"
-    }
+    },
+    "biomes": [
+      "snowfield"
+    ]
   },
   "bat": {
     "name": "ヨナキコウモリ",
@@ -78,7 +81,10 @@
     "steal": {
       "common": "herb",
       "rare": "elixir"
-    }
+    },
+    "biomes": [
+      "snowfield"
+    ]
   },
   "skull": {
     "name": "されこうべ",
@@ -137,7 +143,10 @@
     "steal": {
       "common": "water",
       "rare": "feather"
-    }
+    },
+    "biomes": [
+      "snowfield"
+    ]
   },
   "golem": {
     "name": "いしのしもべ",
@@ -167,7 +176,10 @@
     "steal": {
       "common": "herb",
       "rare": "elixir"
-    }
+    },
+    "biomes": [
+      "volcano"
+    ]
   },
   "warden": {
     "name": "奈落の番人",
@@ -250,7 +262,10 @@
       "rare": "elixir"
     },
     "floor_min": 2,
-    "floor_max": 6
+    "floor_max": 6,
+    "biomes": [
+      "volcano"
+    ]
   },
   "plague_moth": {
     "name": "えきが",
@@ -302,7 +317,10 @@
       "common": "herb"
     },
     "floor_min": 5,
-    "floor_max": 9
+    "floor_max": 9,
+    "biomes": [
+      "snowfield"
+    ]
   },
   "frost_stalker": {
     "name": "ひょうがじゅう",
@@ -330,7 +348,10 @@
       "common": "water"
     },
     "floor_min": 5,
-    "floor_max": 9
+    "floor_max": 9,
+    "biomes": [
+      "snowfield"
+    ]
   },
   "mire_oracle": {
     "name": "ぬまのめ",
@@ -418,7 +439,10 @@
       "rare": "elixir"
     },
     "floor_min": 6,
-    "floor_max": 10
+    "floor_max": 10,
+    "biomes": [
+      "volcano"
+    ]
   },
   "crystal_drake": {
     "name": "しょうりんりゅう",
@@ -446,7 +470,10 @@
       "common": "elixir"
     },
     "floor_min": 8,
-    "floor_max": 10
+    "floor_max": 10,
+    "biomes": [
+      "snowfield"
+    ]
   },
   "void_scribe": {
     "name": "きょじじゅつし",
@@ -504,7 +531,10 @@
       "common": "herb"
     },
     "floor_min": 8,
-    "floor_max": 10
+    "floor_max": 10,
+    "biomes": [
+      "volcano"
+    ]
   },
   "shattered_seraph": {
     "name": "かけたてんし",
@@ -806,7 +836,10 @@
       "common": "herb"
     },
     "floor_min": 6,
-    "floor_max": 10
+    "floor_max": 10,
+    "biomes": [
+      "volcano"
+    ]
   },
   "ash_revenant": {
     "name": "はいのもうじゃ",
@@ -888,7 +921,10 @@
       "rare": "elixir"
     },
     "floor_min": 7,
-    "floor_max": 10
+    "floor_max": 10,
+    "biomes": [
+      "volcano"
+    ]
   },
   "iron_cavalier": {
     "name": "てつきへい",
@@ -916,7 +952,10 @@
       "common": "elixir"
     },
     "floor_min": 8,
-    "floor_max": 10
+    "floor_max": 10,
+    "biomes": [
+      "snowfield"
+    ]
   },
   "siege_walker": {
     "name": "こうじょうほこうき",
@@ -945,7 +984,11 @@
       "rare": "elixir"
     },
     "floor_min": 9,
-    "floor_max": 10
+    "floor_max": 10,
+    "biomes": [
+      "snowfield",
+      "volcano"
+    ]
   },
   "iron_margrave": {
     "name": "てつのへんきょうはく",

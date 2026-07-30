@@ -39,6 +39,7 @@ static func generate(rng: DetRng) -> WorldMap:
 	_carve_land(map, rng)
 	_place_gate_and_castle(map, rng)
 	_spread_danger(map)
+	_assign_biomes(map, rng)
 	_paint_terrain(map, rng)
 	_place_sites(map, rng)
 	return map
@@ -150,34 +151,117 @@ static func _spread_danger(map: WorldMap) -> void:
 # --------------------------------------------------------------------------
 
 
-## 危険度の帯で地形を塗る。**見た目が難度の予告になる**のが狙い。
+## 生物相を**面**で置く。
 ##
-## 森と丘が「歩ける」まま出やすさだけ変えるのに対して、山は通れない。
-## 通れない地形を深いところに置くと、道が細くなって終盤が険しく見える。
-const TERRAIN_BY_DANGER := {
-	1: [WorldMap.T_PLAIN, WorldMap.T_PLAIN, WorldMap.T_PLAIN, WorldMap.T_FOREST],
-	2: [WorldMap.T_PLAIN, WorldMap.T_PLAIN, WorldMap.T_FOREST, WorldMap.T_FOREST],
-	3: [WorldMap.T_PLAIN, WorldMap.T_FOREST, WorldMap.T_FOREST, WorldMap.T_HILL],
-	4: [WorldMap.T_PLAIN, WorldMap.T_FOREST, WorldMap.T_HILL, WorldMap.T_HILL],
-	5: [WorldMap.T_FOREST, WorldMap.T_HILL, WorldMap.T_HILL, WorldMap.T_MOUNTAIN],
-	6: [WorldMap.T_FOREST, WorldMap.T_HILL, WorldMap.T_HILL, WorldMap.T_MOUNTAIN],
-	7: [WorldMap.T_HILL, WorldMap.T_HILL, WorldMap.T_MOUNTAIN, WorldMap.T_PLAIN],
-	8: [WorldMap.T_HILL, WorldMap.T_MOUNTAIN, WorldMap.T_MOUNTAIN, WorldMap.T_PLAIN],
-	9: [WorldMap.T_HILL, WorldMap.T_MOUNTAIN, WorldMap.T_MOUNTAIN, WorldMap.T_PLAIN],
-	10: [WorldMap.T_HILL, WorldMap.T_MOUNTAIN, WorldMap.T_MOUNTAIN, WorldMap.T_PLAIN],
-}
+## これが「世界が適当に見える」問題の本体だった。1 マスずつ危険度から
+## 地形を抽くと、草原と森と丘が均一に混ざった斑模様になり、どこも同じ顔になる。
+## 実際の世界地図が世界に見えるのは、**同じ地形がまとまって続く**からで、
+## 「ここは森林地帯」「ここから雪原」と読めることが地図の情報量になる。
+##
+## 種をいくつか撒いて、いちばん近い種の生物相に染める（ボロノイ）。
+## 種ごとの生物相は**その場所の危険度に合うものから選ぶ**ので、
+## 門のそばに火山は来ないし、城の手前が草原になることもない。
+const BIOME_SEEDS := 9
 
 
+static func _assign_biomes(map: WorldMap, rng: DetRng) -> void:
+	var land := _land_cells(map)
+	if land.is_empty():
+		return
+
+	# 種を撒く。近すぎる種は地帯が細切れになるので間隔をあける。
+	var seeds: Array[Vector2i] = []
+	var kinds: Array[int] = []
+	for _i in BIOME_SEEDS * 8:
+		if seeds.size() >= BIOME_SEEDS:
+			break
+		var at: Vector2i = land[rng.range_i(0, land.size() - 1)]
+		var too_near := false
+		for other in seeds:
+			if absi(other.x - at.x) + absi(other.y - at.y) < 12:
+				too_near = true
+				break
+		if too_near:
+			continue
+		seeds.append(at)
+		kinds.append(0)
+	if seeds.is_empty():
+		seeds.append(land[0])
+		kinds.append(0)
+
+	# いちばん近い種に染める。距離は素直なマンハッタンでよい
+	# （陸路で測ると地帯が道の形に伸びて、地図として読みにくくなる）。
+	var owner := PackedByteArray()
+	owner.resize(map.width * map.height)
+	var danger_sum := []
+	var cell_count := []
+	danger_sum.resize(seeds.size())
+	cell_count.resize(seeds.size())
+	danger_sum.fill(0)
+	cell_count.fill(0)
+
+	for y in map.height:
+		for x in map.width:
+			var best := 0
+			var best_d := -1
+			for i in seeds.size():
+				var d := absi(seeds[i].x - x) + absi(seeds[i].y - y)
+				if best_d < 0 or d < best_d:
+					best_d = d
+					best = i
+			owner[y * map.width + x] = best
+			if map.is_walkable(x, y):
+				danger_sum[best] = int(danger_sum[best]) + map.danger_at(x, y)
+				cell_count[best] = int(cell_count[best]) + 1
+
+	# **生物相は「種の危険度」ではなく「その地帯の平均の危険度」で決める。**
+	# 種で決めると、危険度 4 で引いた湿地が門（危険度 1）まで広がってしまう。
+	# 面を先に確定させてから中身を選べば、地帯と危険度が必ず噛み合う。
+	for i in seeds.size():
+		var mean := 1
+		if int(cell_count[i]) > 0:
+			mean = int(danger_sum[i]) / int(cell_count[i])
+		kinds[i] = _biome_for_danger(mean, rng)
+
+	for y in map.height:
+		for x in map.width:
+			map.set_biome(x, y, kinds[owner[y * map.width + x]])
+
+
+## その危険度に置いてよい生物相から 1 つ選ぶ。
+static func _biome_for_danger(danger: int, rng: DetRng) -> int:
+	var candidates: Array[int] = []
+	for i in WorldMap.BIOMES.size():
+		var band: Array = WorldMap.BIOMES[i].get("danger", [1, 10])
+		if danger >= int(band[0]) and danger <= int(band[1]):
+			candidates.append(i)
+	if candidates.is_empty():
+		return 0
+	return candidates[rng.range_i(0, candidates.size() - 1)]
+
+
+## 生物相の候補から 1 マスずつ塗る。
+##
+## 帯の中の揺れは残す（同じタイルで埋めると地帯が単調な板になる）。
+## 大事なのは「地帯の中では傾向が揃っていること」で、完全な均一ではない。
 static func _paint_terrain(map: WorldMap, rng: DetRng) -> void:
 	for y in map.height:
 		for x in map.width:
 			if map.get_tile(x, y) != WorldMap.T_PLAIN:
 				continue  # 海と、既に置いた門・城には触らない
-			var tier := map.danger_at(x, y)
-			var palette: Array = TERRAIN_BY_DANGER.get(tier, [WorldMap.T_PLAIN])
+			var palette: Array = map.biome_at(x, y).get("tiles", [WorldMap.T_PLAIN])
 			map.set_tile(x, y, int(palette[rng.range_i(0, palette.size() - 1)]))
 
-	# 山で門と城が孤立していないか確かめ、閉じていたら道を通す。
+	# 門と城のまわりは必ず歩けるようにしておく。生物相の抽選で溶岩や山に
+	# 囲まれると、そこだけで詰む。
+	for center in [map.start_pos, map.castle_pos]:
+		for step in FieldMap.NEIGHBORS:
+			var at: Vector2i = center + step
+			if map.in_bounds(at.x, at.y) and not map.is_walkable(at.x, at.y):
+				if map.get_tile(at.x, at.y) != WorldMap.T_SEA:
+					map.set_tile(at.x, at.y, WorldMap.T_HILL)
+
+	# 山と溶岩で城が孤立していないか確かめ、閉じていたら道を通す。
 	# **生成物は必ず到達可能でなければならない**（詰む世界を出さない）。
 	_ensure_reachable(map)
 
@@ -210,7 +294,7 @@ static func _ensure_reachable(map: WorldMap) -> void:
 			while at != map.castle_pos:
 				at += Vector2i(signi(map.castle_pos.x - at.x), 0) if at.x != map.castle_pos.x \
 					else Vector2i(0, signi(map.castle_pos.y - at.y))
-				if map.get_tile(at.x, at.y) in [WorldMap.T_SEA, WorldMap.T_MOUNTAIN]:
+				if not map.is_walkable(at.x, at.y) and map.get_tile(at.x, at.y) != WorldMap.T_SEA:
 					map.set_tile(at.x, at.y, WorldMap.T_HILL)
 			opened = true
 			break
@@ -278,8 +362,15 @@ static func _scatter(
 				continue
 			var d := from_gate[at.y * map.width + at.x]
 			var tier := clampi(1 + (d * (WorldMap.MAX_DANGER - 1)) / maxi(span, 1), 1, WorldMap.MAX_DANGER)
+			# 洞の中の絵はその土地の生物相から決まる（雪原の洞は雪原の絵）。
+			var biome := map.biome_at(at.x, at.y)
 			map.set_tile(at.x, at.y, tile)
-			map.sites[at] = {"kind": kind, "danger": tier, "index": placed}
+			map.sites[at] = {
+				"kind": kind, "danger": tier, "index": placed,
+				"biome": String(biome.get("id", "grassland")),
+				"tileset": String(biome.get("tileset", "dungeon")),
+				"place": String(biome.get("name", "")),
+			}
 			placed += 1
 			break
 

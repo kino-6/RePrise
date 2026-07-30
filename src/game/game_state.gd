@@ -332,6 +332,25 @@ func enter_site(at: Vector2i) -> Dictionary:
 	return site
 
 
+## いま立っている土地の生物相。敵の抽選と絵の両方に使う。
+## 洞の中ではその洞が建っている土地の生物相を引き継ぐ。
+func biome_here() -> String:
+	if not site.is_empty():
+		return String(site.get("biome", ""))
+	if world == null:
+		return ""
+	return world.biome_id_at(world_pos.x, world_pos.y)
+
+
+## いまの土地の名（「雪原」など）。HUD に出す。
+func place_name() -> String:
+	if not site.is_empty():
+		return String(site.get("place", ""))
+	if world == null:
+		return ""
+	return world.biome_name_at(world_pos.x, world_pos.y)
+
+
 ## 洞の何階まで降りられるか。深い土地の洞ほど階が多い（危険度が上限で頭打ちになる）。
 func cave_depth() -> int:
 	return clampi(1 + int(site.get("danger", 1)) / 3, 1, 3)
@@ -561,17 +580,34 @@ func upgrade_value(effect: String) -> int:
 # --------------------------------------------------------------------------
 
 
-## 拠点での転職。恒久データが動くので、その場で保存する。
+## 転職。**世界の中でもできるが、そのランで積んだレベルを返す。**
 ##
-## ラン中は禁じる。潜行中に職業を変えられると「レベルを失う」というランの
-## 代償が抜け道になり、熟練度の持ち帰りが手応えでなくなる。
+## もとはラン中を禁じていた。理由は「職業を変えられると、レベルを失うという
+## 代償が抜け道になる」というものだったが、禁じ方が乱暴だった。
+## このゲームでレベルは職業ではなく人に付いているので、ラン中に職業だけ
+## 変えられると**同じ強さで別の技一式が手に入る**（純粋な得）。それが問題。
+##
+## そこで禁じるのをやめ、**代償を付ける**。転職するとその人のレベルは 1 に戻る。
+## 熟練と覚えた技は残る（いつもの境界と同じ）。
+##
+## この 1 つの規則で場所を分けなくて済む。拠点ではレベルが既に 1 なので
+## 代償はゼロ、世界の奥で転職するなら積み上げを捨てる、という形に自然に落ちる。
+## 「技一式を入れ替えるために強さを捨てる」は、まともな判断になる。
 func change_job(member: PartyMember, job_id: String) -> bool:
-	if run_active:
-		return false
 	if not member.change_job(job_id):
 		return false
+	if run_active:
+		member.level = 1
+		member.exp_points = 0
+		member.hp = mini(member.hp, member.max_hp())
+		member.mp = mini(member.mp, member.max_mp())
 	save_game()
 	return true
+
+
+## 転職でいま何を失うか（画面に出す用）。拠点なら 0。
+func job_change_cost_levels(member: PartyMember) -> int:
+	return maxi(member.level - 1, 0) if run_active else 0
 
 
 # --------------------------------------------------------------------------

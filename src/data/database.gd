@@ -163,20 +163,26 @@ static func job_ids() -> Array:
 ## （キーの列挙順に依存すると、同じシードでも別の敵が出かねない）。
 ##
 ## ボスは通常の遭遇には混ぜない。主の間でしか出会わないから主なので。
-static func monster_ids_for_floor(floor_number: int) -> Array:
-	_ensure()
-	var result: Array = []
-	for id in monsters.keys():
+static func monster_ids_for_floor(floor_number: int, biome: String = "") -> Array:
+	var ids := []
+	var monsters := all_monsters()
+	for id in monsters:
 		var m: Dictionary = monsters[id]
 		if bool(m.get("boss", false)):
 			continue
-		if floor_number >= int(m.get("floor_min", 1)) and floor_number <= int(m.get("floor_max", 99)):
-			result.append(id)
-	result.sort()
-	return result
+		if floor_number < int(m.get("floor_min", 1)) or floor_number > int(m.get("floor_max", 99)):
+			continue
+		# 生物相の指定がある敵はその土地にしか出ない。
+		# **指定の無い敵はどこにでも出る**ので、絞ってもプールは空にならない
+		# （空にすると、その土地で一度も戦えないまま通り抜けられてしまう）。
+		if biome != "":
+			var homes: Array = m.get("biomes", [])
+			if not homes.is_empty() and biome not in homes:
+				continue
+		ids.append(id)
+	return ids
 
 
-## その階層の主。通常の出現表とは別に引く。
 static func boss_ids_for_floor(floor_number: int) -> Array:
 	_ensure()
 	var result: Array = []

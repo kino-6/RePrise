@@ -266,7 +266,7 @@ func _walk(
 		if not Encounter.should_meet(rng, weighted):
 			continue
 		weighted = 0
-		var foes := Encounter.build(rng, int(state["danger"]))
+		var foes := Encounter.build(rng, int(state["danger"]), 100, world.biome_id_at(at.x, at.y))
 		if foes.is_empty():
 			continue
 		if not _fight(members, foes, rng, int(state["danger"]), state):
@@ -289,6 +289,7 @@ func _delve(
 		var here: int = mini(danger + floor_number - 1, WorldMap.MAX_DANGER)
 		state["danger"] = here
 		var map := DungeonGenerator.generate(rng.fork("cave:%d" % floor_number), here, false)
+		var biome := String(site.get("biome", ""))
 		var steps := map.route(map.start_pos, map.stairs_pos).size()
 		var weighted := 0
 		for _s in steps:
@@ -297,7 +298,7 @@ func _delve(
 			if not Encounter.should_meet(rng, weighted):
 				continue
 			weighted = 0
-			var foes := Encounter.build(rng, here)
+			var foes := Encounter.build(rng, here, 100, biome)
 			if foes.is_empty():
 				continue
 			if not _fight(members, foes, rng, here, state):

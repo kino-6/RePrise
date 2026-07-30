@@ -685,6 +685,20 @@ TILE_WORLD_CASTLE = [
 ]
 
 
+def world_texture(a: str, b: str, step: int, fleck: str = "", spots: tuple = ()) -> Canvas:
+    """ディザ 2 色 + 斑点で地形の質感を作る。
+
+    草原や森のように「形」がある地形は ASCII で描くが、雪原・砂漠・沼・溶岩は
+    一面の質感なので手続きのほうが短く、粒の細かさも揃う。
+    """
+    c = Canvas(TILE, TILE)
+    dither(c, 0, 0, TILE, TILE, WORLD.get(a), WORLD.get(b), step)
+    if fleck:
+        for x, y in spots:
+            c.set(x, y, WORLD.get(fleck))
+    return c
+
+
 def build_world_tileset() -> None:
     """ワールドマップのタイル 9 枚（144x16）。
 
@@ -702,6 +716,14 @@ def build_world_tileset() -> None:
         from_ascii(TILE_WORLD_TOWN, WORLD),
         from_ascii(TILE_WORLD_CAVE, WORLD),
         from_ascii(TILE_WORLD_CASTLE, WORLD),
+        # 9 雪原 — 明るい白。通れるが遭遇が重い
+        world_texture("P", "M", 5, "R", ((3, 6), (11, 2), (7, 12), (13, 9))),
+        # 10 砂漠 — 乾いた土。丘より明るく、風紋を入れる
+        world_texture("M", "N", 4, "P", ((2, 4), (6, 4), (10, 11), (14, 11))),
+        # 11 沼 — 濃い緑に水たまり。歩けるが重い
+        world_texture("f", "F", 3, "S", ((4, 5), (5, 5), (10, 9), (11, 9), (7, 13))),
+        # 12 溶岩 — 通れない。赤は世界でここだけなので、遠目でも危険と読める
+        world_texture("A", "K", 3, "Y", ((3, 3), (8, 7), (12, 12), (5, 10))),
     ]
     sheet = Canvas(TILE * len(tiles), TILE)
     for i, t in enumerate(tiles):
@@ -718,12 +740,15 @@ def _report_world_contrast(tiles: list[Canvas]) -> None:
     ここは黙って通さずに数字を出す。海・山（通れない）と草原・森・丘（通れる）
     の代表色が近すぎたら、目で見る前に分かる。
     """
-    names = ["海", "草原", "森", "丘", "山"]
-    blocked = {0, 4}
-    means = [_mean_rgb(t) for t in tiles[:5]]
+    names = ["海", "草原", "森", "丘", "山", "", "", "", "", "雪原", "砂漠", "沼", "溶岩"]
+    index = [0, 1, 2, 3, 4, 9, 10, 11, 12]
+    blocked = {0, 4, 12}
+    means = {i: _mean_rgb(tiles[i]) for i in index}
     worst = None
-    for i in range(5):
-        for j in range(i + 1, 5):
+    for i in index:
+        for j in index:
+            if j <= i:
+                continue
             if (i in blocked) == (j in blocked):
                 continue  # 同じ側どうしは見分けが付かなくてよい
             gap = math.dist(means[i], means[j])
