@@ -51,7 +51,7 @@ static func portrait_of(job_id: String) -> Texture2D:
 ## 覚えた技の一覧は 4 列 x 3 段。職業 4 x ランク 3 = 12 個で必ず収まる。
 const ABILITY_COLUMNS := 4
 
-enum State { MEMBER, JOB, UPGRADE }
+enum State { MEMBER, JOB, UPGRADE, PARTY }
 
 var members: Array[PartyMember] = []
 
@@ -61,6 +61,7 @@ var _index := 0
 var _job_ids: Array = []
 var _job_index := 0
 var _upgrade_ids: Array = []
+var _party_index := 0
 var _upgrade_index := 0
 var _notice := Notice.new()
 var _input_lock := 0.0
@@ -97,13 +98,17 @@ func _notify(text: String) -> void:
 	queue_redraw()
 
 
-## 名簿の下に並ぶ 2 つの行。「出撃する」は名簿が伸びても常に末尾に置く。
-func _upgrade_row() -> int:
+## 名簿の下に並ぶ行。「出撃する」は名簿が伸びても常に末尾に置く。
+func _party_row() -> int:
 	return members.size()
 
 
-func _depart_row() -> int:
+func _upgrade_row() -> int:
 	return members.size() + 1
+
+
+func _depart_row() -> int:
+	return members.size() + 2
 
 
 func _selected() -> PartyMember:
@@ -125,6 +130,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_input_job(event)
 		State.UPGRADE:
 			_input_upgrade(event)
+		State.PARTY:
+			_input_party(event)
 
 
 func _input_member(event: InputEvent) -> void:
@@ -146,6 +153,10 @@ func _input_member(event: InputEvent) -> void:
 			_state = State.UPGRADE
 			_upgrade_index = 0
 			queue_redraw()
+		elif _index == _party_row():
+			_state = State.PARTY
+			_party_index = 0
+			queue_redraw()
 		else:
 			_open_job_menu()
 	elif event.is_action_pressed("cancel"):
@@ -161,6 +172,14 @@ func debug_open_upgrades() -> void:
 	_index = _upgrade_row()
 	_upgrade_index = 0
 	_state = State.UPGRADE
+	queue_redraw()
+
+
+## 開発用。編成の画面を撮るために使う。
+func debug_open_party() -> void:
+	_index = _party_row()
+	_party_index = 0
+	_state = State.PARTY
 	queue_redraw()
 
 
@@ -251,6 +270,50 @@ func _input_upgrade(event: InputEvent) -> void:
 		queue_redraw()
 	elif event.is_action_pressed("confirm"):
 		_buy_upgrade()
+
+
+## 編成。誰を連れて行くかを決め、ここで仲間も迎える。
+##
+## 名簿が 4 人固定だと「出撃する」が選択にならない。留守番させた者は育たないので、
+## 誰を連れるかがそのまま次のランの手応えになる。
+func _input_party(event: InputEvent) -> void:
+	var rows := GameState.all_members().size() + 1  # 末尾は「なかまを迎える」
+	if event.is_action_pressed("cancel"):
+		Sound.play("cancel")
+		_state = State.MEMBER
+		queue_redraw()
+		return
+	if event.is_action_pressed("ui_down"):
+		_party_index = (_party_index + 1) % rows
+		Sound.play("cursor")
+	elif event.is_action_pressed("ui_up"):
+		_party_index = (_party_index - 1 + rows) % rows
+		Sound.play("cursor")
+	elif event.is_action_pressed("confirm"):
+		if _party_index >= GameState.all_members().size():
+			_recruit()
+		elif GameState.toggle_active(_party_index):
+			Sound.play("confirm")
+			members = GameState.active_party()
+		else:
+			Sound.play("cancel")
+			_notify("%d 人までしか 連れて行けない" % GameState.PARTY_SIZE)
+	queue_redraw()
+
+
+func _recruit() -> void:
+	if not GameState.can_recruit():
+		Sound.play("cancel")
+		_notify("これいじょう 仲間は 増えない")
+		return
+	var price := GameState.recruit_price()
+	var member := GameState.recruit()
+	if member == null:
+		Sound.play("cancel")
+		_notify("%s が %d 必要" % [Terms.ECHO, price])
+		return
+	Sound.play("learn")
+	_notify("%s が 仲間に なった！" % member.name)
 
 
 func _buy_upgrade() -> void:
@@ -360,6 +423,7 @@ func _draw_roster() -> void:
 			self, base + Vector2(58, 2), _job_name(m.job_id), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 		)
 
+	_draw_roster_row(_party_row(), Terms.PARTY)
 	_draw_roster_row(_upgrade_row(), Terms.UPGRADE)
 	_draw_roster_row(_depart_row(), Terms.DEPART)
 
@@ -380,6 +444,9 @@ func _draw_detail() -> void:
 		return
 	if _index == _upgrade_row():
 		_draw_upgrade_note()
+		return
+	if _index == _party_row():
+		_draw_party_note()
 		return
 
 	var member := _selected()
@@ -454,6 +521,45 @@ func _draw_departure_note() -> void:
 		)
 
 
+## 編成。名簿の全員を並べ、連れて行く者に印を付ける。
+func _draw_party_note() -> void:
+	var origin := PixelUI.content(DETAIL_RECT).position
+	PixelUI.draw_text(self, origin + Vector2(6, 2), Terms.PARTY, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	PixelUI.draw_text(
+		self, origin + Vector2(6, 26),
+		"%d 人まで 連れて行ける。" % GameState.PARTY_SIZE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+	)
+
+	var all_members := GameState.all_members()
+	var rows := all_members.size() + 1
+	var span := MenuList.range_of(_party_index, rows, 6)
+	for row in range(span[0], span[1]):
+		var at := origin + Vector2(6, 46 + (row - span[0]) * 18)
+		var on := _state == State.PARTY and row == _party_index
+		if on:
+			MenuList.draw_cursor(self, CURSOR_TEX, at)
+		if row >= all_members.size():
+			var price := GameState.recruit_price()
+			var label := "なかまを 迎える（%s %d）" % [Terms.ECHO, price]
+			if not GameState.can_recruit():
+				label = "これで 全員"
+			PixelUI.draw_text(
+				self, at, label, PixelUI.C_ACTIVE if on else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+			)
+			continue
+		var m := all_members[row]
+		var mark := "●" if GameState.is_active(row) else "○"
+		PixelUI.draw_text(
+			self, at, "%s %s" % [mark, m.name],
+			PixelUI.C_TEXT if GameState.is_active(row) else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
+		PixelUI.draw_text(
+			self, at + Vector2(110, 0), _job_name(m.job_id),
+			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
+	MenuList.draw_position(self, PixelUI.content(DETAIL_RECT), _party_index, rows, 6)
+
+
 ## 資源の使い道の一覧。何段まで伸ばしたかと、次の 1 段の値段を並べる。
 func _draw_upgrade_note() -> void:
 	var origin := PixelUI.content(DETAIL_RECT).position
@@ -493,10 +599,25 @@ func _draw_menu() -> void:
 		_draw_job_menu()
 	elif _state == State.UPGRADE or _index == _upgrade_row():
 		_draw_upgrade_desc()
+	elif _state == State.PARTY or _index == _party_row():
+		_draw_party_hint()
 	elif _index == _depart_row():
 		_draw_hint()
 	else:
 		_draw_learned()
+
+
+## 編成のときの案内。名簿の行と操作を分けて書く。
+func _draw_party_hint() -> void:
+	var origin := PixelUI.content(MENU_RECT).position
+	PixelUI.draw_text(self, origin + Vector2(8, 2), "連れて行く なかまを えらぶ", PixelUI.C_TEXT)
+	PixelUI.draw_text(
+		self, origin + Vector2(8, 28), "● が 出撃する なかま。Ｚ で 入れ替える。", PixelUI.C_TEXT_DIM
+	)
+	PixelUI.draw_text(
+		self, origin + Vector2(8, 52),
+		"留守番した なかまは 熟練が 積まれない。", PixelUI.C_TEXT_DIM
+	)
 
 
 func _draw_upgrade_desc() -> void:
@@ -515,6 +636,8 @@ func _draw_upgrade_desc() -> void:
 
 func _draw_learned() -> void:
 	var member := _selected()
+	if member == null:
+		return
 	var origin := PixelUI.content(MENU_RECT).position
 	PixelUI.draw_text(self, origin + Vector2(8, 0), "おぼえた わざ", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 

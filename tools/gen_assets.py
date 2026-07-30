@@ -1255,6 +1255,17 @@ def build_monster(name: str, half_rows: list[str], palette: Palette, width: int 
 ## 敵の絵の上限。これを超えるものは戦闘画面に収まらない。
 MONSTER_MAX = (64, 64)
 
+## 外で描いた絵しか持たない敵。ASCII の下絵は用意していないので、
+## 素材が無ければその敵は生成されない（data/monsters.json 側で使わなければよい）。
+IMPORTED_MONSTERS = [
+    "arcane_hound", "lantern_mimic", "plague_moth", "crystal_drake",
+    "ruin_automaton", "ember_wraith", "frost_stalker", "mire_oracle",
+    "fungal_knight", "void_scribe", "chain_ogre", "shattered_seraph",
+]
+
+## 主。名前は candidate_boss_<ID>.png で探す。
+IMPORTED_BOSSES = ["thorn_crowned_king", "crucible_colossus", "frostbound_oracle"]
+
 
 def _load_monster_sheet(name: str) -> Canvas | None:
     """外で描いた敵の絵を読む。無ければ None（＝ ASCII マップから起こす）。
@@ -1278,6 +1289,28 @@ def _load_monster_sheet(name: str) -> Canvas | None:
         print(f"  取り込み: {name}.png（chara_image/{stem}.png）")
         return sheet
     return None
+
+
+## 外で描いた絵だけで成り立つ敵を書き出す。
+def build_imported_monsters() -> None:
+    for name in IMPORTED_MONSTERS:
+        sheet = _load_monster_sheet(name)
+        if sheet is not None:
+            sheet.to_png(ASSETS / "sprites" / f"{name}.png")
+            sheet.scaled(4).to_png(PREVIEW / f"{name}.png")
+    for name in IMPORTED_BOSSES:
+        path = HERO_SOURCE_DIR / f"candidate_boss_{name}.png"
+        if not path.exists():
+            continue
+        sheet, moved = _quantize(load_png(path))
+        _verify_sheet(f"candidate_boss_{name}", sheet, (sheet.w, sheet.h))
+        if sheet.w > MONSTER_MAX[0] or sheet.h > MONSTER_MAX[1]:
+            raise ValueError("candidate_boss_%s: %dx%d は大きすぎる" % (name, sheet.w, sheet.h))
+        if moved:
+            print(f"    candidate_boss_{name}: {moved} 色を BGR555 へ丸めた")
+        sheet.to_png(ASSETS / "sprites" / f"{name}.png")
+        sheet.scaled(4).to_png(PREVIEW / f"{name}.png")
+        print(f"  取り込み: {name}.png（chara_image/candidate_boss_{name}.png）")
 
 
 def _emit_monster(name: str, half: Canvas) -> None:
@@ -1424,6 +1457,7 @@ def main() -> None:
     build_monster("shade", SHADE_HALF, SHADE, width=24)
     build_monster("golem", GOLEM_HALF, GOLEM, width=24)
     build_monster("warden", WARDEN_HALF, WARDEN, width=32)
+    build_imported_monsters()
     build_window()
     build_cursor()
     print("生成完了:")

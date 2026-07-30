@@ -17,14 +17,24 @@ signal battle_finished(victory: bool)
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
-const SPRITES := {
-	"gel": preload("res://assets/sprites/gel.png"),
-	"bat": preload("res://assets/sprites/bat.png"),
-	"skull": preload("res://assets/sprites/skull.png"),
-	"shade": preload("res://assets/sprites/shade.png"),
-	"golem": preload("res://assets/sprites/golem.png"),
-	"warden": preload("res://assets/sprites/warden.png"),
-}
+## 敵の絵。数が増えたので preload の列挙はやめ、初回に読んで覚えておく。
+## _draw() の中で読むと、読み込み中の白い板が描かれてしまう。
+const FALLBACK_SPRITE := "gel"
+
+static var _sprites: Dictionary = {}
+
+
+static func sprite_of(name: String) -> Texture2D:
+	if _sprites.has(name):
+		return _sprites[name]
+	var path := "res://assets/sprites/%s.png" % name
+	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+	if tex == null:
+		# 絵が無い敵はデータの取りこぼし。落とさずに代わりを出し、テストで拾う。
+		push_warning("敵の絵が無い: %s" % name)
+		tex = load("res://assets/sprites/%s.png" % FALLBACK_SPRITE)
+	_sprites[name] = tex
+	return tex
 
 const MESSAGE_RECT := Rect2(8, 176, 496, 66)
 const STATUS_RECT := Rect2(8, 248, 496, 64)
@@ -693,7 +703,7 @@ func _draw_enemies() -> void:
 		# ダメージの数字が出るより先に「どこに効いたか」が分かる。
 		if _blink > 0.0 and b.id in system.last_hit_ids and fmod(_blink, 0.12) > 0.06:
 			continue
-		var tex: Texture2D = SPRITES.get(b.sprite, SPRITES["gel"])
+		var tex: Texture2D = sprite_of(b.sprite)
 		var pos := Vector2(spacing * (i + 1) - tex.get_width() * 0.5, ENEMY_BASELINE - tex.get_height())
 		draw_texture(tex, pos.floor())
 

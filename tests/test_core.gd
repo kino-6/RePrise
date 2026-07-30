@@ -26,6 +26,7 @@ func _initialize() -> void:
 	_test_docs_hygiene()
 	_test_data_integrity()
 	_test_save_migration()
+	_test_roster()
 	_test_dungeon_route()
 	_test_text_wrap()
 	_test_database_loaded()
@@ -339,6 +340,26 @@ func _test_data_integrity() -> void:
 		print("    語彙の外: " + ", ".join(bad_target))
 	_check("技の対象と系統が語彙の中にある", bad_target.is_empty())
 
+	# 敵の絵がある（敵を足して絵を忘れると、戦闘で別の敵が出たまま気づかない）
+	var no_enemy_sprite: Array[String] = []
+	for monster_id in Database.all_monsters().keys():
+		var sprite := String(Database.monster(String(monster_id)).get("sprite", ""))
+		if not ResourceLoader.exists("res://assets/sprites/%s.png" % sprite):
+			no_enemy_sprite.append("%s -> %s" % [monster_id, sprite])
+	if not no_enemy_sprite.is_empty():
+		print("    敵の絵が無い: " + ", ".join(no_enemy_sprite))
+	_check("すべての敵に絵がある", no_enemy_sprite.is_empty())
+
+	# 敵の技も実在するか
+	var bad_monster_ability: Array[String] = []
+	for monster_id in Database.all_monsters().keys():
+		for ability_id in Database.monster(String(monster_id)).get("abilities", []):
+			if Database.ability(String(ability_id)).is_empty():
+				bad_monster_ability.append("%s -> %s" % [monster_id, ability_id])
+	if not bad_monster_ability.is_empty():
+		print("    存在しない敵の技: " + ", ".join(bad_monster_ability))
+	_check("敵の技がすべて実在する", bad_monster_ability.is_empty())
+
 	# 立ち絵がある（職業を足して絵を忘れると、拠点で欠けたまま気づかない）
 	var no_sprite: Array[String] = []
 	for job_id in Database.job_ids():
@@ -347,6 +368,53 @@ func _test_data_integrity() -> void:
 	if not no_sprite.is_empty():
 		print("    立ち絵が無い職業: " + ", ".join(no_sprite))
 	_check("すべての職業に立ち絵がある", no_sprite.is_empty())
+
+
+## 控えと編成。名簿が伸びても「連れて行くのは 4 人」が崩れないことを見る。
+func _test_roster() -> void:
+	var state: Node = load("res://src/game/game_state.gd").new()
+	state.load_from_dict({
+		"version": 2,
+		"echo": 200,
+		"roster": [
+			{"name": "あ", "job_id": "soldier"}, {"name": "い", "job_id": "priest"},
+			{"name": "う", "job_id": "mage"}, {"name": "え", "job_id": "thief"},
+		],
+	})
+	_check("指定が無ければ先頭 4 人が出撃する", state.active_party().size() == 4)
+
+	var before: int = state.roster.size()
+	var echo_before: int = state.echo
+	var joined: Variant = state.recruit()
+	_check("仲間を迎えられる", joined != null and state.roster.size() == before + 1)
+	_check("恒久通貨を払う", state.echo < echo_before)
+	_check("迎えても出撃は 4 人のまま", state.active_party().size() == 4)
+
+	# 迎えた 5 人目を入れるには、誰かを外さないといけない
+	_check("5 人目はそのままでは入らない", not state.toggle_active(4))
+	_check("外せる", state.toggle_active(0))
+	_check("空いたので入る", state.toggle_active(4))
+	_check("入れ替えても 4 人", state.active_party().size() == 4)
+	_check("外した者は出撃しない", not state.is_active(0))
+
+	# 全員外すことはできない（誰も居ないランは始められない）
+	for i in [1, 2, 3]:
+		state.toggle_active(i)
+	_check("最後の 1 人は外せない", state.active_party().size() >= 1)
+
+	# 書いて読み直しても編成が残る
+	var again: Node = load("res://src/game/game_state.gd").new()
+	again.load_from_dict(state.to_dict())
+	_check("編成がセーブに残る", again.active_indices == state.active_indices)
+
+	# 上限まで迎えたら止まる
+	while again.can_recruit():
+		again.echo = 999
+		again.recruit()
+	_check("名簿には上限がある", not again.can_recruit())
+
+	state.free()
+	again.free()
 
 
 ## セーブの移行。version を上げたときに古いセーブが読めるかは、

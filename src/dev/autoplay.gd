@@ -45,6 +45,7 @@ var _stuck_report: Array[String] = []
 var _deepest := 1
 var _battles := 0
 var _runs := 0
+var _equipped := 0
 
 
 func start(main_node: Node, seconds: float, seed_value: int = 12345) -> void:
@@ -72,6 +73,8 @@ func _process(delta: float) -> void:
 
 	_elapsed += delta
 	_track_mode(delta)
+	if _main != null and _main.has_method("dev_equipped_count"):
+		_equipped = maxi(_equipped, int(_main.dev_equipped_count()))
 
 	_input_timer -= delta
 	if _input_timer <= 0.0:
@@ -230,4 +233,5 @@ func _report() -> void:
 	print("最深      : 地下 %d 階" % _deepest)
 	print("戦闘      : %d 回" % _battles)
 	print("ランの終了 : %d 回" % _runs)
+	print("装備      : 最大 %d 個" % _equipped)
 	print("コマ: %s に %d 枚" % [SHOT_DIR, _shot_index])

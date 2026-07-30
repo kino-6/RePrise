@@ -35,6 +35,7 @@ const PRICE := "ひつよう"
 const MAXED := "きわみ"
 
 # --- 拠点の見出し ---
+const PARTY := "へんせい"
 const UPGRADE := "アップグレード"
 const DEPART := "出撃する"
 

@@ -121,6 +121,14 @@ func dev_status() -> String:
 	return dev_mode_name()
 
 
+## 開発用。パーティが身に着けている装備の数。自動プレイの集計に使う。
+func dev_equipped_count() -> int:
+	var total := 0
+	for m in GameState.active_party():
+		total += m.equipment.size()
+	return total
+
+
 ## 開発用。この階の出口（階段、最終階なら主の間の扉）へ向かう次の一歩。
 ## 自動プレイがこれで階を降りる。届かなければ空文字。
 func dev_step_to_exit() -> String:
@@ -209,6 +217,10 @@ func _capture(which: String) -> void:
 			GameState.add_gear("flame_dagger")
 			_open_menu()
 			menu.debug_open_equip()
+		"party":
+			_enter_stronghold()
+			GameState.echo = 90
+			stronghold.debug_open_party()
 		"upgrade":
 			_enter_stronghold()
 			GameState.echo = 42
@@ -349,13 +361,35 @@ func _fade_to(mode: Mode) -> void:
 	_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
 
 
+## 遭遇の演出。白く 2 回瞬かせてから戦闘へ移る。
+##
+## 暗転だけだと「画面が切り替わった」で終わってしまう。SFC 期の遭遇は
+## 必ず画面全体に一撃入れてから戦闘に入っていて、それが緊張の合図になっていた。
+func _flash_into_battle() -> void:
+	if _curtain == null:
+		_set_mode(Mode.BATTLE)
+		return
+	_cancel_fade()
+	_curtain.color = Color(1, 1, 1, 0)
+	_fade_tween = create_tween()
+	for _i in 2:
+		_fade_tween.tween_property(_curtain, "color:a", 0.85, 0.05)
+		_fade_tween.tween_property(_curtain, "color:a", 0.0, 0.06)
+	# 幕を黒に戻してから暗転で入る（白のまま暗転すると眩しいだけになる）
+	_fade_tween.tween_callback(func() -> void: _curtain.color = Color(0, 0, 0, 0))
+	_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
+	_fade_tween.tween_callback(_apply_mode.bind(Mode.BATTLE))
+	_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
+
+
 ## 飛んでいる暗転を捨てて幕を上げる。
 func _cancel_fade() -> void:
 	if _fade_tween != null and _fade_tween.is_valid():
 		_fade_tween.kill()
 	_fade_tween = null
 	if _curtain != null:
-		_curtain.color.a = 0.0
+		# 幕は黒に戻す。白のまま残すと次の暗転が白飛びになる。
+		_curtain.color = Color(0, 0, 0, 0)
 
 
 ## 画面を切り替える（暗転なし）。
@@ -438,7 +472,7 @@ func _begin_battle(foes: Array[Battler], is_boss: bool) -> void:
 	Sound.play("encounter")
 	Sound.play_bgm("battle")
 	battle.start(system, members)
-	_fade_to(Mode.BATTLE)
+	_flash_into_battle()
 
 
 func _on_battle_finished(victory: bool) -> void:

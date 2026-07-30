@@ -198,5 +198,430 @@
     "steal": {
       "rare": "elixir"
     }
+  },
+  "arcane_hound": {
+    "name": "まどうりょうけん",
+    "sprite": "arcane_hound",
+    "hp": 24,
+    "mp": 0,
+    "atk": 9,
+    "def": 4,
+    "agi": 22,
+    "cost_scale": 70,
+    "exp": 14,
+    "gold": 7,
+    "abilities": [
+      "attack",
+      "quick_stab"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [],
+    "steal": {
+      "common": "herb"
+    },
+    "floor_min": 1,
+    "floor_max": 5
+  },
+  "lantern_mimic": {
+    "name": "くらいあかり",
+    "sprite": "lantern_mimic",
+    "hp": 30,
+    "mp": 6,
+    "atk": 9,
+    "def": 10,
+    "agi": 6,
+    "cost_scale": 125,
+    "exp": 20,
+    "gold": 26,
+    "abilities": [
+      "attack",
+      "poison_blade"
+    ],
+    "weak": [
+      "ice"
+    ],
+    "resist": [
+      "fire"
+    ],
+    "steal": {
+      "common": "water",
+      "rare": "elixir"
+    },
+    "floor_min": 2,
+    "floor_max": 6
+  },
+  "plague_moth": {
+    "name": "えきが",
+    "sprite": "plague_moth",
+    "hp": 22,
+    "mp": 14,
+    "atk": 7,
+    "def": 4,
+    "agi": 18,
+    "cost_scale": 85,
+    "exp": 16,
+    "gold": 8,
+    "abilities": [
+      "attack",
+      "poison_blade",
+      "smoke"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [],
+    "steal": {
+      "common": "herb"
+    },
+    "floor_min": 2,
+    "floor_max": 6
+  },
+  "ruin_automaton": {
+    "name": "いせききへい",
+    "sprite": "ruin_automaton",
+    "hp": 62,
+    "mp": 0,
+    "atk": 12,
+    "def": 16,
+    "agi": 8,
+    "cost_scale": 140,
+    "exp": 40,
+    "gold": 24,
+    "abilities": [
+      "attack",
+      "power_slash"
+    ],
+    "weak": [],
+    "resist": [
+      "ice",
+      "bolt"
+    ],
+    "steal": {
+      "common": "herb"
+    },
+    "floor_min": 5,
+    "floor_max": 9
+  },
+  "frost_stalker": {
+    "name": "ひょうがじゅう",
+    "sprite": "frost_stalker",
+    "hp": 42,
+    "mp": 10,
+    "atk": 13,
+    "def": 7,
+    "agi": 24,
+    "cost_scale": 70,
+    "exp": 38,
+    "gold": 16,
+    "abilities": [
+      "attack",
+      "quick_stab",
+      "frost"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [
+      "ice"
+    ],
+    "steal": {
+      "common": "water"
+    },
+    "floor_min": 5,
+    "floor_max": 9
+  },
+  "mire_oracle": {
+    "name": "ぬまのめ",
+    "sprite": "mire_oracle",
+    "hp": 42,
+    "mp": 30,
+    "atk": 9,
+    "def": 7,
+    "agi": 14,
+    "cost_scale": 115,
+    "exp": 42,
+    "gold": 20,
+    "abilities": [
+      "attack",
+      "slow",
+      "lull",
+      "frost"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "dark"
+    ],
+    "steal": {
+      "common": "water",
+      "rare": "feather"
+    },
+    "floor_min": 5,
+    "floor_max": 10
+  },
+  "fungal_knight": {
+    "name": "きんがいきし",
+    "sprite": "fungal_knight",
+    "hp": 68,
+    "mp": 8,
+    "atk": 12,
+    "def": 19,
+    "agi": 9,
+    "cost_scale": 135,
+    "exp": 48,
+    "gold": 26,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "bulwark"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [
+      "dark"
+    ],
+    "steal": {
+      "common": "herb"
+    },
+    "floor_min": 6,
+    "floor_max": 10
+  },
+  "ember_wraith": {
+    "name": "ほむらぼうれい",
+    "sprite": "ember_wraith",
+    "hp": 46,
+    "mp": 34,
+    "atk": 11,
+    "def": 8,
+    "agi": 17,
+    "cost_scale": 120,
+    "exp": 50,
+    "gold": 24,
+    "abilities": [
+      "attack",
+      "fire",
+      "blast"
+    ],
+    "weak": [
+      "ice"
+    ],
+    "resist": [
+      "fire",
+      "dark"
+    ],
+    "steal": {
+      "common": "water",
+      "rare": "elixir"
+    },
+    "floor_min": 6,
+    "floor_max": 10
+  },
+  "crystal_drake": {
+    "name": "しょうりんりゅう",
+    "sprite": "crystal_drake",
+    "hp": 89,
+    "mp": 28,
+    "atk": 18,
+    "def": 15,
+    "agi": 13,
+    "cost_scale": 130,
+    "exp": 74,
+    "gold": 44,
+    "abilities": [
+      "attack",
+      "frost",
+      "whirlwind"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [
+      "ice"
+    ],
+    "steal": {
+      "common": "elixir"
+    },
+    "floor_min": 8,
+    "floor_max": 10
+  },
+  "void_scribe": {
+    "name": "きょじじゅつし",
+    "sprite": "void_scribe",
+    "hp": 62,
+    "mp": 40,
+    "atk": 14,
+    "def": 11,
+    "agi": 18,
+    "cost_scale": 125,
+    "exp": 70,
+    "gold": 40,
+    "abilities": [
+      "attack",
+      "lull",
+      "slow",
+      "frost"
+    ],
+    "weak": [
+      "bolt"
+    ],
+    "resist": [
+      "dark"
+    ],
+    "steal": {
+      "common": "water",
+      "rare": "feather"
+    },
+    "floor_min": 8,
+    "floor_max": 10
+  },
+  "chain_ogre": {
+    "name": "くさりおに",
+    "sprite": "chain_ogre",
+    "hp": 111,
+    "mp": 0,
+    "atk": 21,
+    "def": 14,
+    "agi": 6,
+    "cost_scale": 165,
+    "exp": 80,
+    "gold": 48,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "whirlwind"
+    ],
+    "weak": [
+      "ice"
+    ],
+    "resist": [
+      "fire"
+    ],
+    "steal": {
+      "common": "herb"
+    },
+    "floor_min": 8,
+    "floor_max": 10
+  },
+  "shattered_seraph": {
+    "name": "かけたてんし",
+    "sprite": "shattered_seraph",
+    "hp": 93,
+    "mp": 30,
+    "atk": 19,
+    "def": 16,
+    "agi": 15,
+    "cost_scale": 125,
+    "exp": 86,
+    "gold": 52,
+    "abilities": [
+      "attack",
+      "smite"
+    ],
+    "weak": [
+      "dark"
+    ],
+    "resist": [
+      "bolt"
+    ],
+    "steal": {
+      "rare": "elixir"
+    },
+    "floor_min": 9,
+    "floor_max": 10
+  },
+  "thorn_crowned_king": {
+    "name": "けいかんのこおう",
+    "sprite": "thorn_crowned_king",
+    "boss": true,
+    "hp": 640,
+    "mp": 40,
+    "atk": 48,
+    "def": 24,
+    "agi": 14,
+    "cost_scale": 130,
+    "exp": 400,
+    "gold": 300,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "whirlwind",
+      "lull"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [
+      "ice"
+    ],
+    "steal": {
+      "rare": "elixir"
+    },
+    "floor_min": 10,
+    "floor_max": 10
+  },
+  "crucible_colossus": {
+    "name": "ろしんきょぞう",
+    "sprite": "crucible_colossus",
+    "boss": true,
+    "hp": 700,
+    "mp": 40,
+    "atk": 54,
+    "def": 26,
+    "agi": 11,
+    "cost_scale": 150,
+    "exp": 400,
+    "gold": 300,
+    "abilities": [
+      "attack",
+      "power_slash",
+      "blast",
+      "whirlwind"
+    ],
+    "weak": [
+      "ice"
+    ],
+    "resist": [
+      "fire"
+    ],
+    "steal": {
+      "rare": "elixir"
+    },
+    "floor_min": 10,
+    "floor_max": 10
+  },
+  "frostbound_oracle": {
+    "name": "ひょうそうのしんたく",
+    "sprite": "frostbound_oracle",
+    "boss": true,
+    "hp": 560,
+    "mp": 90,
+    "atk": 44,
+    "def": 20,
+    "agi": 18,
+    "cost_scale": 115,
+    "exp": 400,
+    "gold": 300,
+    "abilities": [
+      "attack",
+      "frost",
+      "lull",
+      "slow",
+      "mass_heal"
+    ],
+    "weak": [
+      "fire"
+    ],
+    "resist": [
+      "ice"
+    ],
+    "steal": {
+      "rare": "elixir"
+    },
+    "floor_min": 10,
+    "floor_max": 10
   }
 }

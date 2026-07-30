@@ -77,8 +77,102 @@ func _build_default_roster() -> Array[PartyMember]:
 
 
 ## 出撃する 4 人。今は名簿の先頭 4 人固定だが、拠点 UI で選ばせる余地を残す。
+## 出撃する 4 人（名簿の添字）。
+##
+## 名簿が 4 人固定だと拠点の「出撃する」が選択にならない。控えを置いて、
+## 誰を連れて行くかを決めさせる。熟練度は職業ごと・本人ごとに積むので、
+## 「留守番させた者は育たない」が効いてくる。
+var active_indices: Array[int] = []
+
+## 迎えられる仲間の名前。使い切ったら番号を付ける。
+const RECRUIT_NAMES := ["ミナ", "ルカ", "トア", "シオ", "ヤト", "リン", "クド", "エマ"]
+
+## 仲間を迎える値段。1 人増えるごとに上がる（無限に増やせると編成が意味を失う）。
+const RECRUIT_BASE_PRICE := 24
+const RECRUIT_STEP := 18
+const ROSTER_LIMIT := 8
+
+
 func active_party() -> Array[PartyMember]:
-	return roster.slice(0, PARTY_SIZE)
+	_ensure_active_indices()
+	var party: Array[PartyMember] = []
+	for i in active_indices:
+		if i >= 0 and i < roster.size():
+			party.append(roster[i])
+	return party
+
+
+## 選ばれていない者を含む名簿の全員。拠点の編成画面で使う。
+func all_members() -> Array[PartyMember]:
+	return roster
+
+
+func is_active(index: int) -> bool:
+	return index in active_indices
+
+
+## 出撃するかどうかを切り替える。4 人を超えるときと 1 人未満になるときは断る。
+func toggle_active(index: int) -> bool:
+	_ensure_active_indices()
+	if index < 0 or index >= roster.size():
+		return false
+	if index in active_indices:
+		if active_indices.size() <= 1:
+			return false
+		active_indices.erase(index)
+		return true
+	if active_indices.size() >= PARTY_SIZE:
+		return false
+	active_indices.append(index)
+	# 並び順は名簿順に揃える（選んだ順で前衛が変わると分かりにくい）
+	active_indices.sort()
+	return true
+
+
+func recruit_price() -> int:
+	return RECRUIT_BASE_PRICE + RECRUIT_STEP * maxi(roster.size() - PARTY_SIZE, 0)
+
+
+func can_recruit() -> bool:
+	return roster.size() < ROSTER_LIMIT
+
+
+## 仲間を迎える。恒久通貨で払う（ランをまたいで残る買い物なので）。
+## 職業は基本職から選ぶ。上級職は本人が熟練を積んで解放するもの。
+func recruit() -> PartyMember:
+	if not can_recruit() or echo < recruit_price():
+		return null
+	echo -= recruit_price()
+	var index := roster.size()
+	var member_name := String(RECRUIT_NAMES[index % RECRUIT_NAMES.size()])
+	if index >= RECRUIT_NAMES.size():
+		member_name += str(index / RECRUIT_NAMES.size() + 1)
+	# 職業は名簿の人数で決める（乱数を使わない＝同じ手順から同じ結果）
+	const STARTING_JOBS := ["soldier", "priest", "mage", "thief"]
+	var job := String(STARTING_JOBS[index % STARTING_JOBS.size()])
+	var member := PartyMember.create(member_name, job)
+	roster.append(member)
+	save_game()
+	return member
+
+
+## 出撃メンバーが未設定・壊れているときに整える。
+## 古いセーブには active_indices が無いので、先頭 4 人に落ちる。
+func _ensure_active_indices() -> void:
+	var valid: Array[int] = []
+	for i in active_indices:
+		if i >= 0 and i < roster.size() and i not in valid:
+			valid.append(i)
+	active_indices = valid
+	# 足りないぶんを埋めるのは**空のときだけ**。
+	# 減ったら毎回埋め直すと、外した者がすぐ戻ってきて編成ができない
+	# （実際にテストがそれを捕まえた）。
+	if active_indices.is_empty():
+		var at := 0
+		while active_indices.size() < mini(PARTY_SIZE, roster.size()) and at < roster.size():
+			active_indices.append(at)
+			at += 1
+	active_indices.sort()
 
 
 # --------------------------------------------------------------------------
@@ -388,6 +482,7 @@ func to_dict() -> Dictionary:
 		"echo": echo,
 		"upgrades": upgrades,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
+		"active": active_indices,
 	}
 
 
@@ -402,6 +497,11 @@ func load_from_dict(data: Dictionary) -> bool:
 	roster.clear()
 	for entry in data.get("roster", []):
 		roster.append(PartyMember.from_dict(entry))
+	# 古いセーブには出撃メンバーの指定が無い。先頭 4 人に落ちる。
+	active_indices.clear()
+	for i in data.get("active", []):
+		active_indices.append(int(i))
+	_ensure_active_indices()
 	return not roster.is_empty()
 
 
