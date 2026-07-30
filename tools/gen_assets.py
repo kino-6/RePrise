@@ -1297,6 +1297,23 @@ def _load_sheet(stem: str, size: tuple[int, int]) -> Canvas | None:
     return sheet
 
 
+## 町の人。**主人公の絵を借りない。**
+##
+## 借りていたときは、町の中に自分と同じ姿が 4 人立っていた。
+## 24x32 の 1 コマだけなので歩行はしないが、町に居るのは立ち止まっている人。
+NPC_ROLES = ["innkeeper", "merchant", "elder", "scout", "guard"]
+
+
+def build_npcs() -> None:
+    for role in NPC_ROLES:
+        sheet = _load_sheet(f"candidate_npc_{role}", (24, 32))
+        if sheet is None:
+            continue
+        sheet.to_png(ASSETS / "sprites" / f"npc_{role}.png")
+        sheet.scaled(4).to_png(PREVIEW / f"npc_{role}.png")
+        print(f"  取り込み: npc_{role}.png")
+
+
 def build_heroes() -> None:
     """職業ごとに 1 枚。歩行 3 フレーム x 4 方向を 72x128 のシートにまとめる。
 
@@ -1868,6 +1885,7 @@ def main() -> None:
     build_tileset()
     build_world_tileset()
     build_biomes()
+    build_npcs()
     build_heroes()
     build_blob("gel", GEL, width=24, height=40)
     build_monster("bat", BAT_HALF, BAT, width=24)

@@ -629,12 +629,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_pressed() or event.is_echo():
 		return
 
-	# オートは A キーで、**どの階層からでも**切り替えられる。
-	# コマンド欄の末尾まで下がらないと触れないと、連戦のたびに 6 回下げる
-	# ことになる。止め方も同じキーなので、入り方と出方が対称になる。
-	if event.is_action_pressed("auto") and _state in [State.COMMAND, State.LIST, State.TARGET]:
+	# オートは Ｑキーで、**いつでも**切り替えられる。
+	#
+	# 直したところが 2 つある。
+	#   * 最初は A に割り当てたが、A は WASD の「左」でもあるので取り合いになった。
+	#   * 状態を COMMAND / LIST / TARGET に限っていたが、**オートが動き出すと
+	#     その状態を外れる**ので、一度入れたら二度と切り替えられなかった。
+	#     切り替えは戦闘中いつでも通す（止め方が無いオートは信用されない）。
+	if event.is_action_pressed("auto"):
 		Sound.play("confirm")
-		_state = State.COMMAND
 		_cycle_auto()
 		return
 
@@ -850,7 +853,7 @@ func _draw_message_or_command() -> void:
 	if _auto != AutoTactic.Mode.OFF:
 		PixelUI.draw_text_right(
 			self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.position.y + 6),
-			"%s　Ａで きりかえ　Ｘで かいじょ" % AutoTactic.label(_auto), PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
+			"%s　Ｑで きりかえ　Ｘで かいじょ" % AutoTactic.label(_auto), PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
 		)
 		# 何を基準に動いているかを出す。基準が見えないと「連打しているだけ」に見える。
 		PixelUI.draw_text_right(

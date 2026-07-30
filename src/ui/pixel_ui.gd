@@ -47,6 +47,69 @@ const C_HP_OK := Color8(0x38, 0xB4, 0x6C)
 const C_HP_LOW := Color8(0xE0, 0x60, 0x30)
 const C_MP := Color8(0x4A, 0x78, 0xC8)
 
+# --------------------------------------------------------------------------
+# はみ出し検出（`--ui-check` を付けたときだけ働く）
+#
+# 「枠から文字がはみ出ている」は何度も出た。目で見て気づける類ではあるが、
+# 画面が増えるほど見落とすし、直したあとに別の画面で再発する。
+# **測る側を用意して、機械に見つけさせる。**
+#
+# 仕組みは単純で、`draw_window` が描いた窓の内側を覚えておき、
+# `draw_text` のたびに「文字の始点を含む窓」を探して、文字の右端と下端が
+# その内側に収まっているかを見る。呼び出し側は 1 行も変えなくてよい。
+# --------------------------------------------------------------------------
+
+## 枠からの許容（1px は詰めすぎの調整で出るので許す）。
+const OVERFLOW_SLACK := 1.5
+
+static var _ui_check := -1
+static var _windows: Array[Rect2] = []
+static var _violations: Array[String] = []
+
+
+static func ui_check_enabled() -> bool:
+	if _ui_check < 0:
+		_ui_check = 1 if "--ui-check" in OS.get_cmdline_user_args() else 0
+	return _ui_check == 1
+
+
+## 検出した違反の一覧（撮影やテストが読む）。
+static func ui_violations() -> Array[String]:
+	return _violations
+
+
+static func ui_check_reset() -> void:
+	_windows.clear()
+	_violations.clear()
+
+
+## 文字が窓の内側に収まっているかを見る。
+static func _note_text(top_left: Vector2, text: String, size: int) -> void:
+	if not ui_check_enabled() or text.strip_edges() == "":
+		return
+	var extent := font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size)
+	var box := Rect2(top_left, extent)
+	# 始点を含むいちばん小さい窓を相手にする（窓が重なっている画面があるため）。
+	var host := Rect2()
+	var found := false
+	for w in _windows:
+		if not w.has_point(top_left + Vector2(1, 1)):
+			continue
+		if not found or w.get_area() < host.get_area():
+			host = w
+			found = true
+	if not found:
+		return  # 窓の外に直接置いている文字（HUD の見出しなど）は対象外
+	var over_x := box.end.x - host.end.x
+	var over_y := box.end.y - host.end.y
+	if over_x > OVERFLOW_SLACK or over_y > OVERFLOW_SLACK:
+		var note := "「%s」が %.0fx%.0f はみ出し（窓 %s）" % [
+			text.substr(0, 18), maxf(over_x, 0.0), maxf(over_y, 0.0), str(host)
+		]
+		if note not in _violations:
+			_violations.append(note)
+
+
 static var _font: Font = null
 
 
@@ -70,6 +133,7 @@ static func draw_text(
 	canvas: CanvasItem, top_left: Vector2, text: String,
 	color: Color = C_TEXT, size: int = SIZE_TEXT
 ) -> void:
+	_note_text(top_left, text, size)
 	var at := Vector2(top_left.x, top_left.y + font().get_ascent(size)).floor()
 	canvas.draw_string(font(), at + Vector2.ONE, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, C_SHADOW)
 	canvas.draw_string(font(), at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
@@ -169,6 +233,11 @@ const WINDOW_SHADOW := Vector2(3, 3)
 static func draw_window(
 	canvas: CanvasItem, rect: Rect2, texture: Texture2D, alpha: float = WINDOW_ALPHA
 ) -> void:
+	if ui_check_enabled():
+		var seen := content(rect)
+		if seen not in _windows:
+			_windows.append(seen)
+
 	# 1. 落ち影。背景の上に置かれている、と読めるようにする。
 	canvas.draw_rect(
 		Rect2(rect.position + WINDOW_SHADOW, rect.size), Color(0.0, 0.0, 0.03, alpha * 0.5), true

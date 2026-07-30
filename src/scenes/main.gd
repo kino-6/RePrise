@@ -422,6 +422,14 @@ func _capture(which: String) -> void:
 	DirAccess.make_dir_recursive_absolute("res://docs/preview")
 	image.save_png(path)
 	print("撮影: %s (%dx%d)" % [path, image.get_width(), image.get_height()])
+	# はみ出しの検出結果。--ui-check を付けたときだけ出る。
+	if PixelUI.ui_check_enabled():
+		var bad := PixelUI.ui_violations()
+		if bad.is_empty():
+			print("  はみ出し: なし")
+		else:
+			for note in bad:
+				print("  はみ出し: %s" % note)
 	get_tree().quit()
 
 

@@ -540,8 +540,10 @@ func _draw_jobs() -> void:
 			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
 		var label := _job_name(job_id) if not locked else _job_name(job_id) + "×"
 		PixelUI.draw_text(self, at, label, tint)
-		PixelUI.draw_text(
-			self, at + Vector2(104, 2),
+		# ★ は列の右端で揃える。左から固定だと 4 つ並んだとき枠を越える
+		# （tools/check_ui.py が 12px のはみ出しを検出した）。
+		PixelUI.draw_text_right(
+			self, Vector2(at.x + 138.0, at.y + 2),
 			"★".repeat(member.mastery_rank(job_id)), tint, PixelUI.SIZE_SUB
 		)
 

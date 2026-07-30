@@ -338,9 +338,10 @@ func _draw() -> void:
 			var tex := _folk_texture(String(town.folk[pos].get("kind", "")))
 			if tex == null:
 				continue
+			# NPC は 24x32 の 1 コマ（歩かないので切り出しは先頭だけ）。
 			draw_texture_rect_region(
 				tex, Rect2((Vector2(who * TILE) + CHAR_OFFSET).floor(), Vector2(CHAR_W, CHAR_H)),
-				Rect2(CHAR_W, 0, CHAR_W, CHAR_H)
+				Rect2(0, 0, CHAR_W, CHAR_H)
 			)
 
 	if hero_tex == null:
@@ -353,9 +354,13 @@ func _draw() -> void:
 	)
 
 
-## 町の人の見た目。役ごとに違う職業の絵を借りる（新しい絵を起こさない）。
+## 町の人の見た目。**専用の絵を使う（主人公の絵を借りない）。**
+##
+## 借りていたときは、町の中に自分と同じ姿が 4 人立っていた。
+## 原本は docs/chara_image/candidate_npc_*.png。
 const FOLK_LOOKS := {
-	"keeper": "soldier", "trader": "thief", "elder": "priest", "child": "mage",
+	"keeper": "innkeeper", "trader": "merchant", "elder": "elder",
+	"child": "scout", "guard": "guard",
 }
 
 static var _folk_tex: Dictionary = {}
@@ -364,7 +369,7 @@ static var _folk_tex: Dictionary = {}
 func _folk_texture(kind: String) -> Texture2D:
 	if _folk_tex.has(kind):
 		return _folk_tex[kind]
-	var path := "res://assets/sprites/hero_%s.png" % String(FOLK_LOOKS.get(kind, "soldier"))
+	var path := "res://assets/sprites/npc_%s.png" % String(FOLK_LOOKS.get(kind, "innkeeper"))
 	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
 	_folk_tex[kind] = tex
 	return tex
