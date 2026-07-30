@@ -1060,10 +1060,7 @@ func _draw_message_or_command() -> void:
 		# オート中は右上に作戦を出しているので、その幅ぶん狭めて折り返す
 		# （切らずに置いたら 42px 重なった）。
 		var width := 300.0 if _auto != AutoTactic.Mode.OFF else 460.0
-		PixelUI.draw_text(
-			self, origin + Vector2(0, i * 19),
-			PixelUI.clip(_shown[i], width, PixelUI.SIZE_TEXT), PixelUI.C_TEXT
-		)
+		_cell(origin + Vector2(0, i * 19), width).line(_shown[i], PixelUI.C_TEXT)
 
 	# オート中は止め方を出す。始め方だけ見えていて止め方が見えないのは不親切で、
 	# 「戻れなくなった」と思われる。
@@ -1115,6 +1112,11 @@ func _draw_root_menu(origin: Vector2) -> void:
 ## 技一覧の列幅。**合計は窓の内側に収める。**
 ## 固定のオフセット（150 / 192）で置いていた頃と同じ位置だが、
 ## いまは幅として渡すので、長い技名はその列の中で詰まる。
+## 味方 1 人ぶんの持ち幅と、そのうち名前に使える幅。
+## 4 人が横に並ぶので、はみ出すと隣の人の欄に見える。
+const ALLY_COL_W := 112.0
+const ALLY_NAME_W := 62.0
+
 const LIST_NAME_W := 150.0
 const LIST_MP_W := 42.0
 const LIST_COST_W := 60.0
@@ -1216,21 +1218,21 @@ func _draw_party_status() -> void:
 			draw_texture(CURSOR_TEX, (base + Vector2(-12, 3)).floor())
 			name_color = PixelUI.C_ACTIVE
 
-		PixelUI.draw_text(self, base, b.name, name_color)
+		# **1 人ぶんの持ち幅は 112px。** 4 人が横に並ぶので、名前が長い人が
+		# 隣へ食い込むと誰の HP か分からなくなる。列として幅を渡す。
+		_cell(base, ALLY_NAME_W).line(b.name, name_color)
 		if _blink > 0.0 and system.last_hit_amount.has(b.id):
-			PixelUI.draw_text(
-				self, base + Vector2(0, -18), "-%d" % int(system.last_hit_amount[b.id]),
-				PixelUI.C_HP_LOW
-			)
+			_cell(base + Vector2(0, -18), ALLY_COL_W).line(
+				"-%d" % int(system.last_hit_amount[b.id]), PixelUI.C_HP_LOW)
 		var tag := b.status_tag()
 		if tag != "":
-			PixelUI.draw_text(self, base + Vector2(62, 2), tag, PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
-		PixelUI.draw_text(
-			self, base + Vector2(0, 20), "%d/%d" % [b.hp, b.max_hp],
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+			_cell(base + Vector2(ALLY_NAME_W, 2), ALLY_COL_W - ALLY_NAME_W).line(
+				tag, PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
+		_cell(base + Vector2(0, 20), 64.0).line(
+			"%d/%d" % [b.hp, b.max_hp], PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 		if b.max_mp > 0:
-			PixelUI.draw_text(self, base + Vector2(66, 20), "M%d" % b.mp, PixelUI.C_MP, PixelUI.SIZE_SUB)
+			_cell(base + Vector2(66, 20), ALLY_COL_W - 66.0).line(
+				"M%d" % b.mp, PixelUI.C_MP, PixelUI.SIZE_SUB)
 
 		var hp_ratio := float(b.hp) / maxf(float(b.max_hp), 1.0)
 		PixelUI.draw_gauge(self, Rect2(base.x, base.y + 38, 112, 5), hp_ratio, PixelUI.hp_color(hp_ratio))

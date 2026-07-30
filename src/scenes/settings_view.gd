@@ -332,7 +332,7 @@ func _draw() -> void:
 	PixelUI.draw_window(self, PANEL_RECT, WINDOW_TEX)
 	var origin := PixelUI.content(PANEL_RECT).position + Vector2(16, 4)
 
-	PixelUI.draw_text(self, origin, "せってい", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_wide(origin).line("せってい", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	if _keys_open:
 		_draw_keys(origin)
 	elif _erase_open:
@@ -345,17 +345,23 @@ func _draw() -> void:
 	PixelUI.draw_window(self, HINT_RECT, WINDOW_TEX)
 	var hint := PixelUI.content(HINT_RECT).position + Vector2(8, 0)
 	if _awaiting:
-		PixelUI.draw_text(self, hint, "割り当てたい キーを 押す", PixelUI.C_ACTIVE)
+		_wide(hint).line("割り当てたい キーを 押す", PixelUI.C_ACTIVE)
 	elif _keys_open:
-		PixelUI.draw_text(self, hint, "Ｚ で 割り当て　Ｘ で もどる", PixelUI.C_TEXT_DIM)
+		_wide(hint).line("Ｚ で 割り当て　Ｘ で もどる", PixelUI.C_TEXT_DIM)
 	elif _erase_open:
-		PixelUI.draw_text(self, hint, Terms.SAVE_ERASE_HINT, PixelUI.C_TEXT_DIM)
+		_wide(hint).line(Terms.SAVE_ERASE_HINT, PixelUI.C_TEXT_DIM)
 	elif _abandon_stage > 0:
 		PixelUI.draw_text(self, hint, Terms.RUN_ABANDON_HINT, PixelUI.C_TEXT_DIM)
 	elif _notice != "":
-		PixelUI.draw_text(self, hint, _notice, PixelUI.C_ACTIVE)
+		_wide(hint).line(_notice, PixelUI.C_ACTIVE)
 	else:
-		PixelUI.draw_text(self, hint, "←→ で かえる　Ｘ で とじる", PixelUI.C_TEXT_DIM)
+		_wide(hint).line("←→ で かえる　Ｘ で とじる", PixelUI.C_TEXT_DIM)
+
+
+## 幅いっぱいの 1 行。**文言を差し替えても溢れない**ようにするための包み。
+func _wide(at: Vector2) -> UiPanel:
+	return UiPanel.inside(self, Rect2(
+		at, Vector2(PixelUI.SCREEN.x - at.x - 24.0, PixelUI.LINE)))
 
 
 func _draw_root(origin: Vector2) -> void:
@@ -390,20 +396,17 @@ func _draw_root(origin: Vector2) -> void:
 
 
 func _draw_erase(origin: Vector2) -> void:
-	PixelUI.draw_text(
-		self, origin + Vector2(0, 36), Terms.SAVE_ERASE_QUESTION,
-		PixelUI.C_TEXT, PixelUI.SIZE_HEAD
-	)
-	PixelUI.draw_text(
-		self, origin + Vector2(0, 66), Terms.SAVE_ERASE_WARNING, PixelUI.C_ACTIVE
-	)
+	# 消去の確認は**外部化した文**（`Terms`）なので、長さを前提にしない。
+	_wide(origin + Vector2(0, 36)).line(
+		Terms.SAVE_ERASE_QUESTION, PixelUI.C_TEXT, PixelUI.SIZE_HEAD)
+	_wide(origin + Vector2(0, 66)).line(Terms.SAVE_ERASE_WARNING, PixelUI.C_ACTIVE)
 	for i in 2:
 		var at := origin + Vector2(0, 100 + i * ROW)
 		if i == _erase_index:
 			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		var label := Terms.SAVE_ERASE_CANCEL if i == 0 else Terms.SAVE_ERASE_EXECUTE
-		PixelUI.draw_text(
-			self, at, label, PixelUI.C_TEXT if i == _erase_index else PixelUI.C_TEXT_DIM
+		_wide(at).line(
+			label, PixelUI.C_TEXT if i == _erase_index else PixelUI.C_TEXT_DIM
 		)
 
 

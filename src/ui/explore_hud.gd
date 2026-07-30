@@ -53,10 +53,8 @@ func _draw() -> void:
 	# 封の残りを足したぶん、見出しの窓を広げる（3px 溢れていた）。
 	var head := Rect2(8, 8, 186, 32)
 	PixelUI.draw_window(self, head, WINDOW_TEX)
-	PixelUI.draw_text(
-		self, PixelUI.content(head).position + Vector2(6, 1),
-		place_label, PixelUI.C_TEXT
-	)
+	UiPanel.inside(self, PixelUI.content(head).grow(-4.0)).line(
+		place_label, PixelUI.C_TEXT)
 
 	# パーティの体力（探索中も常に見えていないと引き際が判断できない）
 	var status := Rect2(8, 268, 496, 44)
@@ -70,16 +68,20 @@ func _draw() -> void:
 		# 毒は歩くたびに削るので、探索中こそ見えていないといけない。
 		if m.poison_steps > 0 and m.hp > 0:
 			name_color = PixelUI.C_MP
-		PixelUI.draw_text(self, base, m.name, name_color)
-		if m.poison_steps > 0 and m.hp > 0:
-			PixelUI.draw_text(
-				self, base + Vector2(62, 2), "どく", PixelUI.C_HP_LOW, PixelUI.SIZE_SUB
-			)
-		var hp_at := Vector2(62, 2) if m.poison_steps <= 0 or m.hp <= 0 else Vector2(96, 2)
-		PixelUI.draw_text(
-			self, base + hp_at, "%d/%d" % [m.hp, m.max_hp()],
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+		# **1 人ぶんの持ち幅は 112px。** 4 人が横に並ぶので、名前が長い人が
+		# 隣の人へ食い込むと誰の HP か分からなくなる。列として幅を渡す。
+		var poisoned := m.poison_steps > 0 and m.hp > 0
+		UiPanel.inside(self, Rect2(
+			base, Vector2(58.0 if poisoned else 58.0, PixelUI.LINE)
+		)).line(m.name, name_color)
+		if poisoned:
+			UiPanel.inside(self, Rect2(
+				base + Vector2(62, 2), Vector2(30.0, PixelUI.LINE)
+			)).line("どく", PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
+		var hp_at := Vector2(62, 2) if not poisoned else Vector2(96, 2)
+		UiPanel.inside(self, Rect2(
+			base + hp_at, Vector2(112.0 - hp_at.x, PixelUI.LINE)
+		)).line("%d/%d" % [m.hp, m.max_hp()], PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 		PixelUI.draw_gauge(self, Rect2(base.x, base.y + 19, 112, 5), ratio, PixelUI.hp_color(ratio))
 
 	PixelUI.draw_notice(self, WINDOW_TEX, _toast, 212.0)
