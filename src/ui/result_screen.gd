@@ -84,8 +84,5 @@ func _draw() -> void:
 		body.paragraph(line)
 
 	if _ready_to_dismiss:
-		var tail := "Ｚキーで つぎの たびへ"
-		PixelUI.draw_text(
-			self, Vector2((PixelUI.SCREEN.x - PixelUI.text_width(tail)) * 0.5, 288),
-			tail, PixelUI.C_TEXT_DIM
-		)
+		PixelUI.draw_text_center(
+			self, 288, "Ｚキーで つぎの たびへ", PixelUI.C_TEXT_DIM)

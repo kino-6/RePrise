@@ -572,14 +572,11 @@ func _draw_jobs() -> void:
 	if member == null or _job_ids.is_empty():
 		return
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 2)
-	PixelUI.draw_text(
-		self, origin, "%s を てんしょく" % member.name, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
-	)
-	PixelUI.draw_text(
-		self, origin + Vector2(0, 24),
+	_note_head(origin).line(
+		"%s を てんしょく" % member.name, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_note_head(origin + Vector2(0, 24)).line(
 		"Lv%d のまま。おぼえた わざも のこる" % member.level,
-		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
+		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	var rows := int(ceil(_job_ids.size() / float(JOB_COLS)))
 	for i in _job_ids.size():
@@ -684,10 +681,9 @@ func _draw_status() -> void:
 		PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
 	)
 	if m.poison_steps > 0:
-		PixelUI.draw_text(
-			self, area.position + Vector2(232, 30), "どく",
-			PixelUI.C_HP_LOW, PixelUI.SIZE_SUB
-		)
+		UiPanel.inside(self, Rect2(
+			area.position + Vector2(232, 30), Vector2(48.0, PixelUI.LINE)
+		)).line("どく", PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
 
 	var mastery := "★".repeat(m.mastery_rank()) + "☆".repeat(
 		maxi(Database.job(m.job_id).get("mastery", []).size() - m.mastery_rank(), 0)
@@ -764,10 +760,10 @@ func _draw_equip() -> void:
 	var best_on := _slot_index == SLOTS.size()
 	if best_on and _state == State.SLOT:
 		MenuList.draw_cursor(self, CURSOR_TEX, best_at)
-	PixelUI.draw_text(
-		self, best_at + Vector2(76, -2), Terms.BEST_GEAR,
-		PixelUI.C_ACTIVE if best_on else PixelUI.C_TEXT_DIM
-	)
+	UiPanel.inside(self, Rect2(
+		best_at + Vector2(76, -2),
+		Vector2(PixelUI.content(BODY_RECT).end.x - best_at.x - 84.0, PixelUI.LINE)
+	)).line(Terms.BEST_GEAR, PixelUI.C_ACTIVE if best_on else PixelUI.C_TEXT_DIM)
 
 	if _state != State.GEAR:
 		return

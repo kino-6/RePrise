@@ -277,32 +277,32 @@ func _draw_fortress(show_worlds: bool, oath: bool) -> void:
 func _draw_scene_label() -> void:
 	var location := String(_entry().get("location", ""))
 	draw_rect(Rect2(8, 8, 250, 28), Color(0.02, 0.03, 0.08, 0.82), true)
-	PixelUI.draw_text(self, Vector2(16, 11), Lore.PROLOGUE_TITLE, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	# 題と場所は外部化した文（`Lore` / `data`）なので長さを前提にしない。
+	# 題は帯の中（250px）に、場所は画面の右端へ。
+	UiPanel.inside(self, Rect2(16, 11, 234, PixelUI.LINE)).line(
+		Lore.PROLOGUE_TITLE, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	if location != "":
-		PixelUI.draw_text_right(
-			self, Vector2(496, 13), location, PixelUI.C_TEXT_DIM, PixelUI.SIZE_TEXT
-		)
+		UiPanel.inside(self, Rect2(256, 13, 240, PixelUI.LINE)).row(
+			"", location, PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM)
 
 
 func _draw_text_window() -> void:
 	PixelUI.draw_window(self, TEXT_RECT, WINDOW_TEX)
 	var origin := PixelUI.content(TEXT_RECT).position
 	var speaker := String(_entry().get("speaker", ""))
-	PixelUI.draw_text(self, origin + Vector2(8, 1), speaker, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
-
-	var shown: Array[String] = []
+	var inner := PixelUI.content(TEXT_RECT)
+	var panel := UiPanel.inside(self, Rect2(
+		origin + Vector2(8, 1), Vector2(inner.size.x - 16.0, inner.size.y - 2.0)))
+	panel.line(speaker, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	panel.skip(6.0)
+	# **折り返し幅を手で書かない。** 468 は窓の寸法を変えると古くなる。
+	# 入らない行は `paragraph()` が捨てて数える。
 	for raw_line in _entry().get("lines", []):
-		for wrapped in PixelUI.wrap(String(raw_line), 468.0, PixelUI.SIZE_TEXT):
-			shown.append(wrapped)
-	for i in mini(shown.size(), 3):
-		PixelUI.draw_text(
-			self, origin + Vector2(8, 25 + i * 18), shown[i], PixelUI.C_TEXT, PixelUI.SIZE_TEXT
-		)
+		panel.paragraph(String(raw_line))
 
 	if fmod(_time, 1.0) > 0.78:
 		return
 	var prompt := String(_entry().get("prompt", ""))
-	PixelUI.draw_text_right(
-		self, Vector2(PixelUI.content(TEXT_RECT).end.x - 8, origin.y + 76),
-		prompt, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(8, 76), Vector2(inner.size.x - 16.0, PixelUI.LINE)
+	)).row("", prompt, PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)

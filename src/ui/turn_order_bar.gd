@@ -60,7 +60,10 @@ func _draw() -> void:
 
 		var label := _short_name(b)
 		var color := PixelUI.C_ACTIVE if is_current else PixelUI.C_TEXT
-		PixelUI.draw_text(self, Vector2(x + 4, 4), label, color)
+		# 札は 29px しかない。**幅を渡して札の中で詰める** ―― `_short_name()` が
+		# 文字数で詰めているが、文字数と幅は比例しない（「あ」と「i」で倍違う）。
+		UiPanel.inside(self, Rect2(x + 4, 4, PLATE_W - 6.0, PixelUI.LINE)).line(
+			label, color)
 
 		# 手番が近いほど不透明に。奥行きが出て「これから起きること」の順序が読める。
 		if not is_current:
@@ -70,9 +73,10 @@ func _draw() -> void:
 		x += PLATE_W + GAP
 
 	if telegraph != "":
-		PixelUI.draw_text(
-			self, Vector2(4, PLATE_H + 6), "◆ " + telegraph, PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
-		)
+		# 予告は技名を含むので、外部化で名前が伸びうる。画面幅で切る。
+		UiPanel.inside(self, Rect2(
+			4, PLATE_H + 6, PixelUI.SCREEN.x - 8.0, PixelUI.LINE
+		)).line("◆ " + telegraph, PixelUI.C_ACTIVE, PixelUI.SIZE_SUB)
 
 
 ## 29px の札に収まるよう名前を詰める。

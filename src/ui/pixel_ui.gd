@@ -266,6 +266,26 @@ static func draw_text_right(
 	draw_text(canvas, Vector2(right_top.x - text_width(text, size), right_top.y), text, color, size)
 
 
+## 画面の中央へ置く。**詰めてから測る。**
+##
+## 中央寄せは幅を測ってから置き場所を決めるので、`draw_text` の自動収めでは
+## 間に合わない（測ったあとに詰まると中央がずれる）。ここで先に詰める。
+## 窓の外に置く文字（タイトル、版、入力待ち）のための道具。
+static func draw_text_center(
+	canvas: CanvasItem, y: float, text: String,
+	color: Color = C_TEXT, size: int = SIZE_TEXT, margin: float = 12.0
+) -> void:
+	var room := float(SCREEN.x) - margin * 2.0
+	var shown := text
+	if text_width(text, size) > room:
+		note_clipped(text)
+		shown = clip(text, room, size)
+	draw_text(
+		canvas, Vector2((float(SCREEN.x) - text_width(shown, size)) * 0.5, y),
+		shown, color, size
+	)
+
+
 static func text_width(text: String, size: int = SIZE_TEXT) -> float:
 	return font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 

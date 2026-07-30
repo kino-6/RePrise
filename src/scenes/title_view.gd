@@ -88,7 +88,7 @@ func _draw() -> void:
 func _draw_title() -> void:
 	var title := "RePrise"
 	var width := PixelUI.text_width(title, 52)
-	PixelUI.draw_text(self, Vector2((PixelUI.SCREEN.x - width) * 0.5, 74), title, PixelUI.C_TEXT, 52)
+	PixelUI.draw_text_center(self, 74, title, PixelUI.C_TEXT, 52)
 
 
 func _draw_party() -> void:
@@ -111,21 +111,16 @@ func _draw_record() -> void:
 		Terms.ECHO, GameState.echo,
 		Terms.RUNS_TOTAL % GameState.runs_attempted,
 	]
-	var width := PixelUI.text_width(line)
-	PixelUI.draw_text(
-		self, Vector2((PixelUI.SCREEN.x - width) * 0.5, 228), line, PixelUI.C_TEXT_DIM
-	)
+	PixelUI.draw_text_center(self, 228, line, PixelUI.C_TEXT_DIM)
 
 
 ## 版を隅に出す。**不具合報告のときに、どのビルドかが画面から分かる。**
 ## タイトルバーは配布物だと隠れることがあるので、画面にも置く。
 func _draw_version() -> void:
 	var text := GameVersion.full()
-	PixelUI.draw_text(
-		self, Vector2(6, PixelUI.SCREEN.y - 18), text, PixelUI.C_SHADOW.lerp(
-			PixelUI.C_TEXT_DIM, 0.7
-		), PixelUI.SIZE_SUB
-	)
+	UiPanel.inside(self, Rect2(
+		6, PixelUI.SCREEN.y - 18, PixelUI.SCREEN.x - 12.0, PixelUI.LINE
+	)).line(text, PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.7), PixelUI.SIZE_SUB)
 
 
 func _draw_prompt() -> void:
@@ -135,7 +130,4 @@ func _draw_prompt() -> void:
 	var text := "Ｚキーで はじめる　　Ｘキーで せってい"
 	if GameState.has_suspend():
 		text = "Ｚキーで つづきから　　Ｘキーで せってい"
-	var width := PixelUI.text_width(text, PixelUI.SIZE_HEAD)
-	PixelUI.draw_text(
-		self, Vector2((PixelUI.SCREEN.x - width) * 0.5, 274), text, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
-	)
+	PixelUI.draw_text_center(self, 274, text, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)

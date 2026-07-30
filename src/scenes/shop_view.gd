@@ -315,26 +315,39 @@ func _draw_menu() -> void:
 		desc = "%d %sで 傷も魔力も すっかり戻す。" % [rest_price(), Terms.GOLD]
 	else:
 		desc = "ダンジョンへ もどる。"
-	# 説明は 1 行で収める。装備は「説明＋能力値」で長くなるので切る
-	# （切らずに置いたら窓から 3px 出た）。
-	PixelUI.draw_text(
-		self, origin + Vector2(8, 0),
-		PixelUI.clip(desc, 464.0, PixelUI.SIZE_TEXT), PixelUI.C_TEXT
-	)
+	# 説明は 1 行で収める。装備は「説明＋能力値」で長くなる。
+	# **幅は窓の内側から取る**（464 と手で書くと、窓を変えた瞬間に古くなる）。
+	_menu_line(origin, 0).line(desc, PixelUI.C_TEXT)
 
-	PixelUI.draw_text(self, origin + Vector2(8, 26), "もちもの", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	_menu_line(origin, 26).line("もちもの", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	var owned := GameState.inventory_ids()
 	if owned.is_empty():
-		PixelUI.draw_text(self, origin + Vector2(8, 46), "なし", PixelUI.C_TEXT_DIM)
+		_menu_line(origin, 46).line("なし", PixelUI.C_TEXT_DIM)
 		return
 	for i in owned.size():
 		var item_id := String(owned[i])
-		var at := origin + Vector2(8 + i * 118, 46)
-		PixelUI.draw_text(
-			self, at,
-			"%s%d" % [Database.item(item_id).get("name", item_id), GameState.item_count(item_id)],
+		# 品名は横に並ぶので、1 つぶんの持ち幅で切る。
+		UiPanel.inside(self, Rect2(
+			origin + Vector2(8 + i * OWNED_COL_W, 46),
+			Vector2(OWNED_COL_W - 6.0, PixelUI.LINE)
+		)).line(
+			"%s%d" % [
+				Database.item(item_id).get("name", item_id),
+				GameState.item_count(item_id),
+			],
 			PixelUI.C_TEXT
 		)
+
+
+## 持ち物を横に並べるときの 1 つぶんの幅。
+const OWNED_COL_W := 118.0
+
+
+## 下の窓の 1 行。**幅は窓の内側から取る。**
+func _menu_line(origin: Vector2, dy: float) -> UiPanel:
+	var inner := PixelUI.content(MENU_RECT)
+	return UiPanel.inside(self, Rect2(
+		origin + Vector2(8, dy), Vector2(inner.end.x - origin.x - 16.0, PixelUI.LINE)))
 
 
 func _draw_notice() -> void:
