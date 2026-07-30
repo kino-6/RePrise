@@ -1,7 +1,7 @@
 class_name ChronicleAI
 extends Node
 
-## 戦記をローカル AI（Ollama）に書かせる。**唯一の LLM 接続点。**
+## 戦記をローカル AI に書かせる。**接続そのものは `LocalAI` が 1 つだけ持つ。**
 ##
 ## 守っている前提（AGENTS.md の不変条件）:
 ##
@@ -15,14 +15,6 @@ extends Node
 ## 決定性には関与しない（文章はセーブにも乱数にも影響しない）。
 
 signal written(lines: PackedStringArray)
-
-const URL := "http://localhost:11434/api/generate"
-
-## 27B は品質が高いが遅い。ラン終了画面で待てるのは数秒なので 8B を既定にする。
-const MODEL := "huihui_ai/qwen3-abliterated:8b"
-
-## これを超えたら諦めてテンプレートのままにする。
-const TIMEOUT := 8.0
 
 ## 文章の指示はここに置く。事実の構造（facts）には文体を混ぜない。
 ##
@@ -45,69 +37,30 @@ const PROMPT := """あなたは SFC 期の日本語 RPG の語り部です。
 %s
 """
 
-var _request: HTTPRequest = null
-var _timer := 0.0
-var _pending := false
+## これを超えたら諦めてテンプレートのままにする。
+const TIMEOUT := 8.0
+
+## HTTP は持たない。**ローカル AI の窓口は LocalAI の 1 つだけ。**
+## 接続点が 2 つあると、片方だけタイムアウトを直したり、
+## 片方だけ think を切り忘れたりする（実際に別々に書いていた）。
+var _ai: LocalAI = null
 
 
 func _ready() -> void:
-	_request = HTTPRequest.new()
-	_request.timeout = TIMEOUT
-	add_child(_request)
-	_request.request_completed.connect(_on_completed)
-	set_process(false)
+	_ai = LocalAI.new()
+	add_child(_ai)
+	_ai.answered.connect(_on_answered)
 
 
 ## 生成を依頼する。返りは signal で、失敗したときは何も飛ばさない。
 ## 呼び出し側は既にテンプレート版を表示していること。
 func request(summary: Dictionary) -> void:
-	if _pending:
-		return
 	var facts := JSON.stringify(Chronicle.facts_for_llm(summary), "  ")
-	var body := JSON.stringify({
-		"model": MODEL,
-		"prompt": PROMPT % [Lore.WORLD, facts],
-		"stream": false,
-		# Qwen3 系は既定で思考ブロックを吐き、num_predict を思考だけで使い切って
-		# 本文が空で返ってくる。思考は要らないので切る。
-		"think": false,
-		# 文体を安定させる。毎回まったく違う調子になると記録に見えない。
-		"options": {"temperature": 0.7, "num_predict": 260},
-	})
-	var error := _request.request(URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
-	if error != OK:
-		# Ollama が居ないだけ。警告も出さない（これは異常ではない）。
-		return
-	_pending = true
-	_timer = 0.0
-	set_process(true)
+	_ai.ask(PROMPT % [Lore.WORLD, facts], TIMEOUT, "chronicle")
 
 
-func _process(delta: float) -> void:
-	_timer += delta
-	if _timer > TIMEOUT + 1.0:
-		_give_up()
-
-
-func _give_up() -> void:
-	_pending = false
-	set_process(false)
-	_request.cancel_request()
-
-
-func _on_completed(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	_pending = false
-	set_process(false)
-	if code != 200:
-		return
-	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
-	if typeof(parsed) != TYPE_DICTIONARY:
-		return
-	var text := String((parsed as Dictionary).get("response", "")).strip_edges()
+func _on_answered(text: String) -> void:
 	var lines := _clean(text)
-	if "--ai-debug" in OS.get_cmdline_user_args():
-		print("[戦記AI] 生の応答 %d 文字 / 採用 %d 行" % [text.length(), lines.size()])
-		print(text)
 	if lines.is_empty():
 		return
 	written.emit(lines)

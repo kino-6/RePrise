@@ -38,6 +38,9 @@ var _town: TownMap = null
 var _encounter_rng: DetRng = null
 var _battle_rng: DetRng = null
 
+## ローカル AI の窓口（唯一の接続点）。
+var _ai: LocalAI = null
+
 ## 今の戦闘が主との戦いか。勝った時にランを閉じるかどうかがここで変わる。
 var _boss_battle := false
 
@@ -86,6 +89,11 @@ func _ready() -> void:
 	result = ResultScreen.new()
 	result.visible = false
 	add_child(result)
+
+	# ローカル AI の窓口は 1 つだけ。戦記もクエスト文もここを通す。
+	_ai = LocalAI.new()
+	add_child(_ai)
+	_ai.answered.connect(_on_quest_text)
 
 	title.started.connect(_enter_stronghold)
 	stronghold.departed.connect(_start_run)
@@ -411,8 +419,28 @@ func _enter_stronghold() -> void:
 	_fade_to(Mode.STRONGHOLD)
 
 
+## クエスト文をローカル AI に頼むときの言い方。
+##
+## **構造は渡すが、決めさせない。** 封の数も帯も既に確定していて、
+## AI が書くのは名と一文だけ。数を書かせないと明示するのは、
+## 書いてきたものを `QuestText` が落とすより先に、そもそも書かせないため。
+const QUEST_PROMPT := """あなたは SFC 期の日本語 RPG の名づけ役です。
+次の「封」に、名前と一文を付けてください。
+
+%s
+
+制約:
+- 名前は 10 文字以内。ひらがな主体で、漢字は易しいものだけ。
+- 一文は 34 文字以内。その封が城の主を守っている理由を書く。
+- **数字を書かない。** 英字を書かない。記号・箇条書き・思考過程を書かない。
+- 他社の作品に出てくる固有名詞を使わない。
+- JSON だけを返す: {"seals":[{"name":"…","why":"…"},…3つ]}
+"""
+
+
 func _start_run() -> void:
 	GameState.start_new_run()
+	_ask_quest_text()
 	# 開発用の状態指定（--dev-level=8 など）。指定が無ければ何もしない。
 	var applied := DevCheats.apply_to_run(GameState)
 	if not applied.is_empty():
@@ -483,6 +511,27 @@ func _on_site_entered(pos: Vector2i) -> void:
 		_:
 			# 門。踏んでも何も起きない（世界の上に立ったまま）。
 			GameState.site = {}
+
+
+## クエスト文を頼む。**待たせない。**
+##
+## 世界は既にテンプレートの名前で完成していて、すぐ遊べる。
+## 数秒後に届いたら表示だけ差し替える（構造は動かないので途中でも安全）。
+## 届かなければテンプレートのまま、というだけ。
+func _ask_quest_text() -> void:
+	if GameState.world == null or _ai.is_busy():
+		return
+	var facts := JSON.stringify(QuestText.facts_for_llm(GameState.world), "  ")
+	_ai.ask(QUEST_PROMPT % facts, 8.0, "quest")
+
+
+func _on_quest_text(text: String) -> void:
+	var reply := LocalAI.extract_json(text)
+	if reply.is_empty():
+		return
+	var report := QuestText.apply_to_world(GameState.world, reply)
+	if LocalAI.debug_enabled():
+		print("[AI:quest] 採用 %d 項目 / 却下 %s" % [int(report["taken"]), str(report["rejected"])])
 
 
 ## 町の中へ入る。

@@ -33,6 +33,7 @@ func _initialize() -> void:
 	_test_dungeon_route()
 	_test_world_generation()
 	_test_town_generation()
+	_test_quest_text()
 	_test_text_wrap()
 	_test_database_loaded()
 	_test_final_floor()
@@ -710,6 +711,79 @@ func _test_town_generation() -> void:
 	var b := TownGenerator.generate(DetRng.new(555), 3, "dungeon")
 	_check("同じ種から同じ町が出る", a.to_ascii() == b.to_ascii())
 	_check("同じ種なら名前も同じ", a.town_name == b.town_name)
+
+
+## AI が書いた文字列の検算。**繋ぐ前にここを固める。**
+##
+## 通す側だけ試すと、何でも通す検算でもテストは緑になる。だから
+## **落ちるべきものが落ちること**を主に確かめる。
+func _test_quest_text() -> void:
+	# 通ってほしいもの
+	_equal("ふつうの名は通る", QuestText.accept_name("しずまりの錠"), "しずまりの錠")
+	_equal("前後の飾りは落ちる", QuestText.accept_name("「うつろな楔」"), "うつろな楔")
+	_equal(
+		"ふつうの一文は通る", QuestText.accept_line("これが ある かぎり 主は 傷つかない。"),
+		"これが ある かぎり 主は 傷つかない。"
+	)
+
+	# 落ちてほしいもの
+	_equal("長すぎる名は落ちる", QuestText.accept_name("とてもとてもながいふうじのなまえ"), "")
+	_equal("空は落ちる", QuestText.accept_name("   "), "")
+	_equal("数字の混入は落ちる", QuestText.accept_name("だい3の封"), "")
+	_equal("英字の混入は落ちる", QuestText.accept_name("Seal の錠"), "")
+	_equal("記号の混入は落ちる", QuestText.accept_line("{\"name\": \"ほげ\"}"), "")
+	_equal("他社の固有名詞は落ちる", QuestText.accept_name("ホイミの錠"), "")
+	_equal("他社の固有名詞は一文でも落ちる", QuestText.accept_line("ザオラルで よみがえる。"), "")
+	_equal(
+		"長すぎる一文は落ちる",
+		QuestText.accept_line("あ".repeat(QuestText.MAX_LINE + 1)), ""
+	)
+
+	# 世界へ当てる。**構造には触らないこと**を確かめる。
+	var w := WorldGenerator.generate(DetRng.new(4242))
+	var before_pos := []
+	var before_band := []
+	for s in w.seals:
+		before_pos.append(s["pos"])
+		before_band.append(s["band"])
+
+	var reply := {"seals": [
+		{"name": "とこしえの枷", "why": "この地の ちからが とびらを 閉ざす。"},
+		{"name": "ホイミの錠", "why": "だめな 例。"},          # 名だけ落ちる
+		{"name": "こごえた戒め", "why": "HP300 の ぬしが まもる。"},  # 由来だけ落ちる
+	]}
+	var report := QuestText.apply_to_world(w, reply)
+
+	_equal("採れたぶんだけ入る", int(report["taken"]), 4)
+	_check("落ちた理由が残る", report["rejected"].size() == 2)
+	_equal("通った名が入る", String(w.seals[0]["name"]), "とこしえの枷")
+	_check("落ちた名はテンプレートのまま", String(w.seals[1]["name"]) != "ホイミの錠")
+	_check("落ちた由来はテンプレートのまま", "HP300" not in String(w.seals[2]["why"]))
+	_equal("通った由来が入る", String(w.seals[0]["why"]), "この地の ちからが とびらを 閉ざす。")
+
+	var pos_kept := true
+	var band_kept := true
+	for i in w.seals.size():
+		if w.seals[i]["pos"] != before_pos[i]:
+			pos_kept = false
+		if w.seals[i]["band"] != before_band[i]:
+			band_kept = false
+	_check("AI は封の位置を動かさない", pos_kept)
+	_check("AI は封の帯を動かさない", band_kept)
+	_check("当てたあとも検算を通る", WorldGenerator.verify(w).is_empty())
+
+	# 同じ名前を並べさせない
+	var w2 := WorldGenerator.generate(DetRng.new(99))
+	var same := {"seals": [
+		{"name": "おなじ錠", "why": "ひとつめ。"},
+		{"name": "おなじ錠", "why": "ふたつめ。"},
+		{"name": "おなじ錠", "why": "みっつめ。"},
+	]}
+	QuestText.apply_to_world(w2, same)
+	var names := {}
+	for s in w2.seals:
+		names[String(s["name"])] = true
+	_equal("同じ名前は 1 つしか採らない", names.size(), 3)
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。

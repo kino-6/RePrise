@@ -1,4 +1,4 @@
-class_name QuestText
+class_name QuestNarrativeText
 extends RefCounted
 
 ## クエストの表示文だけを作り、AI の候補を項目ごとに検算する。

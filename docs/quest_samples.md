@@ -1,6 +1,6 @@
 # 世界クエストのサンプル
 
-以下は `QuestGenerator` の骨格に、`QuestText` の代替文または AI の表示文を載せた例。
+以下は `QuestGenerator` の骨格に、`QuestNarrativeText` の代替文または AI の表示文を載せた例。
 太字が攻略上の事実で、ここは Script が作る。地名・呼び名・余談だけが差し替わる。
 
 ## 1. 水鏡の世界 — 三つの封

@@ -15,6 +15,17 @@
     "service_loss",
     "encounter_up"
   ],
+  "allowed_risks": [
+    "hp",
+    "mp",
+    "equipment",
+    "normal_fight",
+    "elite_fight",
+    "route_loss",
+    "service_loss",
+    "encounter_up",
+    "biome_shift"
+  ],
   "allowed_rewards": [
     "none",
     "shortcut",

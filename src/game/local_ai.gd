@@ -1,0 +1,109 @@
+class_name LocalAI
+extends Node
+
+## ローカル AI（Ollama）への唯一の窓口。
+##
+## 戦記もクエスト文もここを通す。接続点が 2 つあると、片方だけ
+## タイムアウトを直したり、片方だけ think を切り忘れたりする。
+##
+## 守っている前提（AGENTS.md の不変条件）:
+##
+##   1. **構造はゲームが作り、AI は表示用の文字列だけ。** 渡すのは確定済みの
+##      事実、返るのは文章。数値は受け取らない（`QuestText` が弾く）。
+##   2. **失敗しても遅くてもゲームは成立する。** 呼ぶ前にテンプレートで
+##      完成させておき、届いたら差し替えるだけ。届かなければそのまま。
+##   3. **決定性に関与しない。** 出力は乱数列にもセーブにも入らない。
+##      同じシードからは同じ世界・同じ配置が出る。違うのは呼び名だけ。
+
+signal answered(text: String)
+
+const URL := "http://localhost:11434/api/generate"
+
+## 27B は品質が高いが遅い。待てるのは数秒なので 8B を既定にする。
+const MODEL := "huihui_ai/qwen3-abliterated:8b"
+
+var _request: HTTPRequest = null
+var _timer := 0.0
+var _pending := false
+var _timeout := 8.0
+var _label := ""
+
+
+func _ready() -> void:
+	_request = HTTPRequest.new()
+	add_child(_request)
+	_request.request_completed.connect(_on_completed)
+	set_process(false)
+
+
+## 頼む。返事は `answered` で 1 回だけ飛ぶ。届かなければ何も飛ばない。
+##
+## `label` は記録用（`--ai-debug` でどの依頼の返事かを見分ける）。
+func ask(prompt: String, timeout: float = 8.0, label: String = "") -> bool:
+	if _pending:
+		return false
+	_timeout = timeout
+	_label = label
+	_request.timeout = timeout
+	var body := JSON.stringify({
+		"model": MODEL,
+		"prompt": prompt,
+		"stream": false,
+		# Qwen3 系は既定で思考ブロックを吐き、num_predict を思考だけで使い切って
+		# 本文が空で返ってくる。思考は要らないので切る。
+		"think": false,
+		# 文体を安定させる。毎回まったく違う調子になると記録に見えない。
+		"options": {"temperature": 0.7, "num_predict": 320},
+	})
+	var error := _request.request(URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
+	if error != OK:
+		# Ollama が居ないだけ。警告も出さない（これは異常ではない）。
+		return false
+	_pending = true
+	_timer = 0.0
+	set_process(true)
+	return true
+
+
+func is_busy() -> bool:
+	return _pending
+
+
+func _process(delta: float) -> void:
+	_timer += delta
+	if _timer > _timeout + 1.0:
+		_pending = false
+		set_process(false)
+		_request.cancel_request()
+
+
+func _on_completed(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	_pending = false
+	set_process(false)
+	if code != 200:
+		return
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return
+	var text := String((parsed as Dictionary).get("response", "")).strip_edges()
+	if debug_enabled():
+		print("[AI:%s] %d 文字" % [_label, text.length()])
+		print(text)
+	if text == "":
+		return
+	answered.emit(text)
+
+
+static func debug_enabled() -> bool:
+	return "--ai-debug" in OS.get_cmdline_user_args()
+
+
+## 返事から JSON を取り出す。モデルは前後に説明を付けてくる。
+## 取れなければ空の辞書（呼び出し側はテンプレートのままにする）。
+static func extract_json(text: String) -> Dictionary:
+	var start := text.find("{")
+	var finish := text.rfind("}")
+	if start < 0 or finish <= start:
+		return {}
+	var parsed: Variant = JSON.parse_string(text.substr(start, finish - start + 1))
+	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}
