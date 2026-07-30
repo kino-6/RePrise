@@ -296,7 +296,7 @@ func _try_move_dungeon(target: Vector2i) -> void:
 
 ## 遭遇の判定は Encounter に置いてある（シミュレータと同じ式を使うため）。
 func _should_encounter() -> bool:
-	return Encounter.should_meet(rng, _steps_since_encounter)
+	return Encounter.should_meet(rng, _steps_since_encounter, GameState.event_encounter_bias)
 
 
 func _update_camera() -> void:

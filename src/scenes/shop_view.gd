@@ -53,7 +53,7 @@ func open(stock: Dictionary, floor_number: int) -> void:
 	# 在庫はこのフロアで一度だけ用意する。出入りしても戻らない。
 	if _stock.is_empty():
 		# 「商いの伝手」を買っているぶんだけ品が多く並ぶ。
-		var extra := GameState.upgrade_value("shop_stock")
+		var extra := GameState.upgrade_value("shop_stock") + GameState.event_shop_bonus
 		for id in _ids:
 			var base := int(_entry(String(id)).get("stock", 1))
 			# 装備は 1 点もの。伝手を買っても在庫は増やさない。

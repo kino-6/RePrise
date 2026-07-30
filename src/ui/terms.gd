@@ -53,6 +53,91 @@ static var PARTY := Vocabulary.word("terms", "party", "へんせい")
 static var UPGRADE := Vocabulary.word("terms", "upgrade", "アップグレード")
 static var DEPART := Vocabulary.word("terms", "depart", "出撃する")
 
+# --- 任意イベント ---
+static var EVENT_CLOSE := Vocabulary.word("terms", "event_close", "Ｚで とじる")
+static var EVENT_DEFER_SUMMARY := Vocabulary.word(
+	"terms", "event_defer_summary", "保留 → 再訪できる"
+)
+static var EVENT_DEFER_DETAIL := Vocabulary.word(
+	"terms", "event_defer_detail", "いまは立ち去る。あとで選び直せる。"
+)
+static var EVENT_DEFER_OUTCOME := Vocabulary.word(
+	"terms", "event_defer_outcome", "いまは手を出さず離れた。戻れば、まだ選べる。"
+)
+static var EVENT_UNRESOLVED := Vocabulary.word(
+	"terms", "event_unresolved", "何も起きなかった。この選択肢は未解決だ。"
+)
+static var EVENT_ITEM_MISSING := Vocabulary.word(
+	"terms", "event_item_missing", "渡す物がなく、みんな 傷ついた"
+)
+static var EVENT_GEAR_MISSING := Vocabulary.word(
+	"terms", "event_gear_missing", "失う装備がなく、みんな 傷ついた"
+)
+static var EVENT_ENCOUNTER_UP := Vocabulary.word(
+	"terms", "event_encounter_up", "この先 %d歩、敵が 増える"
+)
+static var EVENT_ENCOUNTER_DOWN := Vocabulary.word(
+	"terms", "event_encounter_down", "%d歩のあいだ 敵が 減る"
+)
+static var EVENT_ROUTE_LOST := Vocabulary.word(
+	"terms", "event_route_lost", "道を失い、%d歩ぶん 敵が 増える"
+)
+static var EVENT_SERVICE_LOST := Vocabulary.word(
+	"terms", "event_service_lost", "次の宿で 世話を 受けられない"
+)
+static var EVENT_BIOME_DAMAGED := Vocabulary.word(
+	"terms", "event_biome_damaged", "%sの土地が 荒れた"
+)
+static var EVENT_SHOP_STOCK := Vocabulary.word(
+	"terms", "event_shop_stock", "この先のみせで 各どうぐが 1つ増える"
+)
+static var EVENT_ROUTE_SAFE := Vocabulary.word(
+	"terms", "event_route_safe", "この道は %d歩ぶん 安全になった"
+)
+static var EVENT_SHORTCUT := Vocabulary.word(
+	"terms", "event_shortcut", "近道で %d歩ぶん 遭遇を避けられる"
+)
+static var EVENT_MAP_SEALS := Vocabulary.word(
+	"terms", "event_map_seals", "地図に 未知の封 %dつと 安全な道を 記した"
+)
+static var EVENT_MAP_ROUTE := Vocabulary.word(
+	"terms", "event_map_route", "城までの 安全な道を 地図に 記した"
+)
+static var EVENT_BIOME_CALMED := Vocabulary.word(
+	"terms", "event_biome_calmed", "%sの土地が 鎮まった"
+)
+static var EVENT_BOSS_INTEL := Vocabulary.word(
+	"terms", "event_boss_intel", "主戦で 敵の初動が %d段階 遅くなる"
+)
+static var EVENT_BOSS_WEAKEN := Vocabulary.word(
+	"terms", "event_boss_weaken", "主戦で 主の力が %d段階 下がる"
+)
+static var EVENT_INN_BONUS := Vocabulary.word(
+	"terms", "event_inn_bonus", "次の宿で よく休んだ効果を 得る"
+)
+static var EVENT_TOWN_SERVICE := Vocabulary.word(
+	"terms", "event_town_service", "次の宿で 旅の物資を 受け取れる"
+)
+static var EVENT_BOON := Vocabulary.word("terms", "event_boon", "%sが %d歩 続く")
+static var EVENT_BATTLE_BOON := Vocabulary.word(
+	"terms", "event_battle_boon", "旅の助けが 戦いに 効いている"
+)
+static var EVENT_BOSS_INTEL_ACTIVE := Vocabulary.word(
+	"terms", "event_boss_intel_active", "主の初動を 読んだ"
+)
+static var EVENT_BOSS_WEAKEN_ACTIVE := Vocabulary.word(
+	"terms", "event_boss_weaken_active", "主の力が 弱っている"
+)
+static var EVENT_INN_DENIED := Vocabulary.word(
+	"terms", "event_inn_denied", "世話の約束を失い、今夜は 休めなかった。"
+)
+static var EVENT_INN_SUPPLY := Vocabulary.word(
+	"terms", "event_inn_supply", "%s を 受け取った"
+)
+static var EVENT_INN_RESTED := Vocabulary.word(
+	"terms", "event_inn_rested", "よく休み、ひとときの守りを 得た"
+)
+
 
 ## 待ちコストを「速さ」に読み替える。
 ##

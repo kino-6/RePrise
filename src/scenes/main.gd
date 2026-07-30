@@ -427,6 +427,16 @@ func _capture(which: String) -> void:
 			for pos in GameState.world.events:
 				_open_event(pos)
 				break
+		"event_outcome":
+			# 選択後に代償と利益が読めるか。表示だけで終わる回帰もここで見る。
+			_start_run()
+			var definition := WorldEventCatalog.event_by_id("signal_tower")
+			var instance := WorldEventCatalog.instantiate(
+				definition, DetRng.new(771), {"biome": GameState.biome_here()}
+			)
+			_event_pos = GameState.world.start_pos
+			GameState.world.events[_event_pos] = instance
+			_on_event_choice(instance.get("choices", [])[1])
 		"town":
 			# 町の中の見え方（宿・店・人）を確かめる。
 			# 物語の拍は町より先に出るので、撮影では飛ばす。
@@ -1066,8 +1076,14 @@ func _make_curtain() -> void:
 const COVERS := {
 	Mode.STRONGHOLD: "iris_gate",
 	Mode.RESULT: "page_turn",
-	Mode.EXPLORE: "pixel_dissolve",
 }
+
+## 洞・町・世界の出入りは**遭遇と同じモザイク**にする。
+##
+## 最初は角形の画素が増殖する覆い（`pixel_dissolve`）を当てたが、覆いが甘く、
+## 中途半端な演出は無いほうがましだった。モザイクは画面の中身を残したまま
+## 崩れるので、**入る前と後が繋がる** ―― 場所を移る演出としてもこちらが強い。
+const MOSAIC_MODES: Array[Mode] = [Mode.EXPLORE]
 
 
 func _fade_to(mode: Mode) -> void:
@@ -1089,6 +1105,9 @@ func _fade_to(mode: Mode) -> void:
 	if kind != "" and _transition != null and _transition.play_cover(
 		kind, _apply_mode.bind(mode)
 	):
+		return
+	if mode in MOSAIC_MODES and _transition != null and _transition.available():
+		_transition.play(_apply_mode.bind(mode))
 		return
 	_fade_tween = create_tween()
 	_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
@@ -1313,10 +1332,10 @@ func _on_event_choice(choice: Dictionary) -> void:
 		lines.append("身がまえる 間もなく、敵が 来た。")
 		_pending_fight_grade = fight_grade
 	if bool(choice.get("defer", false)):
-		lines.append("いまは手を出さず離れた。戻れば、まだ選べる。")
+		lines.append(Terms.EVENT_DEFER_OUTCOME)
 	if lines.is_empty():
 		# この行へ来た選択肢は品質 Gate の漏れ。無言で成功に見せない。
-		lines.append("何も起きなかった。この選択肢は未解決だ。")
+		lines.append(Terms.EVENT_UNRESOLVED)
 	# **結果は同じ窓で読ませる。** toast だと流れて、選んだ意味が確かめられない。
 	_story_beat = {}
 	event_view.open_outcome(String(choice.get("label", "")), lines, danger)

@@ -19,6 +19,7 @@ const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
 const HEAD_RECT := Rect2(8, 8, 496, 92)
 const LIST_RECT := Rect2(8, 106, 496, 122)
 const DETAIL_RECT := Rect2(8, 234, 496, 78)
+const OUTCOME_RECT := Rect2(8, 8, 496, 220)
 
 const INPUT_LOCK := 0.16
 
@@ -69,7 +70,7 @@ func open_story(beat: Dictionary, story: Dictionary, danger_here: int) -> void:
 func open_outcome(title: String, lines: Array[String], danger_here: int) -> void:
 	var body := lines.duplicate()
 	if body.is_empty():
-		body.append("なにも 起こらなかった。")
+		body.append(Terms.EVENT_UNRESOLVED)
 	open({
 		"outcome": true,
 		"skin": {"title": title, "actor": "", "cause": "　".join(body), "flavor": ""},
@@ -139,9 +140,32 @@ func _draw() -> void:
 	PixelUI.ui_frame()
 	# 下の画面を暗く沈ませる。イベントは場面の上に開く窓。
 	draw_rect(Rect2(Vector2.ZERO, Vector2(PixelUI.SCREEN)), Color(0, 0, 0.02, 0.55), true)
+	if bool(event.get("outcome", false)):
+		_draw_outcome()
+		return
 	_draw_head()
 	_draw_list()
 	_draw_detail()
+
+
+## 結果は選択肢と同じ92pxの見出しへ押し込まない。
+## 代償・危険・報酬・後続戦闘が重なると4行を越えるため、画面の大半を結果へ使う。
+func _draw_outcome() -> void:
+	PixelUI.draw_window(self, OUTCOME_RECT, WINDOW_TEX)
+	var origin := PixelUI.content(OUTCOME_RECT).position
+	PixelUI.draw_text(
+		self, origin + Vector2(6, 0), _skin("title"), PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
+	)
+	var lines := PixelUI.wrap(_skin("cause"), 470.0, PixelUI.SIZE_TEXT)
+	for i in mini(lines.size(), 8):
+		PixelUI.draw_text(
+			self, origin + Vector2(6, 28 + i * 20), lines[i], PixelUI.C_TEXT
+		)
+	PixelUI.draw_window(self, DETAIL_RECT, WINDOW_TEX)
+	PixelUI.draw_text(
+		self, PixelUI.content(DETAIL_RECT).position + Vector2(8, 0),
+		Terms.EVENT_CLOSE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+	)
 
 
 func _draw_head() -> void:
@@ -186,6 +210,8 @@ func _draw_list() -> void:
 func _summary(choice: Dictionary) -> String:
 	if bool(event.get("outcome", false)):
 		return ""
+	if bool(choice.get("defer", false)):
+		return Terms.EVENT_DEFER_SUMMARY
 	# 物語の手は数値を持たない。守るものだけを添える。
 	if bool(event.get("story", false)):
 		var keeps := String(choice.get("keeps", ""))
@@ -225,12 +251,6 @@ func _draw_detail() -> void:
 		return
 	var c: Dictionary = _choices()[_index]
 
-	if bool(event.get("outcome", false)):
-		PixelUI.draw_text(
-			self, origin + Vector2(8, 0), "Ｚで とじる", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
-		return
-
 	# 物語の拍は、払う・失う・のこす を文で出す（トークンではない）。
 	if bool(event.get("story", false)):
 		var rows := [
@@ -252,6 +272,13 @@ func _draw_detail() -> void:
 			PixelUI.draw_text(
 				self, origin + Vector2(8, 0), "Ｚで つづける", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 			)
+		return
+
+	if bool(c.get("defer", false)):
+		PixelUI.draw_text(
+			self, origin + Vector2(8, 0),
+			Terms.EVENT_DEFER_DETAIL, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		)
 		return
 
 	var risks := _tokens(c.get("risks", []), "risk")

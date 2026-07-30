@@ -316,6 +316,21 @@ static func _validate_choices(
 		_validate_tokens(
 			choice_prefix, "rewards", choice.get("rewards", null), allowed_rewards, errors
 		)
+		for pair in [["costs", "cost"], ["risks", "risk"], ["rewards", "reward"]]:
+			for raw in choice.get(String(pair[0]), []):
+				var token := String(raw)
+				if not EventEffects.known(token, String(pair[1])):
+					errors.append("%s: %s は実行器に無い" % [choice_prefix, token])
+				elif EventEffects.resolution_kind(token) == "unknown":
+					errors.append("%s: %s の解決方法が無い" % [choice_prefix, token])
+		if not EventEffects.choice_has_consequence(choice):
+			errors.append("%s: 状態変化・戦闘・明示的な保留のどれも無い" % choice_prefix)
+		if bool(choice.get("defer", false)):
+			for field in ["costs", "risks", "rewards"]:
+				for raw in choice.get(field, []):
+					if EventEffects.has_effect(String(raw)):
+						errors.append("%s: defer は効果ゼロの撤退手だけに使う" % choice_prefix)
+						break
 
 
 static func _validate_tokens(

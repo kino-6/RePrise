@@ -230,6 +230,13 @@ static func clipped() -> Array[String]:
 	return _clipped
 
 
+## 詰めたことを控える。`UiPanel` が列の幅で詰めたときにも通る。
+static func note_clipped(text: String) -> void:
+	var note := "「%s」を詰めた" % text.substr(0, 18)
+	if note not in _clipped:
+		_clipped.append(note)
+
+
 ## 文字を置く。**窓からはみ出す分は自動で `…` に詰める。**
 ##
 ## 以前は幅を取らず、151 か所の呼び出しのうち幅で切っていたのは 7 か所だけだった。

@@ -60,6 +60,12 @@ var roster: Array[PartyMember] = []
 var deepest_floor: int = 0
 var runs_attempted: int = 0
 
+## 世界が砕け、銀の砦から遠征が始まった経緯を見たか。
+##
+## 初回導線の印なのでラン中データへは入れない。途中で終了した場合は false のままにし、
+## 次回もう一度最初から見せる。旧セーブは出撃回数から移行する。
+var prologue_seen := false
+
 ## 恒久通貨「残響」。毎ランの道中スコアに応じて必ず支払われる。
 ##
 ## 最深階の更新やボス撃破のような一度きりの達成に紐付けると、達成したあとの
@@ -132,6 +138,17 @@ var event_encounter_bias := 0   ## -1 で遭遇が減り、+1 で増える
 var event_bias_steps := 0       ## 効果が残る歩数
 var event_shop_bonus := 0       ## 町の品数に足す
 var event_boon := ""            ## temporary_* のうち 1 つ
+var event_boons: Array[String] = []  ## 同時に得た一時効果を上書きしない
+var event_boss_intel := 0       ## 主戦で敵の初動を遅らせる段階
+var event_boss_weaken := 0      ## 主戦の能力を下げる段階
+var event_town_service := 0     ## 次の宿で受け取れる物資の回数
+var event_inn_bonus := 0        ## 次の宿で付く「よく休んだ」効果の回数
+var event_service_loss := 0     ## 宿の世話を断られる残り回数
+var event_map_reveals := 0      ## 地図を読み解いた回数（結果とGateの証跡）
+var event_route_changes := 0    ## 道を安全／危険にした回数
+## イベントで変わった生物相。key は "x,y"、value は BIOMES の添字。
+## 世界は中断時に種から再生成するため、差分だけを別に保存する。
+var event_biome_changes: Dictionary = {}
 
 ## 済んだイベント（同じものを二度出さない）。
 var event_done: Dictionary = {}
@@ -157,6 +174,7 @@ func step_event_effects() -> void:
 	if event_bias_steps <= 0:
 		event_encounter_bias = 0
 		event_boon = ""
+		event_boons.clear()
 
 
 ## 持ち物（item_id -> 個数）。ゴールドと同じくランの中でしか存在しない。
@@ -303,6 +321,15 @@ func start_new_run(seed_value: int = -1) -> void:
 	event_bias_steps = 0
 	event_shop_bonus = 0
 	event_boon = ""
+	event_boons.clear()
+	event_boss_intel = 0
+	event_boss_weaken = 0
+	event_town_service = 0
+	event_inn_bonus = 0
+	event_service_loss = 0
+	event_map_reveals = 0
+	event_route_changes = 0
+	event_biome_changes = {}
 	event_done = {}
 	event_tags = {}
 	run_active = true
@@ -642,6 +669,21 @@ func end_run(victory: bool) -> Dictionary:
 	floor_number = 1
 	inventory = {}
 	gear_stock.clear()
+	event_encounter_bias = 0
+	event_bias_steps = 0
+	event_shop_bonus = 0
+	event_boon = ""
+	event_boons.clear()
+	event_boss_intel = 0
+	event_boss_weaken = 0
+	event_town_service = 0
+	event_inn_bonus = 0
+	event_service_loss = 0
+	event_map_reveals = 0
+	event_route_changes = 0
+	event_biome_changes = {}
+	event_done = {}
+	event_tags = {}
 	save_game()
 	run_ended.emit(victory, summary)
 	return summary
@@ -848,9 +890,9 @@ func change_job(member: PartyMember, job_id: String) -> bool:
 
 
 ## セーブの形式。上げたら load_from_dict() に旧版の読み方を残すこと。
-## セーブの形式。またぐ物語の永続状態を足したので 3 へ。
+## セーブの形式。プロローグ視聴済みを足したので 4 へ。
 ## **古い版を必ず読めること**（無い項目は空へ落ちる）。
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 
 
 ## 恒久データを辞書にする。ファイル入出力と分けてあるので、
@@ -875,8 +917,10 @@ func can_suspend() -> bool:
 ## 何を持っているか。
 func to_suspend() -> Dictionary:
 	var broken: Array = []
+	var known: Array = []
 	for s in world.seals:
 		broken.append(bool(s.get("broken", false)))
+		known.append(bool(s.get("known", false)))
 	var done: Array = []
 	for pos in event_done:
 		done.append([int(pos.x), int(pos.y)])
@@ -894,8 +938,22 @@ func to_suspend() -> Dictionary:
 		"gear_stock": gear_stock.duplicate(),
 		"runs_attempted": runs_attempted,
 		"seals_broken": broken,
+		"seals_known": known,
 		"events_done": done,
 		"event_tags": event_tags.duplicate(),
+		"event_encounter_bias": event_encounter_bias,
+		"event_bias_steps": event_bias_steps,
+		"event_shop_bonus": event_shop_bonus,
+		"event_boon": event_boon,
+		"event_boons": event_boons.duplicate(),
+		"event_boss_intel": event_boss_intel,
+		"event_boss_weaken": event_boss_weaken,
+		"event_town_service": event_town_service,
+		"event_inn_bonus": event_inn_bonus,
+		"event_service_loss": event_service_loss,
+		"event_map_reveals": event_map_reveals,
+		"event_route_changes": event_route_changes,
+		"event_biome_changes": event_biome_changes.duplicate(),
 		"story_beat": world.story_beat,
 		"story_choice": world.story_choice,
 		"lifeline": lifeline_left,
@@ -955,10 +1013,32 @@ func resume() -> bool:
 	runs_attempted = int(d.get("runs_attempted", runs_attempted))
 	lifeline_left = int(d.get("lifeline", 0))
 	event_tags = d.get("event_tags", {}).duplicate()
+	event_encounter_bias = int(d.get("event_encounter_bias", 0))
+	event_bias_steps = int(d.get("event_bias_steps", 0))
+	event_shop_bonus = int(d.get("event_shop_bonus", 0))
+	event_boon = String(d.get("event_boon", ""))
+	event_boons.assign(d.get("event_boons", []))
+	if event_boons.is_empty() and event_boon != "":
+		event_boons.append(event_boon)
+	event_boss_intel = int(d.get("event_boss_intel", 0))
+	event_boss_weaken = int(d.get("event_boss_weaken", 0))
+	event_town_service = int(d.get("event_town_service", 0))
+	event_inn_bonus = int(d.get("event_inn_bonus", 0))
+	event_service_loss = int(d.get("event_service_loss", 0))
+	event_map_reveals = int(d.get("event_map_reveals", 0))
+	event_route_changes = int(d.get("event_route_changes", 0))
+	event_biome_changes = d.get("event_biome_changes", {}).duplicate()
 
 	var broken: Array = d.get("seals_broken", [])
 	for i in mini(broken.size(), world.seals.size()):
 		world.seals[i]["broken"] = bool(broken[i])
+	var known: Array = d.get("seals_known", [])
+	for i in mini(known.size(), world.seals.size()):
+		world.seals[i]["known"] = bool(known[i])
+	for key in event_biome_changes:
+		var pair := String(key).split(",")
+		if pair.size() == 2:
+			world.set_biome(int(pair[0]), int(pair[1]), int(event_biome_changes[key]))
 	event_done = {}
 	for raw in d.get("events_done", []):
 		var pair: Array = raw
@@ -1017,6 +1097,7 @@ func to_dict() -> Dictionary:
 		"version": SAVE_VERSION,
 		"deepest_floor": deepest_floor,
 		"runs_attempted": runs_attempted,
+		"prologue_seen": prologue_seen,
 		"echo": echo,
 		"upgrades": upgrades,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
@@ -1038,6 +1119,8 @@ func load_from_dict(data: Dictionary) -> bool:
 
 	deepest_floor = int(data.get("deepest_floor", 0))
 	runs_attempted = int(data.get("runs_attempted", 0))
+	# 視聴印が無い旧セーブでも、既に出撃している人へ突然プロローグを挟まない。
+	prologue_seen = bool(data.get("prologue_seen", runs_attempted > 0))
 	# version 1 のセーブには残響もアップグレードも無い。既定値で素直に読める。
 	echo = int(data.get("echo", 0))
 	upgrades = data.get("upgrades", {})
@@ -1050,6 +1133,18 @@ func load_from_dict(data: Dictionary) -> bool:
 		active_indices.append(int(i))
 	_ensure_active_indices()
 	return not roster.is_empty()
+
+
+func should_show_prologue() -> bool:
+	return not prologue_seen and runs_attempted == 0 and not has_suspend()
+
+
+## 最後の拍を読み終えた時点でだけ呼ぶ。初回の途中終了なら未視聴のまま残す。
+func mark_prologue_seen() -> void:
+	if prologue_seen:
+		return
+	prologue_seen = true
+	save_game()
 
 
 ## セーブする。本体は「書き終わったものと差し替える」形でしか触らない。

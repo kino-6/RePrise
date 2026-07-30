@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCREENS = [
     "title", "prologue", "prologue_shatter", "prologue_worlds", "prologue_oath",
     "stronghold", "job", "depart", "upgrade", "party",
-    "world", "town", "cave", "shop", "event",
+    "world", "town", "cave", "shop", "event", "event_outcome",
     "battle", "commands", "items", "deep", "boss",
     "menu", "status", "equip", "jobmenu", "settings",
     "result", "win",

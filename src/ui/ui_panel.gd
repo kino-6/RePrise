@@ -80,6 +80,17 @@ func dropped() -> int:
 	return _overflow
 
 
+## 幅に収める。**黙って詰めない** ―― 詰めたことを PixelUI に記録させる。
+##
+## 詰まっているのは割り付けの誤りなので、遊ぶ側に見えなくなった代わりに
+## 開発側にも黙るのでは、関門を外したのと同じ。
+static func _shrink(text: String, width: float, size: int) -> String:
+	if PixelUI.text_width(text, size) <= width + PixelUI.OVERFLOW_SLACK:
+		return text
+	PixelUI.note_clipped(text)
+	return PixelUI.clip(text, width, size)
+
+
 ## 1 行置く。幅を超える分は `…` で詰める。
 func line(
 	text: String, color: Color = PixelUI.C_TEXT, size: int = PixelUI.SIZE_TEXT,
@@ -93,7 +104,7 @@ func line(
 	var width := _inner.size.x - indent
 	PixelUI.draw_text(
 		_canvas, Vector2(_inner.position.x + indent, _y),
-		PixelUI.clip(text, width, size), color, size
+		_shrink(text, width, size), color, size
 	)
 	_y += PixelUI.LINE
 
@@ -117,7 +128,7 @@ func row(
 	var left_room := _inner.size.x - indent - right_width - gap
 	PixelUI.draw_text(
 		_canvas, Vector2(_inner.position.x + indent, _y),
-		PixelUI.clip(left, maxf(left_room, 0.0), size), left_color, size
+		_shrink(left, maxf(left_room, 0.0), size), left_color, size
 	)
 	if right != "":
 		PixelUI.draw_text_right(

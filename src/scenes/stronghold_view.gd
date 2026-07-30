@@ -423,32 +423,36 @@ func _draw() -> void:
 
 
 func _draw_header() -> void:
-	PixelUI.draw_window(self, HEADER_RECT, WINDOW_TEX)
-	var inner := PixelUI.content(HEADER_RECT)
-	PixelUI.draw_text(self, inner.position + Vector2(6, 0), Terms.STRONGHOLD, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	# 見出しと記録を 1 行に並べる。**ぶつかったら見出しのほうを詰める。**
+	# 資源と回数は数字なので、欠けると意味が変わる。
 	var record := "%s %d　%s %s　%s" % [
 		Terms.ECHO, GameState.echo,
 		Terms.DEEPEST, "%d" % maxi(GameState.deepest_floor, 1),
 		Terms.RUNS % (GameState.runs_attempted + 1),
 	]
-	PixelUI.draw_text_right(
-		self, Vector2(inner.end.x - 4, inner.position.y + 3), record,
-		PixelUI.C_TEXT_DIM, PixelUI.SIZE_TEXT
+	UiPanel.begin(self, HEADER_RECT, WINDOW_TEX).row(
+		Terms.STRONGHOLD, record, PixelUI.C_ACTIVE, PixelUI.C_TEXT_DIM,
+		PixelUI.SIZE_HEAD
 	)
 
 
 func _draw_roster() -> void:
-	PixelUI.draw_window(self, ROSTER_RECT, WINDOW_TEX)
-	var inner := PixelUI.content(ROSTER_RECT)
+	var panel := UiPanel.begin(self, ROSTER_RECT, WINDOW_TEX)
+	var inner := panel.inner()
 	for i in members.size():
 		var m := members[i]
 		var base := inner.position + Vector2(16, 6 + i * ROW_HEIGHT)
 		var on := _index == i and _state == State.MEMBER
 		if _index == i:
 			MenuList.draw_cursor(self, CURSOR_TEX, base)
-		PixelUI.draw_text(self, base, m.name, PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
-		PixelUI.draw_text(
-			self, base + Vector2(58, 2), _job_name(m.job_id), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		# 名前と職を 1 行に。**ぶつかったら名前を詰める**（職名は 4 文字前後で、
+		# 詰めると「まほう…」のように用途が読めなくなる）。
+		var row := UiPanel.inside(self, Rect2(
+			base, Vector2(inner.end.x - base.x, PixelUI.LINE)))
+		row.row(
+			m.name, _job_name(m.job_id),
+			PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM,
+			PixelUI.C_TEXT_DIM
 		)
 
 	_draw_roster_row(_party_row(), Terms.PARTY)
@@ -462,7 +466,8 @@ func _draw_roster_row(row: int, label: String) -> void:
 	if _index == row:
 		MenuList.draw_cursor(self, CURSOR_TEX, at)
 	var color := PixelUI.C_ACTIVE if _index == row else PixelUI.C_TEXT_DIM
-	PixelUI.draw_text(self, at, label, color)
+	UiPanel.inside(self, Rect2(
+		at, Vector2(inner.end.x - at.x, PixelUI.LINE))).line(label, color)
 
 
 func _draw_detail() -> void:
@@ -493,15 +498,30 @@ func _draw_detail() -> void:
 			Rect2(Vector2.ZERO, PORTRAIT_SIZE)
 		)
 
-	PixelUI.draw_text(self, origin + Vector2(6, 2), member.name, PixelUI.C_TEXT, PixelUI.SIZE_HEAD)
+	# 名前は立ち絵の手前まで。窓の右端まで許すと絵の下に潜る。
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 2), Vector2(200, PixelUI.LINE)
+	)).line(member.name, PixelUI.C_TEXT, PixelUI.SIZE_HEAD)
 	# ラン開始時の姿を出す。拠点ではレベルは常に 1 で、そこが「失ったもの」の証拠になる。
 	# 拠点ではレベルは常に 1（失ったことの証拠）。「じぶんの」と明記して、
 	# 右の熟練（職業ごとに積む・持ち帰る）と取り違えないようにする。
-	var head := "%s　じぶん Lv1　%s %d" % [
-		_job_name(shown_job), Terms.SPEED,
-		Terms.speed(int(Database.job(shown_job).get("cost_scale", 100))),
-	]
-	PixelUI.draw_text(self, origin + Vector2(6, 24), head, PixelUI.C_TEXT_DIM)
+	# **速さは右へ逃がす。** 1 行に詰めると立ち絵の手前（200px）に収まらず、
+	# 末尾の数値が `…` に化けた。数値は欠けると意味が変わるので右寄せで守り、
+	# 溢れたときは左（職名と Lv）が詰まる ―― 職名は下の一覧にも出ている。
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 24), Vector2(200, PixelUI.LINE)
+	)).row(
+		# **職名はこの行から外した。** 立ち絵・下の一覧の反転行・左の名簿の
+		# 3 か所に既に出ていて、4 つ目を置いたせいで 200px に収まらず
+		# `Lv1` まで `…` に化けていた。ここが伝えるのは「じぶんの」ほう ――
+		# 拠点でレベルが常に 1 であること（失ったものの証拠）と、いまの速さ。
+		"じぶん Lv1",
+		"%s %d" % [
+			Terms.SPEED,
+			Terms.speed(int(Database.job(shown_job).get("cost_scale", 100))),
+		],
+		PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
+	)
 	# 見出しは名前の右へ逃がす。1 行ぶん空けると職業が枠に収まらない。
 	# 見出しと数を**右端で揃える**。左から固定の位置に置くと、
 	# 「じゅくれんど」の幅が数字にかぶって枠まで押し出す（実際にはみ出していた）。
@@ -523,15 +543,27 @@ func _draw_detail() -> void:
 		var tint := PixelUI.C_ACTIVE if current else PixelUI.C_TEXT_DIM
 		if not member.can_take_job(job_id):
 			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
-		PixelUI.draw_text(self, row, _job_name(job_id), tint)
-		PixelUI.draw_text(
-			self, row + Vector2(96, 2),
-			_stars(member.mastery_rank(job_id), _max_rank(job_id)), tint, PixelUI.SIZE_SUB
-		)
-		PixelUI.draw_text(
-			self, row + Vector2(148, 2), _mastery_text(member, job_id),
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+		# **3 列それぞれに幅を持たせる。** 固定のオフセットで置いていたので、
+		# 職名が長い行だけ星に食い込んでいた（「つよさ で文字が重なる」の正体）。
+		# 幅を渡せば、はみ出す列は自分の中で `…` に詰まる。
+		UiPanel.inside(self, Rect2(row, Vector2(MASTERY_NAME_W, PixelUI.LINE))).line(
+			_job_name(job_id), tint)
+		UiPanel.inside(self, Rect2(
+			row + Vector2(MASTERY_NAME_W, 2), Vector2(MASTERY_STAR_W, PixelUI.LINE)
+		)).line(
+			_stars(member.mastery_rank(job_id), _max_rank(job_id)), tint, PixelUI.SIZE_SUB)
+		UiPanel.inside(self, Rect2(
+			row + Vector2(MASTERY_NAME_W + MASTERY_STAR_W, 2),
+			Vector2(MASTERY_TEXT_W, PixelUI.LINE)
+		)).line(_mastery_text(member, job_id), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+
+
+## 熟練の一覧の列幅。**合計は立ち絵の左端（208）に収める。**
+## 固定のオフセットで置いていた頃の 96 / 148 と同じ位置だが、
+## いまは幅として渡すので、長い職名はその列の中で詰まる。
+const MASTERY_NAME_W := 96.0
+const MASTERY_STAR_W := 52.0
+const MASTERY_TEXT_W := 58.0
 
 
 func _draw_departure_note() -> void:

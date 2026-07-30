@@ -168,7 +168,7 @@ func _send_input() -> void:
 	# 状態の 1 行（「EXPLORE 町 危険度2」）は場所の判別にも使う。
 	var status: String = _main.dev_status() if _main != null else ""
 	match _mode():
-		"TITLE", "RESULT":
+		"TITLE", "PROLOGUE", "RESULT":
 			_press("confirm")
 		"STRONGHOLD":
 			# 名簿の上ではキャンセルで「出撃する」へ飛べる。そこから決定で潜る。

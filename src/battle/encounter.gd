@@ -39,11 +39,11 @@ const MIN_SAFE_STEPS := 9
 ##
 ## 確率は歩数の半分ずつ上がる。線形に上げると 10 歩そこそこで必ず出るようになり、
 ## 移動が戦闘の待ち時間になってしまう（実際そうなっていた）。
-static func should_meet(rng: DetRng, weighted_steps: int) -> bool:
+static func should_meet(rng: DetRng, weighted_steps: int, event_bias: int = 0) -> bool:
 	if weighted_steps < MIN_SAFE_STEPS:
 		return false
 	@warning_ignore("integer_division")
-	var odds := 3 + weighted_steps / 2
+	var odds := clampi(3 + weighted_steps / 2 + event_bias * 5, 0, 90)
 	return rng.chance(odds)
 
 const SUFFIX := ["Ａ", "Ｂ", "Ｃ", "Ｄ", "Ｅ", "Ｆ"]
@@ -77,6 +77,22 @@ static func build(
 		if tally[id] > 1 and index < SUFFIX.size():
 			b.name += SUFFIX[index]
 		result.append(b)
+	return result
+
+
+## イベントで「手強い戦い」と明示された編成。
+## 通常遭遇をそのまま出すと選択肢の危険表示が嘘になるため、能力を25%上げる。
+static func build_elite(
+	rng: DetRng, floor_number: int, first_id: int = 100, biome: String = ""
+) -> Array[Battler]:
+	var result := build(rng, floor_number, first_id, biome)
+	for foe in result:
+		foe.name = "強敵 %s" % foe.name
+		foe.max_hp = maxi(foe.max_hp * 125 / 100, 1)
+		foe.hp = foe.max_hp
+		foe.atk = maxi(foe.atk * 125 / 100, 1)
+		foe.mag = maxi(foe.mag * 125 / 100, 1)
+		foe.defense = maxi(foe.defense * 125 / 100, 1)
 	return result
 
 
