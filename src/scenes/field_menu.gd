@@ -206,8 +206,7 @@ func _selected() -> PartyMember:
 	return party[clampi(_member_index, 0, party.size() - 1)] if not party.is_empty() else null
 
 
-## てんしょく。**代償を必ず先に見せる。**
-## レベルが戻ることを知らずに押せる位置に置いてはいけない。
+## てんしょく。どこでも自由にできる（取り上げるものは無い）。
 ## 開発用。てんしょくの一覧を撮るために使う。
 func debug_open_jobs() -> void:
 	_root_index = 3
@@ -258,15 +257,11 @@ func _apply_job() -> void:
 		Sound.play("cancel")
 		_notify("つくには %s が いる" % "　".join(member.unmet_requirements(job_id)))
 		return
-	var lost := GameState.job_change_cost_levels(member)
 	if not GameState.change_job(member, job_id):
 		Sound.play("cancel")
 		return
 	Sound.play("learn")
-	if lost > 0:
-		_notify("%sは %s になった（レベルを %d 返した）" % [member.name, _job_name(job_id), lost])
-	else:
-		_notify("%sは %s になった" % [member.name, _job_name(job_id)])
+	_notify("%sは %s になった" % [member.name, _job_name(job_id)])
 	_state = State.MEMBER
 
 
@@ -491,14 +486,13 @@ func _draw_body() -> void:
 				_draw_job_notice()
 
 
-## てんしょくを選ぶ前の案内。**代償を押す前に読める位置に置く。**
+## てんしょくを選ぶ前の案内。押す前に読める位置に置く。
 func _draw_job_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
 	PixelUI.draw_text(self, origin, "てんしょく", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines := [
-		"じゅくれんと おぼえた わざは のこる。",
-		"だが **レベルは 1 に もどる。**",
-		"技を 入れかえるかわりに 強さを 捨てる。",
+		"いつでも どこでも 職を かえられる。",
+		"レベルも じゅくれんも そのまま のこる。",
 	]
 	for i in lines.size():
 		PixelUI.draw_text(self, origin + Vector2(0, 32 + i * 22), lines[i], PixelUI.C_TEXT_DIM)
@@ -510,15 +504,13 @@ func _draw_jobs() -> void:
 	if member == null or _job_ids.is_empty():
 		return
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 2)
-	var lost := GameState.job_change_cost_levels(member)
 	PixelUI.draw_text(
 		self, origin, "%s を てんしょく" % member.name, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD
 	)
-	# 何を失うかを常に見せる。数字が出ていないと押した後に驚くことになる。
-	var cost := "いま Lv%d。てんしょくで Lv1 に もどる" % member.level if lost > 0 else "いま Lv1。失うものは ない"
 	PixelUI.draw_text(
-		self, origin + Vector2(0, 24), cost,
-		PixelUI.C_HP_LOW if lost > 0 else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		self, origin + Vector2(0, 24),
+		"Lv%d のまま。おぼえた わざも のこる" % member.level,
+		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 	)
 
 	var rows := int(ceil(_job_ids.size() / float(JOB_COLS)))

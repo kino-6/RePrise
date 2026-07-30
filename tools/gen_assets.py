@@ -407,6 +407,66 @@ def _tileset_readable(sheet: Canvas) -> tuple[bool, str]:
     )
 
 
+# 床と壁を引き離すときの 1 段ぶん。壁の明るさをこの割合ずつ落とす。
+_SEPARATE_STEP = 0.88
+_SEPARATE_TRIES = 12
+
+
+def separate_floor_wall(sheet: Canvas, name: str) -> Canvas:
+    """床と壁が近すぎるなら、壁を暗くして引き離す。
+
+    **却下せずに直す。** このリポジトリの取り込みは元々そういう作りで、
+    BGR555 に乗っていない色は丸めて通す（実機に無い色は間違いではなく、
+    まだ丸めていないだけ）。寸法・アルファ・色数のように直せないものだけ止める。
+    床と壁の距離は**直せる**ので、止める側に置いていたのが誤りだった。
+
+    草原や湿地は床（草）と壁（茂み）が同じ色相で、絵として正しくても
+    数値では近くなる。色相を変えると絵が壊れるので、**明るさだけ**を落とす。
+    見下ろし画面では壁が暗いほうが自然なので、絵の意図とも喧嘩しない。
+    """
+    floor = _tile_mean(sheet, 0)
+    wall = _tile_mean(sheet, 2)
+    if math.dist(floor, wall) >= MIN_FLOOR_WALL_DISTANCE:
+        return sheet
+
+    before = math.dist(floor, wall)
+    down = 1.0
+    up = 1.0
+    for _ in range(_SEPARATE_TRIES):
+        # **壁を暗くするだけでなく、床も同じだけ明るくする。**
+        # 片側だけ動かすと絵全体が沈み、草原が夜の洞窟になった（実際そうなった）。
+        # 両側へ開けば中間の明るさが保たれるので、元の絵の調子が残る。
+        down *= _SEPARATE_STEP
+        up /= _SEPARATE_STEP
+        shifted = _scale_tiles(sheet, (2, 3), down)
+        shifted = _scale_tiles(shifted, (0, 1), up)
+        after = math.dist(_tile_mean(shifted, 0), _tile_mean(shifted, 2))
+        if after >= MIN_FLOOR_WALL_DISTANCE:
+            print(
+                "    %s: 床を %.0f%% / 壁を %.0f%% にして引き離した（%.1f → %.1f）"
+                % (name, up * 100, down * 100, before, after)
+            )
+            return shifted
+    # ここまで暗くしても離れないなら、床と壁が同じ絵ということ。直せない。
+    return sheet
+
+
+def _scale_tiles(sheet: Canvas, indices: tuple, factor: float) -> Canvas:
+    """指定したタイルだけ明るさを変えた複製を返す。"""
+    out = Canvas(sheet.w, sheet.h)
+    for y in range(sheet.h):
+        for x in range(sheet.w):
+            px = sheet.get(x, y)
+            if px[3] and (x // TILE) in indices:
+                # snes() は #RRGGBB を取るので、ここでは 5bit へ直に丸める
+                # （31 段階に落として戻す。実機に無い色を作らないため）。
+                px = tuple(
+                    (min(int(c * factor), 255) >> 3) * 255 // 31 for c in px[:3]
+                ) + (px[3],)
+            out.set(x, y, px)
+    return out
+
+
 ## 場所ごとのタイル。既定（dungeon）は assets/tiles/dungeon.png に、
 ## それ以外は名前のまま置く。無い場所は単に生成されないので、
 ## ゲーム側は「あれば使う」で拾えばよい。
@@ -421,6 +481,7 @@ def build_biomes() -> None:
         sheet = _load_sheet(f"candidate_tiles_{name}", TILESET_SIZE)
         if sheet is None:
             continue
+        sheet = separate_floor_wall(sheet, name)
         readable, reason = _tileset_readable(sheet)
         if not readable:
             print(f"  見送り: candidate_tiles_{name}.png — {reason}")
@@ -438,6 +499,7 @@ def build_tileset() -> None:
     """
     imported = _load_sheet("candidate_tiles_dungeon", TILESET_SIZE)
     if imported is not None:
+        imported = separate_floor_wall(imported, "dungeon")
         readable, reason = _tileset_readable(imported)
         if readable:
             imported.to_png(ASSETS / "tiles" / "dungeon.png")

@@ -299,7 +299,7 @@ func _capture(which: String) -> void:
 			GameState.add_gear("leather_vest")
 			_open_menu()
 		"jobmenu":
-			# てんしょくの一覧と代償の表示を確かめる
+			# てんしょくの一覧の見え方を確かめる
 			_start_run()
 			for m in GameState.active_party():
 				while m.level < 7:
