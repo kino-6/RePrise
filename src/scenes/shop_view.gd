@@ -26,8 +26,6 @@ const DETAIL_RECT := Rect2(244, 50, 260, 176)
 const MENU_RECT := Rect2(8, 232, 496, 80)
 
 const ROW_HEIGHT := 24
-const CURSOR_OFFSET := Vector2(-15, 2)
-const NOTICE_TIME := 1.6
 const INPUT_LOCK := 0.15
 
 ## 休息の値段は階層に比例させる。深いほど「もう一度整える」判断が重くなる。
@@ -37,8 +35,7 @@ var _map: DungeonMap = null
 var _floor := 1
 var _ids: Array = []
 var _index := 0
-var _notice := ""
-var _notice_timer := 0.0
+var _notice := Notice.new()
 var _input_lock := 0.0
 
 
@@ -57,8 +54,7 @@ func open(map: DungeonMap, floor_number: int) -> void:
 			# 装備は 1 点もの。伝手を買っても在庫は増やさない。
 			_map.shop_stock[id] = base if _is_gear(String(id)) else base + extra
 	_index = 0
-	_notice = ""
-	_notice_timer = 0.0
+	_notice.clear()
 	_input_lock = INPUT_LOCK
 	set_process(true)
 	set_process_unhandled_input(true)
@@ -73,16 +69,12 @@ func close() -> void:
 func _process(delta: float) -> void:
 	if _input_lock > 0.0:
 		_input_lock -= delta
-	if _notice_timer > 0.0:
-		_notice_timer -= delta
-		if _notice_timer <= 0.0:
-			_notice = ""
-			queue_redraw()
+	if _notice.tick(delta):
+		queue_redraw()
 
 
 func _notify(text: String) -> void:
-	_notice = text
-	_notice_timer = NOTICE_TIME
+	_notice.set_text(text)
 	queue_redraw()
 
 
@@ -223,8 +215,7 @@ const VISIBLE_ROWS := 6
 
 ## カーソルを中央付近に保ったまま送る窓の先頭行。
 func _list_top() -> int:
-	var total := _leave_row() + 1
-	return clampi(_index - VISIBLE_ROWS / 2, 0, maxi(total - VISIBLE_ROWS, 0))
+	return MenuList.top_of(_index, _leave_row() + 1, VISIBLE_ROWS)
 
 
 func _draw_list() -> void:
@@ -236,7 +227,7 @@ func _draw_list() -> void:
 	for row in range(top, mini(top + VISIBLE_ROWS, total)):
 		var base := inner.position + Vector2(16, 6 + (row - top) * ROW_HEIGHT)
 		if _index == row:
-			draw_texture(CURSOR_TEX, (base + CURSOR_OFFSET).floor())
+			MenuList.draw_cursor(self, CURSOR_TEX, base)
 
 		if row == _rest_row():
 			_draw_row(base, inner, row, "やすむ", "%dG" % rest_price(), false)
@@ -253,12 +244,7 @@ func _draw_list() -> void:
 		]
 		_draw_row(base, inner, row, String(it.get("name", item_id)), right, sold_out)
 
-	# 続きがあることを隠さない。見えない品を買えない状態が一番たちが悪い。
-	if total > VISIBLE_ROWS:
-		PixelUI.draw_text_right(
-			self, Vector2(inner.end.x - 2, inner.end.y - 14),
-			"%d/%d" % [_index + 1, total], PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+	MenuList.draw_position(self, inner, _index, total, VISIBLE_ROWS)
 
 
 func _draw_row(base: Vector2, inner: Rect2, row: int, label: String, right: String, sold_out: bool) -> void:
@@ -333,4 +319,4 @@ func _draw_menu() -> void:
 
 
 func _draw_notice() -> void:
-	PixelUI.draw_notice(self, WINDOW_TEX, _notice, 130.0)
+	_notice.draw(self, WINDOW_TEX, 130.0)

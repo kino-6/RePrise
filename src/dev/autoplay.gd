@@ -18,6 +18,10 @@ const SHOT_INTERVAL := 1.2
 ## 1 秒あたりの入力回数。人が押す速さより少し速いくらい。
 const INPUTS_PER_SECOND := 6.0
 
+## 同じ画面に居座る上限（秒）。これを超えたら出口へ向かわせる。
+## メニューに confirm を打ち続けると奥へ潜り続けて探索が進まなかった。
+const LINGER_LIMIT := 6.0
+
 const SHOT_DIR := "res://docs/preview/play"
 
 var _rng: DetRng = null
@@ -36,6 +40,11 @@ var _timeline: Array[String] = []
 var _last_mode := ""
 var _mode_time := 0.0
 var _stuck_report: Array[String] = []
+
+## 走らせるたびに数字で比べられるようにする集計。
+var _deepest := 1
+var _battles := 0
+var _runs := 0
 
 
 func start(main_node: Node, seconds: float, seed_value: int = 12345) -> void:
@@ -95,6 +104,13 @@ func _track_mode(delta: float) -> void:
 	var mode := _status()
 	if mode != _last_mode:
 		_timeline.append("%5.1fs %s" % [_elapsed, mode])
+		if mode.begins_with("BATTLE"):
+			_battles += 1
+		if mode.begins_with("RESULT"):
+			_runs += 1
+		var at := mode.find("地下")
+		if at >= 0:
+			_deepest = maxi(_deepest, int(mode.substr(at + 2)))
 		_last_mode = mode
 		_mode_time = 0.0
 		return
@@ -129,10 +145,20 @@ func _send_input() -> void:
 				_press("cancel")
 			else:
 				_press("confirm")
-		"SHOP", "MENU":
-			if _rng.chance(30):
+		"SHOP":
+			# 買い物は実際に踏ませる。すぐ立ち去ると装備も道具も試されない。
+			if _mode_time > LINGER_LIMIT or _rng.chance(8):
 				_press("cancel")
-			elif _rng.chance(40):
+			elif _rng.chance(45):
+				_press(_rng.pick(["ui_up", "ui_down"]))
+			else:
+				_press("confirm")
+		"MENU":
+			# 奥（そうび・つよさ）まで潜らせたいが、居座られると探索が進まない。
+			# 長居したら出口へ向かわせる（人も見終わったら閉じる）。
+			if _mode_time > LINGER_LIMIT or _rng.chance(18):
+				_press("cancel")
+			elif _rng.chance(45):
 				_press(_rng.pick(["ui_up", "ui_down"]))
 			else:
 				_press("confirm")
@@ -200,4 +226,8 @@ func _report() -> void:
 		print("詰まり:")
 		for line in _stuck_report:
 			print("  " + line)
+	print("---")
+	print("最深      : 地下 %d 階" % _deepest)
+	print("戦闘      : %d 回" % _battles)
+	print("ランの終了 : %d 回" % _runs)
 	print("コマ: %s に %d 枚" % [SHOT_DIR, _shot_index])

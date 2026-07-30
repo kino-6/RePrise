@@ -27,9 +27,6 @@ const MENU_RECT := Rect2(8, 220, 496, 92)
 
 const ROW_HEIGHT := 23
 
-## カーソルを行の左に置くときのずれ。文字の左上からの相対で持つ。
-const CURSOR_OFFSET := Vector2(-15, 2)
-const NOTICE_TIME := 2.0
 
 ## 前の画面を閉じた決定キーが、そのままこの画面の決定として流れ込むのを防ぐ。
 const INPUT_LOCK := 0.15
@@ -65,8 +62,7 @@ var _job_ids: Array = []
 var _job_index := 0
 var _upgrade_ids: Array = []
 var _upgrade_index := 0
-var _notice := ""
-var _notice_timer := 0.0
+var _notice := Notice.new()
 var _input_lock := 0.0
 
 
@@ -77,8 +73,7 @@ func open() -> void:
 	_upgrade_index = 0
 	_state = State.MEMBER
 	_index = 0
-	_notice = ""
-	_notice_timer = 0.0
+	_notice.clear()
 	_input_lock = INPUT_LOCK
 	set_process(true)
 	set_process_unhandled_input(true)
@@ -93,16 +88,12 @@ func close() -> void:
 func _process(delta: float) -> void:
 	if _input_lock > 0.0:
 		_input_lock -= delta
-	if _notice_timer > 0.0:
-		_notice_timer -= delta
-		if _notice_timer <= 0.0:
-			_notice = ""
-			queue_redraw()
+	if _notice.tick(delta):
+		queue_redraw()
 
 
 func _notify(text: String) -> void:
-	_notice = text
-	_notice_timer = NOTICE_TIME
+	_notice.set_text(text)
 	queue_redraw()
 
 
@@ -225,8 +216,7 @@ const MASTERY_ROWS := 7
 ## 表示する熟練の行（職業の添字）。選んでいる職業が必ず入るように窓をずらす。
 func _mastery_window(shown_job: String) -> Array[int]:
 	var current := maxi(_job_ids.find(shown_job), 0)
-	@warning_ignore("integer_division")
-	var top := clampi(current - MASTERY_ROWS / 2, 0, maxi(_job_ids.size() - MASTERY_ROWS, 0))
+	var top := MenuList.top_of(current, _job_ids.size(), MASTERY_ROWS)
 	var rows: Array[int] = []
 	for i in range(top, mini(top + MASTERY_ROWS, _job_ids.size())):
 		rows.append(i)
@@ -364,7 +354,7 @@ func _draw_roster() -> void:
 		var base := inner.position + Vector2(16, 6 + i * ROW_HEIGHT)
 		var on := _index == i and _state == State.MEMBER
 		if _index == i:
-			draw_texture(CURSOR_TEX, (base + CURSOR_OFFSET).floor())
+			MenuList.draw_cursor(self, CURSOR_TEX, base)
 		PixelUI.draw_text(self, base, m.name, PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
 		PixelUI.draw_text(
 			self, base + Vector2(58, 2), _job_name(m.job_id), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
@@ -378,7 +368,7 @@ func _draw_roster_row(row: int, label: String) -> void:
 	var inner := PixelUI.content(ROSTER_RECT)
 	var at := inner.position + Vector2(16, 6 + row * ROW_HEIGHT)
 	if _index == row:
-		draw_texture(CURSOR_TEX, (at + CURSOR_OFFSET).floor())
+		MenuList.draw_cursor(self, CURSOR_TEX, at)
 	var color := PixelUI.C_ACTIVE if _index == row else PixelUI.C_TEXT_DIM
 	PixelUI.draw_text(self, at, label, color)
 
@@ -486,7 +476,7 @@ func _draw_upgrade_note() -> void:
 		var on := _state == State.UPGRADE and i == _upgrade_index
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		if on:
-			draw_texture(CURSOR_TEX, (row + CURSOR_OFFSET).floor())
+			MenuList.draw_cursor(self, CURSOR_TEX, row)
 		PixelUI.draw_text(self, row, String(u.get("name", id)), tint)
 		PixelUI.draw_text(
 			self, row + Vector2(144, 0),
@@ -588,7 +578,7 @@ func _draw_job_menu() -> void:
 		var on := i == _job_index
 		var locked := not member.can_take_job(job_id)
 		if on:
-			draw_texture(CURSOR_TEX, (at + CURSOR_OFFSET).floor())
+			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		if job_id == member.job_id:
 			tint = PixelUI.C_ACTIVE
@@ -601,4 +591,4 @@ func _draw_job_menu() -> void:
 
 
 func _draw_notice() -> void:
-	PixelUI.draw_notice(self, WINDOW_TEX, _notice, 130.0)
+	_notice.draw(self, WINDOW_TEX, 130.0)

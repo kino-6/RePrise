@@ -88,12 +88,17 @@ var _victory := false
 var _outcome_shown := false
 var _escaped := false
 
-## オート戦闘。SFC 期の「さくせん」に当たるもので、雑魚戦のテンポのために置く。
-## 中身は「傷が深い者がいれば回復、いなければ一番効く攻撃」の 1 本だけ。
-var _auto := false
+## オート戦闘の作戦。中身は src/battle/auto_tactic.gd にある。
+var _auto: AutoTactic.Mode = AutoTactic.Mode.OFF
 
 ## 被弾の点滅の残り時間。
 var _blink := 0.0
+
+## 画面フラッシュの強さ（強い魔法が当たった瞬間）。
+var _flash := 0.0
+
+## サブウィンドウが開く演出の進み（0..1）。
+var _list_open := 1.0
 
 
 func _ready() -> void:
@@ -111,7 +116,7 @@ func start(battle: BattleSystem, party_members: Array[PartyMember]) -> void:
 	_outcome_shown = false
 	_victory = false
 	_escaped = false
-	_auto = false
+	_auto = AutoTactic.Mode.OFF
 	set_process(true)
 	set_process_unhandled_input(true)
 	_refresh()
@@ -125,6 +130,10 @@ func start(battle: BattleSystem, party_members: Array[PartyMember]) -> void:
 func _process(delta: float) -> void:
 	if system == null:
 		return
+	if _state == State.LIST and _list_open < 1.0:
+		_list_open = minf(_list_open + delta * 9.0, 1.0)
+		queue_redraw()
+
 	match _state:
 		State.TURN_START:
 			_begin_turn()
@@ -132,8 +141,9 @@ func _process(delta: float) -> void:
 			_timer -= delta
 			if _timer <= 0.0:
 				_advance_message()
-			if _blink > 0.0:
+			if _blink > 0.0 or _flash > 0.0:
 				_blink = maxf(_blink - delta, 0.0)
+				_flash = maxf(_flash - delta * 3.0, 0.0)
 				queue_redraw()
 		_:
 			pass
@@ -160,20 +170,28 @@ func _begin_turn() -> void:
 
 	_refresh()
 	if _actor.is_ally:
-		if _auto:
+		if _auto != AutoTactic.Mode.OFF:
 			_auto_act()
 		else:
 			_open_root_menu()
 	else:
 		var lines := system.perform_enemy(_actor)
 		_play_ability_sfx(system.last_ability_id)
+		_play_status_sfx()
 		_show(lines)
 
 
-## 技の系統で効果音を選ぶ。技ごとに音を持たせるのは後からでよく、
-## まずは打撃・魔法・回復の 3 種が鳴り分ければ手応えが出る。
+## 効果音を選ぶ。
+##
+## 属性があるならそれを優先する。炎・氷・雷が同じ音で鳴ると、
+## 属性を切り替えている手応えが出ない（音の作り分けは tools/gen_audio.py 側）。
 func _play_ability_sfx(ability_id: String) -> void:
-	match String(Database.ability(ability_id).get("kind", "")):
+	var ab := Database.ability(ability_id)
+	var element := String(ab.get("element", ""))
+	if element in ["fire", "ice", "bolt"]:
+		Sound.play(element)
+		return
+	match String(ab.get("kind", "")):
 		"physical":
 			Sound.play("hit")
 		"magical":
@@ -182,6 +200,18 @@ func _play_ability_sfx(ability_id: String) -> void:
 			Sound.play("heal")
 		_:
 			Sound.play("confirm")
+
+
+## 状態異常がかかった瞬間の音。かかったかどうかは Battler の状態で判断する
+## （ログの文字列を読むと、文言を変えた瞬間に鳴らなくなる）。
+func _play_status_sfx() -> void:
+	for b in system.allies + system.enemies:
+		if b.sleep_turns == BattleSystem.SLEEP_TURNS:
+			Sound.play("sleep")
+			return
+		if b.poison_turns == BattleSystem.POISON_TURNS:
+			Sound.play("poison")
+			return
 
 
 ## 開発用。コマンド選択が出るまで待ってから撮影するのに使う。
@@ -272,8 +302,12 @@ func _choose_root() -> void:
 		Root.ESCAPE:
 			_try_escape()
 		Root.AUTO:
-			_auto = true
-			_auto_act()
+			# 押すたびに作戦が回る（切 → いのち → ガンガン → 切）。
+			_auto = AutoTactic.next_mode(_auto)
+			if _auto == AutoTactic.Mode.OFF:
+				_open_root_menu()
+			else:
+				_auto_act()
 
 
 # --------------------------------------------------------------------------
@@ -293,6 +327,7 @@ func _open_list(kind: String) -> void:
 		Sound.play("cancel")
 		return
 	_list_index = 0
+	_list_open = 0.0
 	_state = State.LIST
 	_refresh()
 
@@ -407,6 +442,7 @@ func _execute(target: Battler) -> void:
 		return
 	var lines := system.perform(_actor, _pending_ability, target)
 	_play_ability_sfx(_pending_ability)
+	_play_status_sfx()
 	_show(lines)
 
 
@@ -417,6 +453,22 @@ func _execute(target: Battler) -> void:
 
 ## 逃走。素早さ差で決まる。逃げられれば報酬は無いが、資源を残せる。
 ## 「勝つ以外の終わり方」があると、消耗戦の判断が一段増える。
+## 逃げられる見込み（%）。選ぶ前に読めないと、賭けにすらならない。
+func escape_odds() -> int:
+	if system == null:
+		return 0
+	for b in system.enemies:
+		if bool(Database.monster(b.source_id).get("boss", false)):
+			return 0
+	var ours := 0
+	for b in system.living_allies():
+		ours += b.effective_agi()
+	var theirs := 0
+	for b in system.living_enemies():
+		theirs += b.effective_agi()
+	return clampi(45 + (ours - theirs) * 2, 15, 92)
+
+
 func _try_escape() -> void:
 	var ours := 0
 	for b in system.living_allies():
@@ -438,61 +490,12 @@ func _try_escape() -> void:
 		_show(["しかし　まわりこまれてしまった！"] as Array[String])
 
 
-## オート戦闘の 1 手。DQ4 の「いのちだいじに」に近い素朴な指針にしてある。
-## 賢さより読みやすさを優先する（何をするか分からない自動戦闘は使われない）。
+## オート戦闘の 1 手。判断は AutoTactic に任せ、ここは実行だけを持つ。
 func _auto_act() -> void:
-	var hurt := _most_hurt_ally()
-	if hurt != null:
-		var heal_id := _best_heal()
-		if heal_id != "":
-			_pending_ability = heal_id
-			_pending_item = ""
-			_execute(hurt)
-			return
-
-	var attack_id := _best_attack()
-	_pending_ability = attack_id
+	var plan := AutoTactic.decide(system, _actor, _auto)
+	_pending_ability = String(plan["ability"])
 	_pending_item = ""
-	var scope := String(Database.ability(attack_id).get("target", "one_enemy"))
-	if scope in ["self", "all_enemies", "all_allies"]:
-		_execute(null)
-		return
-	var foes := system.living_enemies()
-	_execute(foes[0] if not foes.is_empty() else null)
-
-
-func _most_hurt_ally() -> Battler:
-	var worst: Battler = null
-	for b in system.living_allies():
-		if b.hp * 100 / maxi(b.max_hp, 1) <= 45:
-			if worst == null or b.hp * 100 / b.max_hp < worst.hp * 100 / worst.max_hp:
-				worst = b
-	return worst
-
-
-func _best_heal() -> String:
-	for id in system.usable_abilities(_actor):
-		var ab := Database.ability(id)
-		if String(ab.get("kind", "")) == "heal" and String(ab.get("target", "")) == "one_ally":
-			return id
-	return ""
-
-
-## いちばん期待値の高い攻撃。属性の相性までは見ない（見ると読めなくなる）。
-func _best_attack() -> String:
-	var best := "attack"
-	var best_power := 0
-	for id in system.usable_abilities(_actor):
-		var ab := Database.ability(id)
-		if String(ab.get("kind", "")) not in ["physical", "magical"]:
-			continue
-		var power := int(ab.get("power", 0)) * maxi(int(ab.get("hits", 1)), 1)
-		# 手番の重さで割る。CTB では「1 手あたり」ではなく「時間あたり」が効率。
-		power = power * 100 / maxi(int(ab.get("cost", 100)), 1)
-		if power > best_power:
-			best_power = power
-			best = id
-	return best
+	_execute(plan["target"])
 
 
 # --------------------------------------------------------------------------
@@ -500,10 +503,20 @@ func _best_attack() -> String:
 # --------------------------------------------------------------------------
 
 
+## 画面を白く飛ばすほどの一撃か。全体攻撃か、威力の高い魔法。
+func _is_big_hit(ability_id: String) -> bool:
+	var ab := Database.ability(ability_id)
+	if String(ab.get("target", "")) == "all_enemies":
+		return true
+	return String(ab.get("kind", "")) == "magical" and int(ab.get("power", 0)) >= 130
+
+
 func _show(lines: Array[String]) -> void:
 	# 誰かに当たった行動なら点滅させる。当たった相手は BattleSystem が持っている
 	# （文字列を見て判断すると、文言を変えた瞬間に演出が消える）。
 	_blink = 0.3 if not system.last_hit_ids.is_empty() else 0.0
+	if not system.last_hit_ids.is_empty() and _is_big_hit(system.last_ability_id):
+		_flash = 0.55
 	_queue = lines.duplicate()
 	_shown.clear()
 	_state = State.MESSAGE
@@ -519,7 +532,7 @@ func _advance_message() -> void:
 	# 窓は 3 行ぶん。溢れたら古い行から捨てる。
 	while _shown.size() > 3:
 		_shown.pop_front()
-	_timer = AUTO_LINE_DELAY if _auto else LINE_DELAY
+	_timer = AUTO_LINE_DELAY if _auto != AutoTactic.Mode.OFF else LINE_DELAY
 	_refresh()
 
 
@@ -610,8 +623,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_timer = 0.0
 				_advance_message()
 			# オート中はどのキーでも解除できる
-			elif _auto:
-				_auto = false
+			elif _auto != AutoTactic.Mode.OFF:
+				_auto = AutoTactic.Mode.OFF
 		_:
 			pass
 
@@ -661,6 +674,8 @@ func _draw() -> void:
 	_draw_party_status()
 	if _state == State.LIST:
 		_draw_list()
+	# フラッシュは最前面。窓の上に乗らないと「画面が光った」に見えない。
+	PixelUI.draw_flash(self, _flash)
 
 
 func _draw_enemies() -> void:
@@ -681,6 +696,17 @@ func _draw_enemies() -> void:
 		var tex: Texture2D = SPRITES.get(b.sprite, SPRITES["gel"])
 		var pos := Vector2(spacing * (i + 1) - tex.get_width() * 0.5, ENEMY_BASELINE - tex.get_height())
 		draw_texture(tex, pos.floor())
+
+		# 受けたダメージを相手の上に出す。メッセージ窓の文字だけだと
+		# 「どこに何が起きたか」が数字と場所で結び付かない。
+		if _blink > 0.0 and system.last_hit_amount.has(b.id):
+			var amount := int(system.last_hit_amount[b.id])
+			var text := "%d" % amount
+			var lift := (0.3 - _blink) * 26.0
+			PixelUI.draw_text(
+				self, Vector2(pos.x + tex.get_width() * 0.5 - PixelUI.text_width(text) * 0.5,
+				pos.y - 24 - lift), text, PixelUI.C_ACTIVE
+			)
 
 		# 状態異常は敵にも出す。眠らせた相手が分からないと意味が無い。
 		var tag := b.status_tag()
@@ -731,10 +757,14 @@ func _draw_root_menu(origin: Vector2) -> void:
 		if on:
 			draw_texture(CURSOR_TEX, (at + Vector2(-14, 2)).floor())
 		var label := String(ROOT_LABELS[_roots[i]])
-		if _roots[i] == Root.AUTO and _auto:
-			label = "オート中"
+		if _roots[i] == Root.AUTO:
+			label = AutoTactic.label(_auto)
+		# 逃げられる見込みを添える。0% は主（逃げられない相手）。
+		if _roots[i] == Root.ESCAPE:
+			var odds := escape_odds()
+			label = "にげる ×" if odds <= 0 else "にげる %d%%" % odds
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
-		if _roots[i] == Root.AUTO and _auto:
+		if _roots[i] == Root.AUTO and _auto != AutoTactic.Mode.OFF:
 			tint = PixelUI.C_ACTIVE
 		PixelUI.draw_text(self, at, label, tint)
 
@@ -744,6 +774,10 @@ func _draw_root_menu(origin: Vector2) -> void:
 ## 「待70」が何のことか分からない、という指摘への答えがこの窓の見出し。
 ## MP と「つぎのてばんまで」を列見出しとして常に出し、数字の意味を画面内で閉じる。
 func _draw_list() -> void:
+	# 開く途中は枠だけ伸ばして、中身は開き終わってから出す。
+	if _list_open < 1.0:
+		PixelUI.draw_window(self, PixelUI.opening(LIST_RECT, _list_open), WINDOW_TEX)
+		return
 	PixelUI.draw_window(self, LIST_RECT, WINDOW_TEX)
 	var inner := PixelUI.content(LIST_RECT)
 	var origin := inner.position + Vector2(16, 0)
@@ -826,6 +860,11 @@ func _draw_party_status() -> void:
 			name_color = PixelUI.C_ACTIVE
 
 		PixelUI.draw_text(self, base, b.name, name_color)
+		if _blink > 0.0 and system.last_hit_amount.has(b.id):
+			PixelUI.draw_text(
+				self, base + Vector2(0, -18), "-%d" % int(system.last_hit_amount[b.id]),
+				PixelUI.C_HP_LOW
+			)
 		var tag := b.status_tag()
 		if tag != "":
 			PixelUI.draw_text(self, base + Vector2(62, 2), tag, PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)

@@ -25,6 +25,10 @@ const ELEMENT_RESIST := 50
 ## group は 2 体以下、all は 3 体以下で増える。
 const SPREAD_BONUS := {1: 150, 2: 120, 3: 100}
 
+## 敵が候補に入れる素点の下限（最善の何 % か）。
+## 小さいほど気まぐれ、100 にすると常に最善を打って理不尽になる。
+const ENEMY_PICK_RATIO := 45
+
 ## 状態異常の持続手番。
 const SLEEP_TURNS := 3
 const POISON_TURNS := 5
@@ -46,9 +50,10 @@ var stolen_items: Array[String] = []
 ## 直近に実行された技。演出側が効果音を選ぶのに使う。
 var last_ability_id: String = ""
 
-## 直近の行動でダメージを受けた者の id。演出（被弾の点滅）に使う。
+## 直近の行動でダメージを受けた者の id と量。演出（点滅と数字）に使う。
 ## 表示側がログの文字列を読んで判断すると、文言を変えた瞬間に演出が消える。
 var last_hit_ids: Array[int] = []
+var last_hit_amount: Dictionary = {}
 
 
 func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_no: int = 1) -> void:
@@ -181,6 +186,7 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 
 	last_ability_id = ability_id
 	last_hit_ids.clear()
+	last_hit_amount.clear()
 	var lines: Array[String] = []
 	actor.mp = maxi(actor.mp - int(ab.get("mp", 0)), 0)
 	lines.append("%sの　%s！" % [actor.name, ab.get("name", ability_id)])
@@ -503,11 +509,79 @@ func use_item(actor: Battler, item_id: String, target: Battler) -> Array[String]
 
 ## 敵が次に使う技を決める。**技だけ**を先に決めて予告に出し、対象は実行時に選ぶ。
 ## 対象まで先に決めると、その相手が先に倒れていた場合に空振りになる。
+##
+## 等確率で引くと、深層の敵ほど的外れな手を打つ（範囲攻撃を 1 体に撃つ、
+## 効いている状態異常を上塗りする）。重み付けで「それらしい」程度まで上げる。
+## 賢くしすぎないこと。読めない敵は理不尽になる。
 func _choose_enemy_ability(actor: Battler) -> String:
 	var usable := usable_abilities(actor)
 	if usable.is_empty():
 		return "attack"
-	return String(rng.pick(usable))
+
+	# 最善だけを打たせない。
+	#
+	# 素点の最大だけを選ばせたら、自動操縦の勝率が 14% から 1% まで落ちた。
+	# DQ4 の AI が「わざと最善を打たない」作りになっているのはこのためで、
+	# 最善を打ち続ける相手は強いのではなく理不尽になる。
+	# 上位の候補から引くことで、読める範囲の強さに収める。
+	var scores := {}
+	var best_score := 0
+	for id in usable:
+		var score := _enemy_score(actor, id)
+		scores[id] = score
+		best_score = maxi(best_score, score)
+
+	var pool: Array[String] = []
+	for id in usable:
+		if int(scores[id]) * 100 >= best_score * ENEMY_PICK_RATIO:
+			pool.append(id)
+	return String(rng.pick(pool)) if not pool.is_empty() else "attack"
+
+
+func _enemy_score(actor: Battler, ability_id: String) -> int:
+	var ab := Database.ability(ability_id)
+	var kind := String(ab.get("kind", "physical"))
+	var scope := String(ab.get("target", "one_enemy"))
+	var foes := living_allies()  # 敵から見た「相手」＝味方
+	var score := 10
+
+	match kind:
+		"physical", "magical":
+			# 時間あたりの効率で見る。CTB では 1 手あたりではなく時間あたりが効率。
+			var power := int(ab.get("power", 0)) * maxi(int(ab.get("hits", 1)), 1)
+			score = power * 100 / maxi(int(ab.get("cost", 100)), 1)
+			# 範囲は相手が多いときだけ得。1 体に全体攻撃を撃たない。
+			if scope in ["group_enemy", "all_enemies"]:
+				score = score * mini(foes.size(), 3) / 2
+			# 弱点を突けるなら上げる（属性を持たない技は素点のまま）
+			var element := String(ab.get("element", ""))
+			if element != "":
+				var weak := 0
+				for f in foes:
+					if element in f.weak:
+						weak += 1
+				score += weak * 30
+		"debuff":
+			# 既に効いている相手に上塗りしない。全員に効いていれば選ばない。
+			var fresh := 0
+			for f in foes:
+				match String(ab.get("effect", "")):
+					"sleep":
+						if f.sleep_turns <= 0:
+							fresh += 1
+					"slow":
+						if f.agi_scale >= 100:
+							fresh += 1
+					_:
+						fresh += 1
+			score = 0 if fresh == 0 else 60 + fresh * 10
+		"buff":
+			# 自分にかけ直しても意味が薄い
+			score = 20 if actor.agi_scale <= 100 else 0
+		"heal":
+			# 手負いのときだけ
+			score = 90 if actor.hp * 2 < actor.max_hp else 0
+	return maxi(score, 1)
 
 
 ## 敵の行動を実行する。LLM は一切関与させない。

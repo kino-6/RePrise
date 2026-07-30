@@ -126,6 +126,7 @@ func _try_move(target: Vector2i) -> void:
 		chest_opened.emit(rng.range_i(8, 30))
 		return
 
+
 	if not map.is_walkable(target.x, target.y):
 		queue_redraw()  # 向きだけ変える
 		return

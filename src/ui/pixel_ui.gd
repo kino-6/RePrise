@@ -191,6 +191,29 @@ static func draw_gauge(
 		canvas.draw_rect(inner, fill, true)
 
 
+## 窓を開くときの拡大。t は 0..1。
+##
+## 一瞬で出ると板が貼られたように見える。SFC 期の窓は必ず縦に開いた。
+## 中心から上下へ伸ばすので、開き終わりが指定した矩形と一致する。
+static func opening(rect: Rect2, t: float) -> Rect2:
+	var ratio := clampf(t, 0.08, 1.0)
+	var height := rect.size.y * ratio
+	return Rect2(
+		rect.position.x, rect.position.y + (rect.size.y - height) * 0.5,
+		rect.size.x, height
+	)
+
+
+## 画面全体の光。強い魔法が当たった瞬間に 1 枚だけ重ねる。
+## SFC 期は加算合成で画面を白く飛ばしていた。ここでは白の重ねで近似する。
+static func draw_flash(canvas: CanvasItem, strength: float) -> void:
+	if strength <= 0.0:
+		return
+	canvas.draw_rect(
+		Rect2(Vector2.ZERO, SCREEN), Color(1.0, 1.0, 1.0, clampf(strength, 0.0, 0.6)), true
+	)
+
+
 ## 縦のグラデーション。
 ##
 ## 一色で塗った背景は「絵が置かれていない」ように見える。SFC 期は背景に

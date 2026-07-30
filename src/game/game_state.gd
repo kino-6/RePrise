@@ -374,15 +374,39 @@ func change_job(member: PartyMember, job_id: String) -> bool:
 # --------------------------------------------------------------------------
 
 
-func save_game() -> void:
-	var data := {
-		"version": 2,
+## セーブの形式。上げたら load_from_dict() に旧版の読み方を残すこと。
+const SAVE_VERSION := 2
+
+
+## 恒久データを辞書にする。ファイル入出力と分けてあるので、
+## 「書いて読み直しても壊れない」をテストから確かめられる。
+func to_dict() -> Dictionary:
+	return {
+		"version": SAVE_VERSION,
 		"deepest_floor": deepest_floor,
 		"runs_attempted": runs_attempted,
 		"echo": echo,
 		"upgrades": upgrades,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
 	}
+
+
+## 辞書から恒久データを復元する。**古い版を必ず読めること。**
+## 無い項目は既定値に落ちるので、version が上がっても遊んでいる人のデータは消えない。
+func load_from_dict(data: Dictionary) -> bool:
+	deepest_floor = int(data.get("deepest_floor", 0))
+	runs_attempted = int(data.get("runs_attempted", 0))
+	# version 1 のセーブには残響もアップグレードも無い。既定値で素直に読める。
+	echo = int(data.get("echo", 0))
+	upgrades = data.get("upgrades", {})
+	roster.clear()
+	for entry in data.get("roster", []):
+		roster.append(PartyMember.from_dict(entry))
+	return not roster.is_empty()
+
+
+func save_game() -> void:
+	var data := to_dict()
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		push_error("セーブに失敗: %s" % SAVE_PATH)
@@ -400,13 +424,4 @@ func load_game() -> bool:
 	if typeof(parsed) != TYPE_DICTIONARY:
 		push_warning("セーブが壊れている。初期状態で開始する。")
 		return false
-	var data: Dictionary = parsed
-	deepest_floor = int(data.get("deepest_floor", 0))
-	runs_attempted = int(data.get("runs_attempted", 0))
-	# version 1 のセーブには残響もアップグレードも無い。既定値で素直に読める。
-	echo = int(data.get("echo", 0))
-	upgrades = data.get("upgrades", {})
-	roster.clear()
-	for entry in data.get("roster", []):
-		roster.append(PartyMember.from_dict(entry))
-	return not roster.is_empty()
+	return load_from_dict(parsed)

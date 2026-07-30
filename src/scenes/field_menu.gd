@@ -22,7 +22,6 @@ const HINT_RECT := Rect2(8, 256, 496, 56)
 const PARTY_RECT := Rect2(8, 168, 150, 80)
 
 const ROW := 24
-const CURSOR_OFFSET := Vector2(-15, 2)
 
 ## そうびの 3 スロット。順番は固定する。
 const SLOTS: Array[String] = ["weapon", "armor", "accessory"]
@@ -39,14 +38,12 @@ var _item_index := 0
 var _target_index := 0
 var _slot_index := 0
 var _gear_index := 0
-var _notice := ""
-var _notice_timer := 0.0
+var _notice := Notice.new()
 var _input_lock := 0.0
 
 ## そうび / つよさ のどちらから人を選んでいるか。
 var _after_member: State = State.STATUS
 
-const NOTICE_TIME := 1.6
 const INPUT_LOCK := 0.15
 
 
@@ -54,7 +51,7 @@ func open() -> void:
 	_state = State.ROOT
 	_root_index = 0
 	_member_index = 0
-	_notice = ""
+	_notice.clear()
 	_input_lock = INPUT_LOCK
 	set_process(true)
 	set_process_unhandled_input(true)
@@ -69,16 +66,12 @@ func close() -> void:
 func _process(delta: float) -> void:
 	if _input_lock > 0.0:
 		_input_lock -= delta
-	if _notice_timer > 0.0:
-		_notice_timer -= delta
-		if _notice_timer <= 0.0:
-			_notice = ""
-			queue_redraw()
+	if _notice.tick(delta):
+		queue_redraw()
 
 
 func _notify(text: String) -> void:
-	_notice = text
-	_notice_timer = NOTICE_TIME
+	_notice.set_text(text)
 	queue_redraw()
 
 
@@ -271,7 +264,7 @@ func _use_item() -> void:
 		_state = State.ITEM
 	queue_redraw()
 	# 使ったことを呼び出し側の HUD にも伝える
-	_notify(_notice + "（%s）" % label)
+	_notify("%s（%s）" % [_notice.text, label])
 
 
 func _input_slot(event: InputEvent) -> void:
@@ -352,7 +345,7 @@ func _draw_root() -> void:
 	for i in ROOT_ITEMS.size():
 		var at := origin + Vector2(0, i * ROW)
 		if i == _root_index:
-			draw_texture(CURSOR_TEX, (at + CURSOR_OFFSET).floor())
+			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		var on := i == _root_index and _state == State.ROOT
 		PixelUI.draw_text(self, at, ROOT_ITEMS[i], PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
 
@@ -408,7 +401,7 @@ func _draw_items() -> void:
 		var it := Database.item(String(items[i]))
 		var on := i == _item_index and _state in [State.ITEM, State.ITEM_TARGET]
 		if on:
-			draw_texture(CURSOR_TEX, (at + CURSOR_OFFSET).floor())
+			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		PixelUI.draw_text(self, at, String(it.get("name", items[i])), PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
 		PixelUI.draw_text_right(
 			self, Vector2(origin.x + 280, at.y + 2), "%d こ" % GameState.item_count(String(items[i])),
@@ -467,7 +460,7 @@ func _draw_equip() -> void:
 		var at := origin + Vector2(0, 28 + i * ROW)
 		var on := i == _slot_index
 		if on and _state == State.SLOT:
-			draw_texture(CURSOR_TEX, (at + CURSOR_OFFSET).floor())
+			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		var gear_id := String(m.equipment.get(SLOTS[i], ""))
 		var label := String(Database.gear(gear_id).get("name", "")) if gear_id != "" else "—"
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
@@ -504,8 +497,8 @@ func _draw_equip() -> void:
 func _draw_hint() -> void:
 	PixelUI.draw_window(self, HINT_RECT, WINDOW_TEX)
 	var origin := PixelUI.content(HINT_RECT).position + Vector2(8, 0)
-	if _notice != "":
-		PixelUI.draw_text(self, origin, _notice, PixelUI.C_ACTIVE)
+	if _notice.text != "":
+		PixelUI.draw_text(self, origin, _notice.text, PixelUI.C_ACTIVE)
 	else:
 		var desc := ""
 		match _state:

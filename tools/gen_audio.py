@@ -307,6 +307,41 @@ def build_sfx() -> None:
             t.add_note(i * 0.055, 0.22, n, BELL, 0.62)
     sfx("heal", _heal, 0.80, cutoff=8000.0, echo_ms=118.0, echo_fb=0.28)
 
+    # 属性ごとの魔法音。
+    #
+    # 炎・氷・雷が同じ「魔法」の音で鳴ると、属性を切り替えている手応えが出ない。
+    # 音の作り分けは音色ではなく**動きの向き**で付ける（SFC 期の作法）。
+    #   炎 … ノイズ主体で下から膨らむ
+    #   氷 … 高い鈴が硬く刺さって減衰する
+    #   雷 … 一瞬で立ち上がって切れる
+    def _fire(t: Track) -> None:
+        t.add_noise(0.0, 0.34, amp=0.62, decay=0.012, pitch=2)
+        t.add_sweep(0.0, 0.26, "a2", "a4", BASS, 0.5)
+    sfx("fire", _fire, 0.66, cutoff=5600.0, echo_fb=0.22)
+
+    def _ice(t: Track) -> None:
+        for i, n in enumerate(["c6", "g6", "e6"]):
+            t.add_note(i * 0.035, 0.20, n, BELL, 0.55)
+        t.add_noise(0.10, 0.20, amp=0.20, decay=0.06, pitch=4)
+    sfx("ice", _ice, 0.62, cutoff=9000.0, echo_ms=132.0, echo_fb=0.30)
+
+    def _bolt(t: Track) -> None:
+        t.add_noise(0.0, 0.06, amp=0.95, decay=0.002, pitch=5)
+        t.add_sweep(0.0, 0.12, "a6", "a3", LEAD, 0.6)
+        t.add_note(0.05, 0.10, "e2", BASS, 0.7)
+    sfx("bolt", _bolt, 0.48, cutoff=7600.0, echo_fb=0.18, peak=0.88)
+
+    # 状態異常: かかった瞬間が分かる音。眠りは沈み、毒は濁る。
+    def _sleep(t: Track) -> None:
+        t.add_sweep(0.0, 0.40, "c5", "c3", STRINGS, 0.5)
+    sfx("sleep", _sleep, 0.70, cutoff=4200.0, echo_ms=140.0, echo_fb=0.30)
+
+    def _poison(t: Track) -> None:
+        t.add_noise(0.0, 0.26, amp=0.34, decay=0.02, pitch=1)
+        t.add_note(0.0, 0.24, "ef3", BASS, 0.55)
+        t.add_note(0.06, 0.22, "a3", BASS, 0.40)
+    sfx("poison", _poison, 0.56, cutoff=4000.0, echo_fb=0.20)
+
     # 習得・レベルアップ: 短いファンファーレ。ここが毎ランの報酬の瞬間。
     def _learn(t: Track) -> None:
         for i, n in enumerate(["c5", "e5", "g5"]):

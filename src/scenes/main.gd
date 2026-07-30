@@ -83,6 +83,7 @@ func _ready() -> void:
 	menu.closed.connect(_close_menu)
 	result.dismissed.connect(_enter_stronghold)
 
+	_make_curtain()
 	_enter_title()
 	_handle_debug_args()
 
@@ -266,7 +267,7 @@ func _enter_title() -> void:
 func _enter_stronghold() -> void:
 	Sound.play_bgm("stronghold")
 	stronghold.open()
-	_set_mode(Mode.STRONGHOLD)
+	_fade_to(Mode.STRONGHOLD)
 
 
 func _start_run() -> void:
@@ -290,7 +291,37 @@ func _enter_floor() -> void:
 	var leader_job := party[0].job_id if not party.is_empty() else "soldier"
 	explore.setup(_map, _encounter_rng, leader_job)
 	Sound.play_bgm("descent")
-	_set_mode(Mode.EXPLORE)
+	_fade_to(Mode.EXPLORE)
+
+
+## 画面の切り替えに挟む暗転の長さ（片道）。
+## SFC 期は必ず暗転を挟んでいて、これが無いと画面が「差し替わった」ように見える。
+const FADE_TIME := 0.14
+
+
+## 暗転の幕。最前面に置いた黒い板で、透明度だけを動かす。
+var _curtain: ColorRect = null
+
+
+func _make_curtain() -> void:
+	_curtain = ColorRect.new()
+	_curtain.color = Color(0, 0, 0, 0)
+	_curtain.size = Vector2(PixelUI.SCREEN)
+	_curtain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_curtain.z_index = 100
+	add_child(_curtain)
+
+
+## 暗転を挟んで画面を切り替える。
+## 撮影（--shot）や自動プレイでも同じ経路を通るので、待ち時間は短く保つ。
+func _fade_to(mode: Mode) -> void:
+	if _curtain == null:
+		_set_mode(mode)
+		return
+	var tween := create_tween()
+	tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
+	tween.tween_callback(_set_mode.bind(mode))
+	tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
 
 
 func _set_mode(mode: Mode) -> void:
@@ -363,7 +394,7 @@ func _begin_battle(foes: Array[Battler], is_boss: bool) -> void:
 	Sound.play("encounter")
 	Sound.play_bgm("battle")
 	battle.start(system, members)
-	_set_mode(Mode.BATTLE)
+	_fade_to(Mode.BATTLE)
 
 
 func _on_battle_finished(victory: bool) -> void:
@@ -386,7 +417,7 @@ func _on_battle_finished(victory: bool) -> void:
 
 func _finish_run(victory: bool) -> void:
 	result.show_summary(GameState.end_run(victory))
-	_set_mode(Mode.RESULT)
+	_fade_to(Mode.RESULT)
 
 
 func _on_descend() -> void:
@@ -401,8 +432,34 @@ func _on_shop_entered() -> void:
 	_set_mode(Mode.SHOP)
 
 
+## 宝箱の中身。
+##
+## 金だけだと「開ける手間に対して薄い」ので、装備と道具も出す。
+## 出店にしか装備が無いと、道中の宝箱を開ける理由が弱かった。
+## 抽選はこの階の乱数から引くので、同じシードなら同じ中身が出る。
 func _on_chest(amount: int) -> void:
 	Sound.play("chest")
+	var roll := _battle_rng.range_i(0, 99)
+
+	# 深い階ほど装備が出やすい。1 階で 15%、10 階で 33% ほど。
+	if roll < 12 + GameState.floor_number * 2:
+		var pool := Database.gear_ids_for_floor(GameState.floor_number)
+		if not pool.is_empty():
+			var gear_id := String(_battle_rng.pick(pool))
+			GameState.add_gear(gear_id)
+			hud.toast("たからばこ！ %s" % Database.gear(gear_id).get("name", gear_id))
+			_refresh_hud()
+			return
+
+	if roll < 45:
+		var items := Database.item_ids_for_floor(GameState.floor_number)
+		if not items.is_empty():
+			var item_id := String(_battle_rng.pick(items))
+			GameState.add_item(item_id)
+			hud.toast("たからばこ！ %s" % Database.item(item_id).get("name", item_id))
+			_refresh_hud()
+			return
+
 	GameState.earn_gold(amount)
 	hud.toast("たからばこ！ %d %s" % [amount, Terms.GOLD])
 	_refresh_hud()

@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_test_dungeon_determinism()
 	_test_dungeon_reachable()
 	_test_data_integrity()
+	_test_save_migration()
 	_test_dungeon_route()
 	_test_text_wrap()
 	_test_database_loaded()
@@ -321,6 +322,41 @@ func _test_data_integrity() -> void:
 	if not no_sprite.is_empty():
 		print("    立ち絵が無い職業: " + ", ".join(no_sprite))
 	_check("すべての職業に立ち絵がある", no_sprite.is_empty())
+
+
+## セーブの移行。version を上げたときに古いセーブが読めるかは、
+## 遊んでいる人のデータが消えるかどうかの話なので、必ず機械で見る。
+func _test_save_migration() -> void:
+	var state: Node = load("res://src/game/game_state.gd").new()
+
+	# version 1 のセーブ（残響もアップグレードも無い）を読ませる
+	var old_save := {
+		"version": 1,
+		"roster": [{
+			"name": "ふるいひと", "job_id": "soldier",
+			"job_exp": {"soldier": 40}, "learned": ["power_slash"],
+		}],
+		"deepest_floor": 5,
+		"runs_attempted": 3,
+	}
+	state.load_from_dict(old_save)
+	_check("version 1 のセーブから名簿が読める", state.roster.size() == 1)
+	_check("熟練度が残る", state.roster[0].mastery_points("soldier") == 40)
+	_check("覚えた技が残る", "power_slash" in state.roster[0].learned)
+	_check("最深階が残る", state.deepest_floor == 5)
+	_check("無い項目は既定値になる", state.echo == 0 and state.upgrades.is_empty())
+
+	# 書いて読み直しても同じ（往復で壊れない）
+	state.echo = 42
+	state.upgrades = {"shop_stock": 2}
+	var round_trip: Node = load("res://src/game/game_state.gd").new()
+	round_trip.load_from_dict(state.to_dict())
+	_check("書いて読み直しても資源が残る", round_trip.echo == 42)
+	_check("書いて読み直してもアップグレードが残る", int(round_trip.upgrades.get("shop_stock", 0)) == 2)
+	_check("書いて読み直しても名簿が残る", round_trip.roster.size() == state.roster.size())
+
+	state.free()
+	round_trip.free()
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。
