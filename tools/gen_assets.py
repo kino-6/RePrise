@@ -1504,11 +1504,157 @@ def build_event_effects() -> None:
         print(f"  取り込み: event_{effect}.png")
 
 
+def _transition_frame(sheet: Canvas, index: int) -> Canvas:
+    """8 コマのアトラスから 64x40 の 1 コマを取り出す。"""
+    frame = Canvas(64, 40)
+    for y in range(frame.h):
+        for x in range(frame.w):
+            frame.set(x, y, sheet.get(index * frame.w + x, y))
+    return frame
+
+
+def _edge_intro(frame: Canvas, fraction: float) -> Canvas:
+    """外周側から絵を半分だけ見せる導入コマ。
+
+    アイリス／シャッターの元絵は最初のコマですでに画面の 4 割前後を覆う。
+    そのまま再生すると「突然部品が出た」ように見えるため、左右上下を一組に
+    した帯を外から入れる。対称の組を崩さないので輪郭は歪まない。
+    """
+    opaque = {
+        (x, y) for y in range(frame.h) for x in range(frame.w)
+        if frame.get(x, y)[3] != 0
+    }
+    target = max(1, int(len(opaque) * fraction))
+    groups: list[set[tuple[int, int]]] = []
+    seen: set[tuple[int, int]] = set()
+    for x, y in sorted(opaque):
+        if (x, y) in seen:
+            continue
+        orbit = {
+            p for p in {
+                (x, y), (frame.w - 1 - x, y),
+                (x, frame.h - 1 - y),
+                (frame.w - 1 - x, frame.h - 1 - y),
+            } if p in opaque
+        }
+        seen.update(orbit)
+        groups.append(orbit)
+    groups.sort(key=lambda g: min(
+        min(x, frame.w - 1 - x, y, frame.h - 1 - y) for x, y in g
+    ))
+
+    keep: set[tuple[int, int]] = set()
+    for group in groups:
+        keep.update(group)
+        if len(keep) >= target:
+            break
+    out = Canvas(frame.w, frame.h)
+    for x, y in keep:
+        out.set(x, y, frame.get(x, y))
+    return out
+
+
+def _right_intro(frame: Canvas, fraction: float) -> Canvas:
+    """右から入るページを途中まで見せる。"""
+    opaque = [
+        (x, y) for y in range(frame.h) for x in range(frame.w)
+        if frame.get(x, y)[3] != 0
+    ]
+    opaque.sort(key=lambda p: (-p[0], p[1]))
+    out = Canvas(frame.w, frame.h)
+    for x, y in opaque[:max(1, int(len(opaque) * fraction))]:
+        out.set(x, y, frame.get(x, y))
+    return out
+
+
+def _dissolve_between(base: Canvas, filled: Canvas, fraction: float) -> Canvas:
+    """角形の千鳥順で、base と filled の中間を作る。
+
+    Web のマイクロトランジションにある staggered grid を、連続的な拡縮ではなく
+    4x4 画素の離散セルへ翻訳したもの。乱数は使わず生成結果を固定する。
+    """
+    out = Canvas(base.w, base.h)
+    out.blit(base, 0, 0)
+    limit = int(max(0.0, min(1.0, fraction)) * 16)
+    for y in range(filled.h):
+        for x in range(filled.w):
+            if out.get(x, y)[3] != 0 or filled.get(x, y)[3] == 0:
+                continue
+            # 4x4 セルごとの固定順。隣のセルが同時に出ないよう位相をずらす。
+            rank = ((x // 4) * 5 + (y // 4) * 3) % 16
+            if rank < limit:
+                out.set(x, y, filled.get(x, y))
+    return out
+
+
+def _solid_last(frame: Canvas) -> Canvas:
+    """最後のコマを完全に覆う。色は元絵の最多色だけを使い、色数を増やさない。"""
+    counts: dict[tuple[int, int, int, int], int] = {}
+    for color in frame.px:
+        if color[3] != 0:
+            counts[color] = counts.get(color, 0) + 1
+    fill = max(counts, key=counts.get) if counts else snes("#080C18") + (255,)
+    out = Canvas(frame.w, frame.h)
+    for i, color in enumerate(frame.px):
+        out.px[i] = color if color[3] != 0 else fill
+    return out
+
+
+def _prepare_transition_sheet(name: str, sheet: Canvas) -> Canvas:
+    """導入 0% → 終端 100% を保証し、状態ごとの拍へ並べ直す。
+
+    原画は読み取り専用のまま残す。生成物だけを整えることで、同じ入力から
+    常に同じアセットを再生成できる。
+    """
+    src = [_transition_frame(sheet, i) for i in range(8)]
+    blank = Canvas(64, 40)
+    if name in {"iris_gate", "gear_shutter"}:
+        frames = [
+            blank, _edge_intro(src[0], 0.5), src[0], src[1],
+            src[2], src[3], src[4], _solid_last(src[7]),
+        ]
+    elif name == "page_turn":
+        frames = [
+            blank, src[0], _right_intro(src[1], 0.5), src[1],
+            src[2], src[3], src[4], _solid_last(src[7]),
+        ]
+    else:
+        frames = [
+            blank, src[0], src[1], src[2], src[3], src[4],
+            _dissolve_between(src[4], src[5], 0.55), _solid_last(src[7]),
+        ]
+
+    # 覆いは増えるだけ。原画側に小さな穴の戻りがあっても前コマで埋め、
+    # 再生中のちらつきを防ぐ。
+    for i in range(1, len(frames)):
+        for p, color in enumerate(frames[i - 1].px):
+            if color[3] != 0 and frames[i].px[p][3] == 0:
+                frames[i].px[p] = color
+
+    out = Canvas(TRANSITION_SIZE[0], TRANSITION_SIZE[1])
+    for i, frame in enumerate(frames):
+        out.blit(frame, i * frame.w, 0)
+
+    coverage = [
+        sum(p[3] != 0 for p in frame.px) / len(frame.px) for frame in frames
+    ]
+    if coverage[0] != 0.0 or coverage[-1] != 1.0:
+        raise ValueError(f"{name}: 遷移は透明から全面覆いまで必要（{coverage}）")
+    if any(a > b for a, b in zip(coverage, coverage[1:])):
+        raise ValueError(f"{name}: 覆い率が途中で戻っている（{coverage}）")
+    print("    %s: 覆い率 %s" % (
+        name, " → ".join(f"{round(value * 100):d}%" for value in coverage)
+    ))
+    return out
+
+
 def build_transitions() -> None:
     for transition in TRANSITIONS:
         sheet = _load_sheet(f"candidate_transition_{transition}", TRANSITION_SIZE)
         if sheet is None:
             continue
+        sheet = _prepare_transition_sheet(transition, sheet)
+        _verify_sheet(f"transition_{transition}", sheet, TRANSITION_SIZE)
         sheet.to_png(ASSETS / "transitions" / f"{transition}.png")
         sheet.scaled(2).to_png(PREVIEW / f"transition_{transition}.png")
         print(f"  取り込み: transition/{transition}.png")

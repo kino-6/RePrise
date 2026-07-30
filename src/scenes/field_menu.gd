@@ -484,7 +484,9 @@ func _draw_root() -> void:
 		if i == _root_index:
 			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		var on := i == _root_index and _state == State.ROOT
-		PixelUI.draw_text(self, at, ROOT_ITEMS[i], PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
+		UiPanel.inside(self, Rect2(
+			at, Vector2(PixelUI.content(ROOT_RECT).end.x - 6.0 - at.x, PixelUI.LINE)
+		)).line(ROOT_ITEMS[i], PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
 
 
 ## 左下は常にパーティの並び。誰を選んでいるかがどの階層でも見える。
@@ -503,10 +505,12 @@ func _draw_party_box() -> void:
 		if picking and i == index:
 			draw_texture(CURSOR_TEX, (at + Vector2(-14, 2)).floor())
 			color = PixelUI.C_ACTIVE
-		PixelUI.draw_text(self, at, m.name, color, PixelUI.SIZE_SUB)
-		PixelUI.draw_text_right(
-			self, Vector2(origin.x + 118, at.y), "%d/%d" % [m.hp, m.max_hp()],
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+		# 名前と HP を 1 行に。**HP は消えては困る**ので、詰まるのは名前のほう。
+		UiPanel.inside(self, Rect2(
+			at, Vector2(118.0 + origin.x - at.x, PixelUI.LINE)
+		)).row(
+			m.name, "%d/%d" % [m.hp, m.max_hp()],
+			color, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
 		)
 
 
@@ -534,16 +538,32 @@ func _draw_body() -> void:
 				_draw_escape_notice()
 
 
+## 職業一覧の 1 列の幅。★ の位置（+132）まで含めた列の取り分。
+const JOB_COL_W := 132.0
+
+
+## 案内 3 種の見出し行。**幅は窓の内側から取る**（文言を変えても溢れない）。
+func _note_head(origin: Vector2) -> UiPanel:
+	var body := PixelUI.content(BODY_RECT)
+	return UiPanel.inside(self, Rect2(
+		origin, Vector2(body.end.x - origin.x - 8.0, PixelUI.LINE)))
+
+
+## 案内 3 種の本文 i 行目。
+func _note_line(origin: Vector2, i: int) -> UiPanel:
+	return _note_head(origin + Vector2(0, 32 + i * 22))
+
+
 ## てんしょくを選ぶ前の案内。押す前に読める位置に置く。
 func _draw_job_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
-	PixelUI.draw_text(self, origin, "てんしょく", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_note_head(origin).line("てんしょく", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines := [
 		"いつでも どこでも 職を かえられる。",
 		"レベルも じゅくれんも そのまま のこる。",
 	]
 	for i in lines.size():
-		PixelUI.draw_text(self, origin + Vector2(0, 32 + i * 22), lines[i], PixelUI.C_TEXT_DIM)
+		_note_line(origin, i).line(lines[i], PixelUI.C_TEXT_DIM)
 
 
 ## 職業の一覧。2 列。選べない職業は理由を下に出す。
@@ -578,7 +598,9 @@ func _draw_jobs() -> void:
 		elif locked:
 			tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.55)
 		var label := _job_name(job_id) if not locked else _job_name(job_id) + "×"
-		PixelUI.draw_text(self, at, label, tint)
+		# 列に幅を渡す。2 列に 15 職を詰めているので、長い職名は隣の列へ届く
+		# （枠の中なので、はみ出し検出では捕まらなかった）。
+		UiPanel.inside(self, Rect2(at, Vector2(JOB_COL_W, PixelUI.LINE))).line(label, tint)
 		# **★ を並べない。** 2 列に 15 職を詰めているので、4 つ並べると
 		# 隣の列の職業名に届く（枠の中なので、はみ出し検出では捕まらなかった）。
 		# 数で出せば桁が増えても幅が変わらない。
@@ -592,27 +614,27 @@ func _draw_jobs() -> void:
 ## 中断の案内。**何が起きるかを押す前に書く。**
 func _draw_suspend_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
-	PixelUI.draw_text(self, origin, "ちゅうだん", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_note_head(origin).line("ちゅうだん", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines := [
 		"いまの ところで 保存して とじる。",
 		"つぎに ひらくと ここから つづく。",
 		"世界も もちものも そのまま。",
 	]
 	for i in lines.size():
-		PixelUI.draw_text(self, origin + Vector2(0, 32 + i * 22), lines[i], PixelUI.C_TEXT_DIM)
+		_note_line(origin, i).line(lines[i], PixelUI.C_TEXT_DIM)
 
 
 ## 洞から出る案内。使えないときは理由を出す。
 func _draw_escape_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
-	PixelUI.draw_text(self, origin, "ぬけだす", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_note_head(origin).line("ぬけだす", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines: Array[String] = []
 	if GameState.can_escape_site():
 		lines = ["ここでの 用は 済んでいる。", "入口へ もどって 世界へ 出る。"]
 	else:
 		lines = ["まだ ここには 用が ある。", "封を やぶるまでは ぬけだせない。"]
 	for i in lines.size():
-		PixelUI.draw_text(self, origin + Vector2(0, 32 + i * 22), lines[i], PixelUI.C_TEXT_DIM)
+		_note_line(origin, i).line(lines[i], PixelUI.C_TEXT_DIM)
 
 
 func _draw_items() -> void:
@@ -717,7 +739,10 @@ func _draw_equip() -> void:
 	if m == null:
 		return
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(16, 4)
-	PixelUI.draw_text(self, origin, "%s の そうび" % m.name, PixelUI.C_TEXT)
+	var body := PixelUI.content(BODY_RECT)
+	var width := body.end.x - origin.x - 8.0
+	UiPanel.inside(self, Rect2(origin, Vector2(width, PixelUI.LINE))).line(
+		"%s の そうび" % m.name, PixelUI.C_TEXT)
 
 	for i in SLOTS.size():
 		var at := origin + Vector2(0, 28 + i * ROW)
@@ -727,8 +752,12 @@ func _draw_equip() -> void:
 		var gear_id := String(m.equipment.get(SLOTS[i], ""))
 		var label := String(Database.gear(gear_id).get("name", "")) if gear_id != "" else "—"
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
-		PixelUI.draw_text(self, at, String(SLOT_LABELS[SLOTS[i]]), tint, PixelUI.SIZE_SUB)
-		PixelUI.draw_text(self, at + Vector2(76, -2), label, tint)
+		# 部位名と品名の 2 列。品名は外部化の対象なので長さを前提にしない。
+		UiPanel.inside(self, Rect2(at, Vector2(76.0, PixelUI.LINE))).line(
+			String(SLOT_LABELS[SLOTS[i]]), tint, PixelUI.SIZE_SUB)
+		UiPanel.inside(self, Rect2(
+			at + Vector2(76, -2), Vector2(width - 76.0, PixelUI.LINE)
+		)).line(label, tint)
 
 	# 「さいきょう」の行。3 つのスロットの下に置く。
 	var best_at := origin + Vector2(0, 28 + SLOTS.size() * ROW)
@@ -745,10 +774,13 @@ func _draw_equip() -> void:
 
 	# 付け替え候補。先頭は必ず「はずす」。
 	var list := _gear_list()
-	var body := PixelUI.content(BODY_RECT)
+	var list_body := PixelUI.content(BODY_RECT)
 	var panel := UiPanel.inside(self, Rect2(
 		Vector2(origin.x, origin.y + 110.0),
-		Vector2(body.end.x - origin.x - 10.0, body.end.y - origin.y - 112.0)
+		Vector2(
+			list_body.end.x - origin.x - 10.0,
+			list_body.end.y - origin.y - 112.0
+		)
 	))
 	panel.line("つけかえる", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	panel.skip(4.0)
@@ -789,8 +821,7 @@ func _draw_hint() -> void:
 					desc = String(Database.gear(list[_gear_index - 1]).get("desc", ""))
 			_:
 				desc = ""
-		PixelUI.draw_text(self, origin, desc, PixelUI.C_TEXT_DIM)
-	PixelUI.draw_text(
-		self, origin + Vector2(0, 24), "↑↓ えらぶ　Ｚ けってい　Ｘ もどる",
-		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
+		panel.line(desc, PixelUI.C_TEXT_DIM)
+	# 操作の案内は必ず 2 行目に置く（説明の長さで動かさない）。
+	panel.move_to(origin.y + 24.0)
+	panel.line("↑↓ えらぶ　Ｚ けってい　Ｘ もどる", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)

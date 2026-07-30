@@ -1,6 +1,8 @@
 class_name SettingsView
 extends Node2D
 
+const ConfirmFlow := preload("res://src/game/confirm_flow.gd")
+
 ## 設定。音量・文字の速さ・キーの割り当て。
 ##
 ## タイトルと探索メニューの両方から開ける。中身は `src/game/settings.gd` にあり、
@@ -204,14 +206,15 @@ func begin_run_abandon() -> bool:
 func confirm_run_abandon(confirmed: bool) -> bool:
 	if _abandon_stage <= 0:
 		return false
-	if not confirmed:
+	var next := ConfirmFlow.next_run_abandon_stage(_abandon_stage, confirmed)
+	if next == 0:
 		_abandon_stage = 0
 		_abandon_index = 0
 		Sound.play("cancel")
 		queue_redraw()
 		return false
-	if _abandon_stage == 1:
-		_abandon_stage = 2
+	if next == 2:
+		_abandon_stage = next
 		_abandon_index = 0
 		Sound.play("confirm")
 		queue_redraw()

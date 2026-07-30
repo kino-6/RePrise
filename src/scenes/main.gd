@@ -59,6 +59,18 @@ var _guardian_beaten := false
 ## 今の戦闘が主との戦いか。勝った時にランを閉じるかどうかがここで変わる。
 var _boss_battle := false
 
+## トランジションは絵だけでなく、入力を止めて初めて成立する。
+##
+## 画面を差し替える中点で ExploreView が再び active になり、覆いが開いている最中に
+## `Input.is_action_pressed()` を拾って歩けていた。イベント入力を飲むだけでは、
+## Input をポーリングする移動は止まらないため、View 自体も最後まで止める。
+const TRANSITION_RELEASE_MIN := 0.08
+const TRANSITION_RELEASE_MAX := 0.35
+
+var _transition_input_locked := false
+var _transition_visual_done := false
+var _transition_release_elapsed := 0.0
+
 
 func _ready() -> void:
 	# 「RePrise  v0.1.0」。どのビルドを触っているかがウィンドウ枠だけで分かる。
@@ -191,6 +203,7 @@ func _ready() -> void:
 	title.settings_requested.connect(_open_settings)
 	settings.closed.connect(_close_settings)
 	settings.save_erase_requested.connect(_erase_save_data)
+	settings.run_abandon_requested.connect(_abandon_run)
 	result.dismissed.connect(_enter_stronghold)
 
 	_make_curtain()
@@ -199,6 +212,58 @@ func _ready() -> void:
 	# 上書きしてしまう（`--shot=town` がタイトルを撮っていた）。
 	if not _handle_debug_args():
 		_enter_title()
+
+
+func _input(_event: InputEvent) -> void:
+	if _transition_input_locked:
+		# 各 View は _unhandled_input() を使う。ここで処理済みにすれば、
+		# 覆いの下のメニュー・戦闘・設定へ同じ決定キーが届かない。
+		get_viewport().set_input_as_handled()
+
+
+func _process(delta: float) -> void:
+	if not _transition_input_locked or not _transition_visual_done:
+		return
+	_transition_release_elapsed += delta
+	if _transition_release_elapsed < TRANSITION_RELEASE_MIN:
+		return
+	# 遷移を起こしたキーが離れるまで待つ。ただし自動プレイが毎フレーム入力しても
+	# 永久ロックにならないよう、最大時間では必ず開ける。
+	if not _transition_action_pressed() or _transition_release_elapsed >= TRANSITION_RELEASE_MAX:
+		_unlock_transition_input()
+
+
+func _transition_action_pressed() -> bool:
+	for action in Settings.ACTIONS:
+		if Input.is_action_pressed(String(action)):
+			return true
+	return false
+
+
+func _begin_transition_input() -> void:
+	_transition_input_locked = true
+	_transition_visual_done = false
+	_transition_release_elapsed = 0.0
+	explore.set_active(false)
+	if _curtain != null:
+		_curtain.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+func _transition_visual_finished() -> void:
+	if not _transition_input_locked:
+		return
+	_transition_visual_done = true
+	_transition_release_elapsed = 0.0
+
+
+func _unlock_transition_input() -> void:
+	_transition_input_locked = false
+	_transition_visual_done = false
+	_transition_release_elapsed = 0.0
+	if _curtain != null:
+		_curtain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if explore != null:
+		explore.set_active(_mode == Mode.EXPLORE)
 
 
 ## 開発用。画面を 1 枚撮って終了する。
@@ -548,6 +613,12 @@ func _capture(which: String) -> void:
 			settings.open(true, true)
 			settings.debug_open_save_erase()
 			_set_mode(Mode.SETTINGS)
+		"run_abandon":
+			# 実際には終わらせず、最終確認だけを撮る。
+			_start_run()
+			_open_menu()
+			_open_settings()
+			settings.debug_open_run_abandon()
 		"upgrade":
 			_enter_stronghold()
 			GameState.echo = 42
@@ -600,6 +671,35 @@ func _capture(which: String) -> void:
 			# （ここで待つと、そのあとの固定待ちが足されて撮り逃す）。
 			_start_run()
 			_on_encounter()
+		"transition_lock":
+			# 覆いが開いている中点で移動入力を押し、座標が変わらないことを実測する。
+			_start_run()
+			await get_tree().create_timer(0.8).timeout
+			var before := explore.player_pos
+			var action := dev_step_to_exit()
+			_fade_to(Mode.EXPLORE)
+			await get_tree().create_timer(
+				ScreenTransition.IN_TIME + ScreenTransition.MOSAIC_SWAP_HOLD * 0.75
+			).timeout
+			if action != "":
+				Input.action_press(action)
+				await get_tree().create_timer(ExploreView.MOVE_DELAY + 0.04).timeout
+				Input.action_release(action)
+			if explore.player_pos != before:
+				push_error("遷移入力Gate: NG %s -> %s" % [before, explore.player_pos])
+				get_tree().quit(1)
+				return
+			print("遷移入力Gate: OK（覆いの途中では移動しない）")
+		"defeat_transition":
+			# 戦場が崩れずに沈んでいく、全滅専用の暗転途中を撮る。
+			_start_run()
+			_on_encounter()
+			await get_tree().create_timer(
+				ScreenTransition.IN_TIME + ScreenTransition.OUT_TIME + 0.08
+			).timeout
+			Sound.stop_bgm()
+			# セーブを書き換える end_run() は通さず、実際と同じ遷移経路だけを鳴らす。
+			_transition_to_result(true)
 		"battle":
 			_start_run()
 			_on_encounter()
@@ -634,6 +734,8 @@ func _capture(which: String) -> void:
 		# **崩れている途中**を撮る。入りきると戦闘画面になってしまうので、
 		# 入りの時間の 6 割で切る。
 		wait = ScreenTransition.IN_TIME * 0.6
+	elif which == "defeat_transition":
+		wait = ScreenTransition.DEFEAT_DIM_TIME * 0.65
 	await get_tree().create_timer(wait).timeout
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
@@ -1082,6 +1184,7 @@ var _transition: ScreenTransition = null
 func _make_curtain() -> void:
 	_transition = ScreenTransition.new()
 	add_child(_transition)
+	_transition.finished.connect(_transition_visual_finished)
 	_curtain = ColorRect.new()
 	_curtain.color = Color(0, 0, 0, 0)
 	_curtain.size = Vector2(PixelUI.SCREEN)
@@ -1123,11 +1226,11 @@ func _fade_to(mode: Mode) -> void:
 	# 暗転を入れるまでは「切り替え＝即座」だったので気づかなかったが、
 	# 幕の裏で切り替える形にすると、その 0.3 秒のあいだ入力が生きたままになる。
 	# 実際に「遭遇したのに歩けて、そのまま階段へ降りられる」状態だった。
-	explore.set_active(false)
 	if _curtain == null:
 		_set_mode(mode)
 		return
 	_cancel_fade()
+	_begin_transition_input()
 	# 城へ入るときだけは歯車。**行き先ではなく行為で選ぶ**ので、
 	# Mode の表とは別に見る（城も町も同じ Mode.EXPLORE）。
 	var kind := String(COVERS.get(mode, ""))
@@ -1142,10 +1245,13 @@ func _fade_to(mode: Mode) -> void:
 		return
 	_fade_tween = create_tween()
 	_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
+	_fade_tween.tween_interval(ScreenTransition.MOSAIC_SWAP_HOLD * 0.5)
 	# 幕の裏で切り替えるのは _apply_mode。_set_mode を呼ぶと自分の暗転を
 	# 自分で殺してしまい、幕が上がらなくなる。
 	_fade_tween.tween_callback(_apply_mode.bind(mode))
+	_fade_tween.tween_interval(ScreenTransition.MOSAIC_SWAP_HOLD * 0.5)
 	_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
+	_fade_tween.tween_callback(_transition_visual_finished)
 
 
 ## 遭遇の演出。画面をモザイクに崩して戦闘へ移る。
@@ -1160,8 +1266,8 @@ func _fade_to(mode: Mode) -> void:
 ## 戦闘へ繋がる。暗転や閃光が前後を**切る**のに対し、モザイクは**繋ぐ**。
 func _flash_into_battle() -> void:
 	# 遭遇の瞬間に歩みを止める（理由は _fade_to と同じ）。
-	explore.set_active(false)
 	_cancel_fade()
+	_begin_transition_input()
 	if _transition != null and _transition.available():
 		_transition.play(_apply_mode.bind(Mode.BATTLE))
 		return
@@ -1171,8 +1277,11 @@ func _flash_into_battle() -> void:
 		return
 	_fade_tween = create_tween()
 	_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
+	_fade_tween.tween_interval(ScreenTransition.MOSAIC_SWAP_HOLD * 0.5)
 	_fade_tween.tween_callback(_apply_mode.bind(Mode.BATTLE))
+	_fade_tween.tween_interval(ScreenTransition.MOSAIC_SWAP_HOLD * 0.5)
 	_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
+	_fade_tween.tween_callback(_transition_visual_finished)
 
 
 ## 装備が手に入った（C-9）。**宝箱・イベント・店のどれもここへ来る。**
@@ -1214,6 +1323,7 @@ func _cancel_fade() -> void:
 		_transition.cancel()
 	if _curtain != null:
 		_curtain.color = Color(0, 0, 0, 0)
+	_unlock_transition_input()
 
 
 ## 画面を切り替える（暗転なし）。
@@ -1251,7 +1361,8 @@ func _apply_mode(mode: Mode) -> void:
 		explore.visible = true
 	else:
 		gear_offer.close()
-	explore.set_active(mode == Mode.EXPLORE)
+	# 遷移の中点で探索画面へ切り替わっても、覆いが完全に開くまでは動かさない。
+	explore.set_active(mode == Mode.EXPLORE and not _transition_input_locked)
 	if mode != Mode.TITLE:
 		title.close()
 	if mode != Mode.PROLOGUE:
@@ -1514,7 +1625,8 @@ func _open_settings() -> void:
 	_mode_before_settings = _mode
 	settings.open(
 		_mode_before_settings == Mode.TITLE,
-		GameState.has_save_data()
+		GameState.has_save_data(),
+		_mode_before_settings == Mode.MENU and GameState.run_active
 	)
 	# 下の画面は残したまま重ねる（設定は場面ではなく、上に開く窓）。
 	_set_mode(Mode.SETTINGS)
@@ -1537,6 +1649,17 @@ func _erase_save_data() -> void:
 	if erased:
 		# 記録行と「つづきから」をその場で消す。
 		title.queue_redraw()
+
+
+## 設定の二段階確認を通ったときだけランを閉じる。
+##
+## 「全滅」ではないので物語へ敗北印は付けない。一方、失う物／残る物の処理は
+## 必ず GameState.end_run() に集約し、別の後始末経路を増やさない。
+func _abandon_run() -> void:
+	if not GameState.run_active:
+		_close_settings()
+		return
+	_finish_run(false, "abandoned")
 
 
 func _refresh_hud() -> void:
@@ -1627,7 +1750,6 @@ func _on_battle_finished(victory: bool) -> void:
 		# 主を倒した。ランが「生還」で終わる唯一の経路。
 		_boss_battle = false
 		Sound.play("victory")
-		Sound.play_bgm("chronicle")
 		_finish_run(true)
 		return
 	if victory and _guardian_battle:
@@ -1659,18 +1781,20 @@ func _on_battle_finished(victory: bool) -> void:
 		return
 	_boss_battle = false
 	Sound.play("defeat")
-	Sound.play_bgm("chronicle")
-	_finish_run(false)
+	# 敗北音のあとに戦闘曲を引きずらない。暗く沈む一拍を無音にする。
+	Sound.stop_bgm()
+	_finish_run(false, "defeat")
 
 
-func _finish_run(victory: bool) -> void:
+func _finish_run(victory: bool, outcome: String = "") -> void:
 	# **全滅は物語を打ち切らない**（打ち切ると失敗したランが無かったことになる）。
-	if not victory:
+	# 自分で帰還を選んだランを「全滅した」と記録するのは別の物語になる。
+	if not victory and outcome != "abandoned":
 		GameState.note_cross_world_setback("run_lost")
 
 	# またぐ物語の「ラン結果」の段階は戦記に載せる。
 	# 拠点の通知だと、ラン終了直後の画面をまたいで消えてしまう。
-	var summary := GameState.end_run(victory)
+	var summary := GameState.end_run(victory, outcome)
 	var beat := GameState.cross_world_beat("run_result")
 	if not beat.is_empty():
 		summary["cross_world_line"] = GameState.cross_world_line(beat)
@@ -1678,8 +1802,49 @@ func _finish_run(victory: bool) -> void:
 		if not GameState.cross_world_is_last():
 			GameState.advance_cross_world()
 	result.show_summary(summary)
-	_fade_to(Mode.RESULT)
-	effect.play("chronicle_echo", Vector2(PixelUI.SCREEN.x * 0.5, 46.0))
+	_transition_to_result(outcome == "defeat" or (outcome == "" and not victory))
+
+
+## 戦記へ移る専用経路。演出の途中で年代記の紋を先に出さず、
+## 画面が切り替わった瞬間にだけ部品を開く。
+func _transition_to_result(defeat: bool) -> void:
+	_cancel_fade()
+	_begin_transition_input()
+	var apply := func() -> void:
+		Sound.play_bgm("chronicle")
+		_apply_mode(Mode.RESULT)
+		effect.play("chronicle_echo", Vector2(PixelUI.SCREEN.x * 0.5, 46.0))
+
+	if defeat and _transition != null and _transition.available():
+		_transition.play_defeat(apply)
+		return
+	if not defeat and _transition != null and _transition.play_cover("page_turn", apply):
+		return
+
+	# シェーダや覆い絵が無い環境でも進行は止めない。全滅だけは同じ一拍を
+	# 素の黒幕で保ち、「急に結果へ差し替わる」見え方を避ける。
+	if _curtain == null:
+		apply.call()
+		_transition_visual_finished()
+		return
+	_fade_tween = create_tween()
+	if defeat:
+		_fade_tween.tween_property(
+			_curtain, "color:a", 1.0, ScreenTransition.DEFEAT_DIM_TIME
+		)
+		_fade_tween.tween_interval(ScreenTransition.DEFEAT_HOLD_TIME)
+		_fade_tween.tween_callback(apply)
+		_fade_tween.tween_interval(ScreenTransition.DEFEAT_RESULT_HOLD)
+		_fade_tween.tween_property(
+			_curtain, "color:a", 0.0, ScreenTransition.DEFEAT_REVEAL_TIME
+		)
+	else:
+		_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
+		_fade_tween.tween_interval(ScreenTransition.MOSAIC_SWAP_HOLD * 0.5)
+		_fade_tween.tween_callback(apply)
+		_fade_tween.tween_interval(ScreenTransition.MOSAIC_SWAP_HOLD * 0.5)
+		_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
+	_fade_tween.tween_callback(_transition_visual_finished)
 
 
 ## 洞の階段。いちばん深い階まで来たら、次は下ではなく外へ出る。

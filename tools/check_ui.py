@@ -28,10 +28,25 @@ SCREENS = [
     "stronghold", "job", "depart", "upgrade", "party",
     "world", "town", "cave", "shop", "event", "event_outcome",
     "battle", "commands", "items", "deep", "boss",
-    "menu", "status", "equip", "jobmenu", "settings", "save_erase",
+    "menu", "status", "equip", "jobmenu", "settings", "save_erase", "run_abandon",
     "result", "win",
     "gearoffer",
 ]
+
+
+def _run_or_kill(cmd: list[str], timeout: float = 180.0) -> str:
+    """走らせて出力を返す。時間切れなら殺してから空を返す。"""
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace",
+    )
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+        return out or ""
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        return ""
 
 
 def _check_one(name: str) -> tuple[str, list[str]]:
@@ -43,7 +58,11 @@ def _check_one(name: str) -> tuple[str, list[str]]:
     **嘘をつく関門は無いより悪い。**
     """
     for attempt in range(2):
-        proc = subprocess.run(
+        # **時間切れの子は必ず殺す。** `subprocess.run(timeout=)` は
+        # TimeoutExpired を投げるが、Windows では孫が残ることがある。
+        # 実際に Godot が 41 個居残ってデスクトップヒープを枯らし、
+        # 以後の起動が accesskit の 0x80070008 で落ちるようになった。
+        proc = _run_or_kill(
             # `--accessibility disabled` を付ける。**並列で立てると Windows の
             # デスクトップヒープが枯れて accesskit が落ちる**（0x80070008）。
             # 画面の検査に読み上げは要らない。
@@ -51,10 +70,8 @@ def _check_one(name: str) -> tuple[str, list[str]]:
                 "godot", "--accessibility", "disabled", "--path", str(ROOT),
                 "--", f"--shot={name}", "--ui-check",
             ],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=180,
         )
-        out = (proc.stdout or "") + (proc.stderr or "")
+        out = proc
         hits = [
             line.split("はみ出し:", 1)[1].strip()
             for line in out.splitlines()

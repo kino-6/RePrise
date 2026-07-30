@@ -1,6 +1,9 @@
 class_name ScreenTransition
 extends ColorRect
 
+## 見た目が完全に終わった瞬間。Main はこれを受けるまで入力を戻さない。
+signal finished
+
 ## 遭遇の切り替え ―― 画面をモザイクに崩して戻す。
 ##
 ## 調査と根拠は `docs/screen_transition_design.md`。要点だけ再掲する。
@@ -33,10 +36,27 @@ const BRIGHT_STEPS := 15.0
 const IN_TIME := 0.30
 const OUT_TIME := 0.20
 
-## 場面転換の覆い。遭遇より少しだけ長い ―― こちらは前後を切るのが仕事なので、
-## 覆いきった一瞬が要る。それでも長くはしない（何十回も通る）。
-const COVER_IN_TIME := 0.32
-const COVER_OUT_TIME := 0.26
+## 場面転換の覆い。絵の意味に合わせて拍を変える。
+##
+## 現代のマイクロトランジションから「全部を同じ速度で動かさない」という原則だけを
+## 借りる。連続スプリングは持ち込まず、SFC の 8 コマを gentle / smooth / snappy
+## の離散的な長さで再生する。
+const COVER_IN_TIME := 0.36
+const COVER_OUT_TIME := 0.28
+const COVER_TIMES := {
+	"page_turn": Vector2(0.44, 0.34),      # 読ませる頁は穏やか
+	"iris_gate": Vector2(0.36, 0.28),      # 門は滑らか
+	"gear_shutter": Vector2(0.28, 0.22),   # 機械は短く硬く
+	"pixel_dissolve": Vector2(0.34, 0.26),
+}
+const COVER_HOLDS := {
+	"page_turn": 0.10,
+	"iris_gate": 0.08,
+	"gear_shutter": 0.06,
+	"pixel_dissolve": 0.06,
+}
+## 全面を覆ったフレームを見せずに差し替えると、絵が「通過しただけ」に見える。
+const MOSAIC_SWAP_HOLD := 0.04
 
 ## 全滅専用。覆い絵を突然出さず、戦場そのものを暗くして一拍置く。
 ## 戦記へ切り替わったあとも黒を少し保ち、結果画面をゆっくり戻す。
@@ -46,6 +66,7 @@ const DEFEAT_RESULT_HOLD := 0.16
 const DEFEAT_REVEAL_TIME := 0.54
 
 var _tween: Tween = null
+var _active := false
 
 ## 場面転換の覆い（B-3）。遭遇のモザイクとは別物なので、別の子に描かせる。
 ## **同じ CanvasItem に描くとモザイクのシェーダが覆いにも掛かる。**
@@ -98,15 +119,23 @@ class Cover:
 		_tex = texture_of(kind)
 		if _tex == null:
 			return false
-		_at = clampi(int(t * float(FRAMES)), 0, FRAMES - 1)
+		var staged := _staged_t(kind, clampf(t, 0.0, 1.0))
+		_at = clampi(int(staged * float(FRAMES)), 0, FRAMES - 1)
 		if material != null:
 			# 終わりぎわだけ塗り潰す。覆いきった一瞬が無いと、その裏で
 			# 画面を差し替えたのが見えてしまう。
 			material.set_shader_parameter(
-				"seal", clampf((t - SEAL_FROM) / (1.0 - SEAL_FROM), 0.0, 1.0))
+				"seal", clampf((staged - SEAL_FROM) / (1.0 - SEAL_FROM), 0.0, 1.0))
 		visible = true
 		queue_redraw()
 		return true
+
+	static func _staged_t(kind: String, t: float) -> float:
+		if kind == "gear_shutter":
+			# 短い機械動作。後半に速度が乗って噛み合う。
+			return t * t
+		# 頁と門は最初と最後に一拍を置く。中間値は最終的に8コマへ量子化される。
+		return t * t * (3.0 - 2.0 * t)
 
 	func hide_cover() -> void:
 		visible = false
@@ -159,13 +188,20 @@ func play_cover(kind: String, apply: Callable) -> bool:
 	if _cover == null or _cover.material == null or Cover.texture_of(kind) == null:
 		return false
 	cancel()
+	_active = true
 	_cover.show_at(kind, 0.0)
+	var times: Vector2 = COVER_TIMES.get(
+		kind, Vector2(COVER_IN_TIME, COVER_OUT_TIME)
+	)
+	var hold := float(COVER_HOLDS.get(kind, 0.06))
 	_tween = create_tween()
 	_tween.tween_method(
-		func(t: float) -> void: _cover.show_at(kind, t), 0.0, 1.0, COVER_IN_TIME)
+		func(t: float) -> void: _cover.show_at(kind, t), 0.0, 1.0, times.x)
+	_tween.tween_interval(hold * 0.5)
 	_tween.tween_callback(apply)
+	_tween.tween_interval(hold * 0.5)
 	_tween.tween_method(
-		func(t: float) -> void: _cover.show_at(kind, 1.0 - t), 0.0, 1.0, COVER_OUT_TIME)
+		func(t: float) -> void: _cover.show_at(kind, 1.0 - t), 0.0, 1.0, times.y)
 	_tween.tween_callback(_finish)
 	return true
 
@@ -179,11 +215,14 @@ func play(apply: Callable) -> bool:
 		apply.call()
 		return false
 	cancel()
+	_active = true
 	_set_in(0.0)
 	visible = true
 	_tween = create_tween()
 	_tween.tween_method(_set_in, 0.0, 1.0, IN_TIME)
+	_tween.tween_interval(MOSAIC_SWAP_HOLD * 0.5)
 	_tween.tween_callback(apply)
+	_tween.tween_interval(MOSAIC_SWAP_HOLD * 0.5)
 	_tween.tween_method(_set_out, 0.0, 1.0, OUT_TIME)
 	_tween.tween_callback(_finish)
 	return true
@@ -198,6 +237,7 @@ func play_defeat(apply: Callable) -> bool:
 		apply.call()
 		return false
 	cancel()
+	_active = true
 	_apply(1.0, 1.0)
 	visible = true
 	_tween = create_tween()
@@ -220,10 +260,15 @@ func cancel() -> void:
 
 
 func _finish() -> void:
+	var was_active := _active
+	_active = false
+	_tween = null
 	visible = false
 	if _cover != null:
 		_cover.hide_cover()
 	_apply(1.0, 1.0)
+	if was_active:
+		finished.emit()
 
 
 func _set_in(t: float) -> void:
