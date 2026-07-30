@@ -39,6 +39,7 @@ func _initialize() -> void:
 	_test_vocabulary()
 	_test_version()
 	_test_event_effects()
+	_test_cross_world_catalog()
 	_test_text_wrap()
 	_test_database_loaded()
 	_test_final_floor()
@@ -1023,6 +1024,72 @@ func _test_guardian_and_escape() -> void:
 		state.enter_site(plain_cave)
 		_check("封の無い洞はいつでも出られる", state.can_escape_site())
 	state.free()
+
+
+## またぐ物語のカタログ（A-1）。
+##
+## **読込と検算だけ**の段。本体へはまだ繋がない（設計文書の導入順に従う）。
+## ここでも「落ちる側」を主に見る ―― 通す側だけ試すと、何でも通す検算でも緑になる。
+func _test_cross_world_catalog() -> void:
+	var catalog := CrossWorldArcCatalog.load_catalog()
+	_check("またぐ物語のカタログが読める", not catalog.is_empty())
+	_equal("型が 12 件", CrossWorldArcCatalog.arcs(catalog).size(), 12)
+	var clean := CrossWorldArcCatalog.validate(catalog)
+	_check("原本が検算を通る", clean.is_empty(), "(%s)" % str(clean.slice(0, 3)))
+	_check("id で引ける", not CrossWorldArcCatalog.arc_by_id(
+		String(CrossWorldArcCatalog.arcs(catalog)[0]["id"]), catalog).is_empty())
+
+	# --- 落ちるべきものが落ちること（設計文書の 5 点）---
+	#
+	# 壊した版は**毎回 JSON を読み直して**作る。`duplicate(true)` で深い複製を
+	# 取ろうとしたら落ちた（十二型は入れ子が深い）。読み直すほうが安いし確実。
+	_check("型が足りないと落ちる", not _broken_arcs(func(arcs: Array) -> void:
+		arcs.remove_at(0)).is_empty())
+	_check("id が重複すると落ちる", not _broken_arcs(func(arcs: Array) -> void:
+		arcs[1]["id"] = String(arcs[0]["id"])).is_empty())
+	_check("段階の順が違うと落ちる", not _broken_arcs(func(arcs: Array) -> void:
+		(arcs[0]["beats"] as Array).reverse()).is_empty())
+	_check("置き場が語彙に無いと落ちる", not _broken_arcs(func(arcs: Array) -> void:
+		arcs[0]["beats"][0]["placement"] = "どこでもない場所").is_empty())
+	_check("結末が無いと落ちる", not _broken_arcs(func(arcs: Array) -> void:
+		arcs[0]["choices"][0]["ending_id"] = "無い結末").is_empty())
+	_check("2 つの選択が同じ結末だと落ちる", not _broken_arcs(func(arcs: Array) -> void:
+		arcs[0]["choices"][1]["ending_id"] = String(arcs[0]["choices"][0]["ending_id"])
+		).is_empty())
+	_check("fallback が実在しないと落ちる", not _broken_arcs(func(arcs: Array) -> void:
+		arcs[0]["fallback_choice"] = "無い選択").is_empty())
+
+	# --- AI へ渡すものに構造を含めない ---
+	var facts := CrossWorldArcCatalog.facts_for_ai(
+		CrossWorldArcCatalog.arcs(catalog)[0], catalog
+	)
+	var text := JSON.stringify(facts)
+	_check("AI へ id を渡さない", not text.contains(
+		String(CrossWorldArcCatalog.arcs(catalog)[0]["id"])))
+	_check("AI へ選択を渡さない", not facts.has("choices"))
+	_check("AI へ結末を渡さない", not facts.has("endings"))
+	_check("AI へ渡す枠に既定値が付く", facts.get("slots", []).size() == 4)
+	var first_slot: Dictionary = facts["slots"][0]
+	_check("既定値が空でない", String(first_slot.get("fallback", "")) != "")
+
+	# AI を使わなくても表示語が決まること（同じ種からは同じ語）
+	var arc0: Dictionary = CrossWorldArcCatalog.arcs(catalog)[0]
+	var a_skin := CrossWorldArcCatalog.pick_skin(arc0, DetRng.new(9), catalog)
+	var b_skin := CrossWorldArcCatalog.pick_skin(arc0, DetRng.new(9), catalog)
+	_equal("同じ種からは同じ表示語", a_skin, b_skin)
+	_equal("表示語が 4 枠そろう", a_skin.size(), 4)
+
+
+## 原本を読み直して壊し、検算にかける。壊し方は呼び出し側が渡す。
+func _broken_arcs(damage: Callable) -> Array[String]:
+	var parsed: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(CrossWorldArcCatalog.PATH)
+	)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return ["読み直せない"] as Array[String]
+	var copy: Dictionary = parsed
+	damage.call(copy.get("arcs", []) as Array)
+	return CrossWorldArcCatalog.validate(copy)
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。
