@@ -332,7 +332,9 @@ func _leave() -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color8(0x08, 0x0A, 0x14), true)
+	# 塗りつぶさずに暗くするだけ。下のダンジョンが透けていれば
+	# 「歩みを止めて鞄を開けている」ように見える（塗ると場面が切り替わって見える）。
+	draw_rect(Rect2(0, 0, PixelUI.SCREEN.x, PixelUI.SCREEN.y), Color(0.03, 0.04, 0.08, 0.55), true)
 	_draw_root()
 	_draw_party_box()
 	_draw_body()

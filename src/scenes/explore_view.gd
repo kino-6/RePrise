@@ -9,6 +9,8 @@ signal boss_reached
 signal shop_entered
 signal chest_opened(amount: int)
 signal menu_requested
+## 主の間の扉が隣にある。踏む前に知らせるためのもの。
+signal door_nearby
 
 const TILE := 16
 const MOVE_DELAY := 0.10
@@ -157,6 +159,13 @@ func _try_move(target: Vector2i) -> void:
 	if tile == DungeonMap.T_DOOR:
 		boss_reached.emit()
 		return
+
+	# 主の間が隣にあるなら知らせる。扉は地形に紛れるので、
+	# 気づかないまま踏んで開幕から不利、という事故が起きる。
+	for step in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		if map.get_tile(player_pos.x + step.x, player_pos.y + step.y) == DungeonMap.T_DOOR:
+			door_nearby.emit()
+			break
 
 	# 出店は踏んで入る。踏み直せば何度でも入れる（立っている間は開かない）。
 	if tile == DungeonMap.T_SHOP:

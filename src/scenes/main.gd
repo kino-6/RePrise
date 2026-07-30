@@ -80,6 +80,7 @@ func _ready() -> void:
 	explore.chest_opened.connect(_on_chest)
 	battle.battle_finished.connect(_on_battle_finished)
 	explore.menu_requested.connect(_open_menu)
+	explore.door_nearby.connect(_on_door_nearby)
 	menu.closed.connect(_close_menu)
 	result.dismissed.connect(_enter_stronghold)
 
@@ -316,6 +317,7 @@ func _enter_floor() -> void:
 		GameState.floor_number,
 		GameState.floor_number >= GameState.FINAL_FLOOR
 	)
+	_door_warned = false
 	var party := GameState.active_party()
 	var leader_job := party[0].job_id if not party.is_empty() else "soldier"
 	explore.setup(_map, _encounter_rng, leader_job)
@@ -408,7 +410,9 @@ func _apply_mode(mode: Mode) -> void:
 	stronghold.visible = mode == Mode.STRONGHOLD
 	shop.visible = mode == Mode.SHOP
 	menu.visible = mode == Mode.MENU
-	explore.visible = mode == Mode.EXPLORE
+	# メニュー中も探索の絵は出したままにする（メニューを半透明にしてあるので、
+	# 下にダンジョンが見える）。HUD は二重になるので隠す。
+	explore.visible = mode == Mode.EXPLORE or mode == Mode.MENU
 	hud.visible = mode == Mode.EXPLORE
 	battle.visible = mode == Mode.BATTLE
 	result.visible = mode == Mode.RESULT
@@ -423,6 +427,18 @@ func _apply_mode(mode: Mode) -> void:
 		menu.close()
 	if mode == Mode.EXPLORE:
 		_refresh_hud()
+
+
+## 主の間が隣に来た。踏むと戻れないので、踏む前に知らせる。
+## 同じ階で何度も出ると邪魔なので、1 階につき 1 回だけ。
+var _door_warned := false
+
+
+func _on_door_nearby() -> void:
+	if _door_warned:
+		return
+	_door_warned = true
+	hud.toast("おおきな扉が ある。ここから先は 戻れない。")
 
 
 ## 探索中のメニュー。歩きを止めてから開く。
