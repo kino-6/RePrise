@@ -1984,6 +1984,13 @@ def build_cursor() -> Canvas:
 
 
 def main() -> None:
+    # 版の刻印を先に更新する。**手で上げる番号は当てにしない**ので、
+    # 生成を回すたびに git の commit を写しておく（tools/stamp_version.py）。
+    try:
+        import stamp_version
+        stamp_version.main()
+    except Exception as exc:  # 刻印に失敗しても絵の生成は続ける
+        print(f"  版の刻印を飛ばした: {exc}")
     build_tileset()
     build_world_tileset()
     build_biomes()

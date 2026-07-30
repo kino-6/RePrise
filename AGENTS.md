@@ -113,6 +113,7 @@ godot --headless --script res://tests/balance.gd      # 到達率と勝率を実
 godot --path . -- --shot=title                        # 画面を 1 枚撮って終了
 godot --path .                                        # 起動
 
+python tools/stamp_version.py                         # 版の刻印を git から更新
 godot --headless --export-release "Windows Desktop" build/windows/RePrise.exe   # 配布物を書き出す
 ```
 

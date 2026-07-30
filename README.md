@@ -272,6 +272,7 @@ python tools/gen_audio.py     # これを飛ばすと「音の無いビルド」
 godot --headless --import     # class_name と .import を最新にする
 
 mkdir -p build/windows        # 出力先が無いと Godot は作らずに失敗する
+python tools/stamp_version.py    # 版の刻印を git から更新（先に走らせる）
 godot --headless --export-release "Windows Desktop" build/windows/RePrise.exe
 ```
 
@@ -285,6 +286,25 @@ PowerShell の `mkdir` に `-p` は無い。`New-Item -ItemType Directory -Force
 ドット絵の原本（Python）や撮影物まで配布物に入れる必要は無い。
 
 `--export-release` を `--export-debug` に替えるとデバッグビルドになる。
+
+### 版（バージョン）
+
+**手で上げる番号は当てにしない。** `application/config/version`（0.1.0）は
+節目にだけ人が上げるもので、日々の識別は git の commit に任せる。
+
+`tools/stamp_version.py` が `data/build.json` に短縮ハッシュ・コミット日・
+「未コミットの変更を含むか」を書き出す。画面には次の形で出る。
+
+```
+v0.1.0+efcc6dc*-dev (2026-07-30)
+        ^^^^^^^ ^ ^^^^
+        commit  | 書き出していないビルド
+                未コミットの変更を含む
+```
+
+`*` が付いたビルドは**他の誰も再現できない**。不具合報告のときはこの 1 行を
+そのまま貼ってもらう（`GameVersion.full()`）。刻印は
+`python tools/gen_assets.py` でも更新されるので、普段は意識しなくてよい。
 アサートとエラー表示が残るので、配る前の確認はこちらで踏む。標準出力を目で見たいなら
 プリセットの `debug/export_console_wrapper` を `1` にすると
 コンソール付きの `RePrise.console.exe` が一緒に出る。

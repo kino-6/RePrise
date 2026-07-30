@@ -80,6 +80,7 @@ func _draw() -> void:
 	_draw_party()
 	_draw_record()
 	_draw_prompt()
+	_draw_version()
 
 
 ## 題字だけを置く。説明もキャッチコピーも入れない。
@@ -113,6 +114,17 @@ func _draw_record() -> void:
 	var width := PixelUI.text_width(line)
 	PixelUI.draw_text(
 		self, Vector2((PixelUI.SCREEN.x - width) * 0.5, 228), line, PixelUI.C_TEXT_DIM
+	)
+
+
+## 版を隅に出す。**不具合報告のときに、どのビルドかが画面から分かる。**
+## タイトルバーは配布物だと隠れることがあるので、画面にも置く。
+func _draw_version() -> void:
+	var text := GameVersion.full()
+	PixelUI.draw_text(
+		self, Vector2(6, PixelUI.SCREEN.y - 18), text, PixelUI.C_SHADOW.lerp(
+			PixelUI.C_TEXT_DIM, 0.7
+		), PixelUI.SIZE_SUB
 	)
 
 

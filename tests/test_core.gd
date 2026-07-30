@@ -37,6 +37,7 @@ func _initialize() -> void:
 	_test_town_generation()
 	_test_quest_text()
 	_test_vocabulary()
+	_test_version()
 	_test_event_effects()
 	_test_text_wrap()
 	_test_database_loaded()
@@ -818,6 +819,27 @@ func _test_vocabulary() -> void:
 	)
 	_check("Lore の前提が組み立てられる", Lore.WORLD.contains("世界の前提"))
 	_equal("Lore の 3 行がそろう", Lore.DEPART_LINES.size(), 3)
+
+
+## 版の刻印。
+##
+## **手で上げる番号は当てにしない**という決めごとを、ここで固定する。
+## 刻印が無くても動くこと（配布物を作り直すときに git が無い場合がある）と、
+## 刻印があればハッシュが表示に出ることの両方を見る。
+func _test_version() -> void:
+	_check("番号が読める", GameVersion.number() != "")
+	_check("表示に番号が入る", GameVersion.label().contains(GameVersion.number()))
+	var hash_text := GameVersion.commit()
+	if hash_text == "":
+		# git が無い環境。**刻印が無くても落ちないこと**が要件。
+		_check("刻印が無くても表示が作れる", GameVersion.label() != "")
+	else:
+		_check("表示にコミットが入る", GameVersion.label().contains(hash_text))
+		_check("コミットは短縮ハッシュ", hash_text.length() >= 6 and hash_text.length() <= 12)
+		_check("報告用の 1 行に日付が入る", GameVersion.full().contains(GameVersion.commit_date()))
+		# 未コミットの変更を含むビルドは印で分かること
+		if GameVersion.dirty():
+			_check("変更ありは印が付く", GameVersion.label().contains("*"))
 
 
 ## イベントの効果トークン。
