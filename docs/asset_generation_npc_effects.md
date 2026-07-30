@@ -2,8 +2,12 @@
 
 生成日: 2026-07-30
 
-画像生成は組み込みの ImageGen を使い、`docs/chara_image/` の既存候補を
-画風の参照にした。生成時のクロマキー原画は
+キャラクター再生成: 2026-07-30
+
+画像生成は組み込みの ImageGen を使った。NPC の再生成では
+`docs/character_art_direction.md` の参照順に従い、ユーザー設定画を最上位、
+`reference_character_style_anchor_v2.png` を歩行キャラへの翻訳基準にした。
+生成時のクロマキー原画は
 `candidate_*_source.png`、SFC 制約へ変換した採用候補は
 `candidate_*.png` に分けてある。ゲーム用画像は候補から
 `tools/gen_assets.py` が `assets/` へ生成する。
@@ -15,18 +19,18 @@
 
 | ID | 役割と輪郭 |
 |---|---|
-| `healer` | 短い象牙色の肩掛け、青緑の上衣、薬鞄 |
-| `blacksmith` | 幅広い革前掛け、片肩当て、腰の金槌 |
-| `miner` | 灯火付き兜、短い外套、背のつるはし |
-| `ferryman` | 広いつばの笠、雨除け、背の櫂 |
-| `farmer` | 麦わら帽、苔色の上衣、種袋と鎌 |
-| `beastkeeper` | 耳当て付き頭巾、噛みつき防具、餌袋 |
-| `mechanic` | ゴーグル、左右非対称の機械腕、工具と導線 |
-| `scribe` | 角帽、長衣、眼鏡、巻物筒 |
-| `refugee` | 継ぎ布の外套、毛布、生活道具の包み |
-| `pilgrim` | 深い頭巾、淡色の肩衣、祈祷板と鈴 |
-| `performer` | 羽根帽子、割れた外套、太鼓と足鈴 |
-| `imperial_officer` | 制帽、片肩章、割れ裾の長衣、指揮杖 |
+| `healer` | 枝角の薄布冠、象牙の聖遺物襟、青緑の呼吸器と薬筒 |
+| `blacksmith` | 炉殻の眼盾、漆の前垂れ甲、燃える有機襟と鍛造具 |
+| `miner` | 結晶測量冠、紫の多眼レンズ、折り畳み式共鳴つるはし |
+| `ferryman` | 三日月形の骨輪頭巾、潮の鈴、儀式用の櫂刃 |
+| `farmer` | 枝角と花弁の冠、記憶樹の種子薬筒、剪定刃 |
+| `beastkeeper` | 顎骨の頭巾、獣の口輪を思わせる肩、契約鎖と呼笛 |
+| `mechanic` | 冠状の眼鏡、左右非対称の義手、青緑の導線と炉心 |
+| `scribe` | 黒い書庫冠、封印頁の長衣、鎖付き写本と印章 |
+| `refugee` | 欠けた冠、裂けた漆の外套、深紅の形見 |
+| `pilgrim` | 枝角と光輪の頭巾、象牙の門衣、紫の小鐘 |
+| `performer` | 分かれた髪、肩の仮面、非対称の漆衣。道化服ではない |
+| `imperial_officer` | 冠状の眼盾、深紅の有機襟、漆の指揮衣と命令印 |
 
 生成プロンプトは次の共通部へ、表の「役割と輪郭」を一件ずつ差し込んだ。
 
@@ -34,12 +38,18 @@
 Use case: stylized-concept
 Asset type: one NPC source character for a late-16-bit JRPG
 Primary request: create one original front-facing standing NPC: <役割と輪郭>
-Style/medium: polished late-SFC-era pixel art with slightly modern character design
+Art authority: treat the supplied original face concepts as highest authority;
+preserve their poised adult feminine/androgynous presence, modern gothic
+high-fashion silhouette, glossy black lacquer and ivory bone, organic
+horn/coral/reliquary forms, vivid eyes, and one saturated accent
 Composition: one full-body figure, centered, generous padding, no animation grid
-Palette: dark navy/brown base, restrained cyan/ivory/brass accents
-Constraints: readable after reduction to 24x32; distinguish the job by silhouette;
-no text, no watermark, no scene, no cast shadow
-Backdrop: perfectly flat solid #00FF00 chroma key; do not use #00FF00 in the subject
+Pixel translation: use the approved soldier sheet only for scale, density and
+late-16-bit readability; keep 2 or 3 large silhouette features for 24x32
+Avoid: rustic brown leather, generic medieval adventurer, peasant, monk,
+ordinary military cap or uniform, lab coat, round steampunk goggles, circus
+motley, jester cap, cards, dice, generic tribal fur
+Constraints: no text, watermark, scene or cast shadow
+Backdrop: perfectly flat solid #00FF00 chroma key; do not use #00FF00 in subject
 ```
 
 ## イベントエフェクト 4 種
@@ -104,4 +114,3 @@ Backdrop: uncovered portions are perfectly flat solid #00FF00 chroma key
 python tools/check_candidates.py
 python tools/gen_assets.py
 ```
-

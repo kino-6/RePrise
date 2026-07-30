@@ -2,20 +2,23 @@
 
 作成日: 2026-07-30
 
-組み込みの imagegen で方向性画像を生成し、ゲーム内寸法に縮小したあと、
+組み込みの ImageGen で方向性画像を生成し、ゲーム内寸法に縮小したあと、
 BGR555・15色サブパレット・二値アルファへローカルで整形した候補。
-`assets/`、`data/jobs.json`、ゲームロジックには未反映。
+採用候補は `tools/gen_assets.py` を通して `assets/sprites/hero_<id>.png` に反映する。
+職業データとゲームロジックは既存のものを変えず、今回は画像だけを差し替えた。
+2026-07-30 の再生成では `docs/character_art_direction.md` に従い、
+ユーザー設定画を最上位の画風基準として 6 職すべてを描き直した。
 
 ## 職業候補
 
 | ID | 仮称 | シルエット上の特徴 |
 |---|---|---|
-| `jester` | 遊び人 | 二股帽、鈴、左右非対称のカード柄コート |
-| `sage` | 賢者 | 折り返した学匠帽、幅広の襟、長い学術ローブ |
-| `gunner` | 銃士 | 制帽、分割ロングコート、腰の小型魔導銃 |
-| `alchemist` | 錬金術師 | 額のゴーグル、作業外套、薬瓶ラックと金属手袋 |
-| `chronomancer` | 時術師 | 円環状のフード枠、振り子風の裾、砂時計飾り |
-| `beastmaster` | 魔獣使い | 獣耳の毛皮頭巾、片側だけ広い毛皮肩、太い編み髪 |
+| `jester` | 遊び人 | 分かれた髪、肩の割れ仮面、左右非対称の漆衣 |
+| `sage` | 賢者 | 象牙の枝角書庫冠、幅広い黒襟、封印頁の長衣 |
+| `gunner` | 銃士 | 冠状の眼盾、白黒の分割長衣、民生の深紅刻印銃 |
+| `alchemist` | 錬金術師 | 聖遺物の薬筒冠、象牙の義手、非対称の調律衣 |
+| `chronomancer` | 時術師 | 紫に発光する骨円環、欠けた時相、振り子状の裾 |
+| `beastmaster` | 魔獣使い | 顎骨の頭巾、深紅の獣口輪肩、太い契約鎖 |
 
 各職業には次の3種類がある。
 
@@ -33,39 +36,40 @@ BGR555・15色サブパレット・二値アルファへローカルで整形し
 全職共通:
 
 > Use case: stylized-concept. Asset type: SFC-era JRPG playable character
-> sprite sheet concept. Use the approved sprite candidates only as the exact
-> style, rendering density, proportions, palette mood, and 3x4 sheet-layout
-> reference. Create one complete 3 columns by 4 rows walking sprite sheet;
+> sprite sheet concept. Treat the supplied original face concepts as the
+> highest-authority art direction. Preserve their poised adult
+> feminine/androgynous presence, modern gothic high-fashion silhouette,
+> glossy black lacquer and ivory bone, organic horn/coral/reliquary forms,
+> vivid eyes, and one saturated accent. Use the approved soldier sheet only
+> for pixel density, proportions and 3x4 layout. Create one complete 3 columns by 4 rows;
 > rows are front, right-facing, left-facing, back; exactly three walking
 > frames per row; equal spacing, no overlap, consistent identity. Polished
 > late-16-bit-console pixel-art concept, modern fantasy design translated
 > into chunky readable pixels, crisp clusters, no blur, strong silhouette.
 > Perfectly flat solid #00ff00 chroma-key background. No shadow, texture,
 > grid, captions, UI, numbers, watermark, photorealism, or copied commercial
-> character. Do not use #00ff00 in the subject.
+> character. Do not use #00ff00 in the subject. Avoid rustic brown leather,
+> generic medieval adventurer, ordinary military uniforms and caps, lab coats,
+> round steampunk goggles, circus motley, jester caps, cards, dice and generic tribal fur.
 
 職別の追加指定:
 
-- 遊び人: androgynous young adult; asymmetric two-point soft cap with tiny
-  brass bells; lively wide eyes; cropped ivory-and-deep-wine motley coat;
-  one flared shoulder and one narrow shoulder; card-and-dice charm; playful
-  but capable, not a circus clown.
-- 賢者: mature but youthful scholar-mage; long ash-silver hair; calm luminous
-  eyes; tall layered scholar hood folded back like a soft crown; ivory mantle
-  with broad teal collar; geometric arcane hems; grimoire and astrolabe;
-  distinct from pointed-hat mage and horned summoner.
-- 銃士: short silver hair and dark undercut; compact field cap; fitted charcoal
-  split long coat; cross-belts and mana capsules; compact rune hand-cannon at
-  the hip; practical modern fantasy, not military science fiction.
-- 錬金術師: tousled pale-blond hair; round goggles on forehead; asymmetric
-  ivory workshop coat with teal lining; apron panels; bottle rack, satchel,
-  metal reagent glove; not a modern laboratory scientist.
-- 時術師: dark-violet bob with one silver forelock; crescent-shaped hood frame;
-  asymmetric ivory mantle; brass clockwork ring and hourglass charm;
-  pendulum-like skirt panels; mysterious but not evil.
-- 魔獣使い: dark auburn braid; open wolf-eared hide hood; one broad fur
-  shoulder; hunter tunic, leather straps, claw buckle, rope and whistle;
-  no animal companion and no oversized weapon.
+- 遊び人: poised androgynous adult “playful anomaly”; split black-and-ivory
+  hair, fractured mask ornaments at the shoulders, magenta accent and
+  asymmetric lacquer mantle; mischievous and dangerous; no circus symbols.
+- 賢者: adult archive oracle; ash-silver hair, ivory antler archive crown,
+  broad black reliquary collar, cyan sealed pages and chained codex;
+  not a conventional robed scholar.
+- 銃士: adult civilian rune gunner; short silver hair, crown-like eye shield,
+  fitted black-and-ivory split coat and compact crimson rune hand-cannon;
+  no military cap, rank badge or ordinary uniform.
+- 錬金術師: adult reliquary alchemist; pale hair, crown of reagent ampoules,
+  asymmetric ivory prosthetic glove and black lacquer tuning mantle;
+  no lab coat or round goggles.
+- 時術師: adult time binder; dark-violet bob, luminous violet bone ring behind
+  the head, broken phase plates and pendulum hem; no clockmaker costume.
+- 魔獣使い: adult bound-beast keeper; bone-jaw hood, crimson beast-muzzle
+  shoulder, black lacquer coat and heavy contract chain; no tribal fur or animal ears.
 
 ## ステージ用マップチップ
 
