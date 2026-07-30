@@ -70,6 +70,35 @@ var echo: int = 0
 ## 買ったアップグレード（upgrade_id -> 段数）。
 var upgrades: Dictionary = {}
 
+## ランをまたぐ物語の進行（`docs/cross_world_story_design.md` の「永続状態」）。
+##
+## **生成済みの一型と進行だけ**を持つ。長文はカタログ側にあるので、ここには
+## 結末の ID しか残さない（セーブに文章を複製しない）。
+## 古いセーブでは空に落ちる ―― 空でも遊べることが条件。
+##
+##   active_id / skin      … 選出時に確定して即保存する
+##   phase_index           … 表示または失敗継続が確定してから進める
+##   setbacks              … 結末の文脈に使う。**打ち切る条件にはしない**
+##   completed             … 結末 ID だけ
+##   recent_ids            … 同じ型が続かないようにするため
+var cross_world: Dictionary = {}
+
+
+## またぐ物語の空の状態。形をここ 1 か所に置く。
+static func empty_cross_world() -> Dictionary:
+	return {
+		"schema": 1,
+		"active_id": "",
+		"phase_index": 0,
+		"skin": {},
+		"started_run": 0,
+		"next_due_run": 0,
+		"setbacks": [],
+		"history": [],
+		"completed": {},
+		"recent_ids": [],
+	}
+
 # --- ラン中のみ（全滅で消える） ---
 var run_active: bool = false
 var run_seed: int = 0
@@ -148,6 +177,7 @@ var inventory: Dictionary = {}
 func _ready() -> void:
 	if not load_game():
 		roster = _build_default_roster()
+		cross_world = empty_cross_world()
 
 
 func _build_default_roster() -> Array[PartyMember]:
@@ -766,7 +796,9 @@ func change_job(member: PartyMember, job_id: String) -> bool:
 
 
 ## セーブの形式。上げたら load_from_dict() に旧版の読み方を残すこと。
-const SAVE_VERSION := 2
+## セーブの形式。またぐ物語の永続状態を足したので 3 へ。
+## **古い版を必ず読めること**（無い項目は空へ落ちる）。
+const SAVE_VERSION := 3
 
 
 ## 恒久データを辞書にする。ファイル入出力と分けてあるので、
@@ -937,12 +969,21 @@ func to_dict() -> Dictionary:
 		"upgrades": upgrades,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
 		"active": active_indices,
+		"cross_world": cross_world,
 	}
 
 
 ## 辞書から恒久データを復元する。**古い版を必ず読めること。**
 ## 無い項目は既定値に落ちるので、version が上がっても遊んでいる人のデータは消えない。
 func load_from_dict(data: Dictionary) -> bool:
+	# またぐ物語。**古いセーブには無いので空へ落とす。**
+	# 版が上がっても遊んでいる人のデータを壊さない、という約束を守る。
+	var raw_cross: Variant = data.get("cross_world", null)
+	cross_world = raw_cross if typeof(raw_cross) == TYPE_DICTIONARY else empty_cross_world()
+	for key in empty_cross_world():
+		if not cross_world.has(key):
+			cross_world[key] = empty_cross_world()[key]
+
 	deepest_floor = int(data.get("deepest_floor", 0))
 	runs_attempted = int(data.get("runs_attempted", 0))
 	# version 1 のセーブには残響もアップグレードも無い。既定値で素直に読める。

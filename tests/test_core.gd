@@ -522,6 +522,41 @@ func _test_save_migration() -> void:
 	_check("書いて読み直してもアップグレードが残る", int(round_trip.upgrades.get("shop_stock", 0)) == 2)
 	_check("書いて読み直しても名簿が残る", round_trip.roster.size() == state.roster.size())
 
+	# --- A-2: またぐ物語の永続状態 ---
+	#
+	# **古いセーブが読めること**が最優先。版を上げたときに遊んでいる人の
+	# データを壊すのが、この手の追加でいちばんやりがちな事故。
+	var old: Node = load("res://src/game/game_state.gd").new()
+	old.load_from_dict({
+		"version": 2,
+		"roster": [{"name": "ふるいひと", "job_id": "soldier"}],
+		"echo": 5,
+	})
+	_check("旧セーブ（版 2）が読める", old.roster.size() == 1)
+	_check("旧セーブでは物語が空に落ちる", String(old.cross_world.get("active_id", "?")) == "")
+	_check("空でも形はそろう", old.cross_world.has("phase_index") and old.cross_world.has("completed"))
+
+	# 書いて読み直しても残る
+	old.cross_world["active_id"] = "chronicle_margins"
+	old.cross_world["phase_index"] = 2
+	old.cross_world["completed"] = {"chronicle_margins": "double_ledger"}
+	old.cross_world["recent_ids"] = ["chronicle_margins"]
+	var carried: Node = load("res://src/game/game_state.gd").new()
+	carried.load_from_dict(old.to_dict())
+	_equal("進行中の型が残る", String(carried.cross_world["active_id"]), "chronicle_margins")
+	_equal("段階が残る", int(carried.cross_world["phase_index"]), 2)
+	_equal(
+		"結末は ID だけ残る",
+		String(carried.cross_world["completed"]["chronicle_margins"]), "double_ledger"
+	)
+	# **長文をセーブへ複製しない**（設計の決めごと）
+	_check(
+		"セーブに物語の本文が入らない",
+		not JSON.stringify(carried.to_dict()).contains("宛先のない")
+	)
+	old.free()
+	carried.free()
+
 	state.free()
 	round_trip.free()
 
