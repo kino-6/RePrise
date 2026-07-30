@@ -616,22 +616,30 @@ func _draw_escape_notice() -> void:
 
 
 func _draw_items() -> void:
-	var origin := PixelUI.content(BODY_RECT).position + Vector2(16, 4)
-	PixelUI.draw_text(self, origin, "もちもの", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	var body := PixelUI.content(BODY_RECT)
+	var area := Rect2(
+		body.position + Vector2(16, 4),
+		Vector2(body.size.x - 26.0, body.size.y - 8.0)
+	)
+	var panel := UiPanel.inside(self, area)
+	panel.line("もちもの", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	var items := _items()
 	if items.is_empty():
-		PixelUI.draw_text(self, origin + Vector2(0, 24), "なにも もっていない。", PixelUI.C_TEXT_DIM)
+		panel.skip(6.0)
+		panel.line("なにも もっていない。", PixelUI.C_TEXT_DIM)
 		return
+	panel.skip(6.0)
 	for i in items.size():
-		var at := origin + Vector2(0, 24 + i * ROW)
 		var it := Database.item(String(items[i]))
 		var on := i == _item_index and _state in [State.ITEM, State.ITEM_TARGET]
 		if on:
-			MenuList.draw_cursor(self, CURSOR_TEX, at)
-		PixelUI.draw_text(self, at, String(it.get("name", items[i])), PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
-		PixelUI.draw_text_right(
-			self, Vector2(origin.x + 280, at.y + 2), "%d こ" % GameState.item_count(String(items[i])),
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
+			MenuList.draw_cursor(
+				self, CURSOR_TEX, Vector2(area.position.x, panel.cursor_y()))
+		# 個数は右端で守る。品名が長くても数は消えない。
+		panel.row(
+			String(it.get("name", items[i])),
+			"%d こ" % GameState.item_count(String(items[i])),
+			PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
 		)
 
 
@@ -639,46 +647,45 @@ func _draw_status() -> void:
 	var m := _selected()
 	if m == null:
 		return
-	var origin := PixelUI.content(BODY_RECT).position + Vector2(16, 4)
-	PixelUI.draw_text(self, origin, m.name, PixelUI.C_TEXT, PixelUI.SIZE_HEAD)
+	var body := PixelUI.content(BODY_RECT)
+	var area := Rect2(
+		body.position + Vector2(16, 4),
+		Vector2(body.size.x - 26.0, body.size.y - 8.0)
+	)
+	var panel := UiPanel.inside(self, area)
+	panel.line(m.name, PixelUI.C_TEXT, PixelUI.SIZE_HEAD)
 	# 「Lv」だけだと、この人のレベルなのか職業の熟練なのか読めない。
 	# 人のレベル（ランで失う）と職業の熟練（持ち帰る）は別物なので、必ず並べて書く。
-	PixelUI.draw_text(
-		self, origin + Vector2(0, 26),
-		"%s　%s %d" % [
-			Database.job(m.job_id).get("name", m.job_id),
-			Terms.SPEED, Terms.speed(m.cost_scale())
-		],
-		PixelUI.C_TEXT_DIM
+	panel.row(
+		String(Database.job(m.job_id).get("name", m.job_id)),
+		"%s %d" % [Terms.SPEED, Terms.speed(m.cost_scale())],
+		PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
 	)
-
 	if m.poison_steps > 0:
 		PixelUI.draw_text(
-			self, origin + Vector2(232, 30), "どく", PixelUI.C_HP_LOW, PixelUI.SIZE_SUB
+			self, area.position + Vector2(232, 30), "どく",
+			PixelUI.C_HP_LOW, PixelUI.SIZE_SUB
 		)
+
 	var mastery := "★".repeat(m.mastery_rank()) + "☆".repeat(
 		maxi(Database.job(m.job_id).get("mastery", []).size() - m.mastery_rank(), 0)
 	)
-	# **値は列の右端で揃える。** ラベルから固定の位置に置くと、
-	# 長いラベル（「しょくぎょうの 熟練」）が必ず値と重なる（実際に重なっていた）。
-	# 右端で揃えれば、ラベルの長さが変わっても衝突しない。
+	# **値は行の右端で揃える。** ラベルから固定の位置に置くと、長いラベル
+	# （「しょくぎょうの 熟練」）が必ず値と重なった（実際に重なっていた）。
+	# `row()` は右を守って左を詰めるので、ラベルが伸びても衝突しない。
 	#
 	# 長い 2 行は 2 列の格子に入れず、幅いっぱいの独立した行にする。
 	# 人のレベル（ランで失う）と職業の熟練（持ち帰る）は別物なので、
 	# 短く縮めて並べるより、行を分けて書き切るほうがよい。
-	const COL_W := 150.0
-	var wide := [
-		["じぶんの レベル", "%d" % m.level],
-		["しょくぎょうの 熟練", mastery],
-	]
-	for i in wide.size():
-		var at := origin + Vector2(0, 50 + i * 19)
-		PixelUI.draw_text(self, at, String(wide[i][0]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
-		PixelUI.draw_text_right(
-			self, Vector2(origin.x + COL_W * 2.0 - 10.0, at.y - 2), String(wide[i][1]),
-			PixelUI.C_TEXT
-		)
+	panel.skip(6.0)
+	panel.row("じぶんの レベル", "%d" % m.level, PixelUI.C_TEXT_DIM,
+		PixelUI.C_TEXT, PixelUI.SIZE_SUB)
+	panel.row("しょくぎょうの 熟練", mastery, PixelUI.C_TEXT_DIM,
+		PixelUI.C_TEXT, PixelUI.SIZE_SUB)
 
+	# 能力は 2 列 x 3 行。列ごとに幅を持つので、値が隣の列へ食い込まない。
+	panel.skip(6.0)
+	var cols := panel.columns(2, 16.0)
 	var rows := [
 		["HP", "%d/%d" % [m.hp, m.max_hp()]],
 		["MP", "%d/%d" % [m.mp, m.max_mp()]],
@@ -689,21 +696,20 @@ func _draw_status() -> void:
 	]
 	for i in rows.size():
 		@warning_ignore("integer_division")
-		var col := i / 3
-		var row := i % 3
-		var at := origin + Vector2(col * COL_W, 94 + row * 19)
-		PixelUI.draw_text(self, at, String(rows[i][0]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
-		PixelUI.draw_text_right(
-			self, Vector2(at.x + COL_W - 24.0, at.y - 2), String(rows[i][1]), PixelUI.C_TEXT
+		cols[i / 3].row(
+			String(rows[i][0]), String(rows[i][1]),
+			PixelUI.C_TEXT_DIM, PixelUI.C_TEXT, PixelUI.SIZE_SUB
 		)
 
-	PixelUI.draw_text(self, origin + Vector2(0, 150), "そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	panel.move_to(cols[0].cursor_y() + 8.0)
+	panel.line("そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	for i in SLOTS.size():
-		var at := origin + Vector2(0, 168 + i * 18)
 		var gear_id := String(m.equipment.get(SLOTS[i], ""))
 		var label := String(Database.gear(gear_id).get("name", "—")) if gear_id != "" else "—"
-		PixelUI.draw_text(self, at, String(SLOT_LABELS[SLOTS[i]]), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
-		PixelUI.draw_text(self, at + Vector2(64, -2), label, PixelUI.C_TEXT)
+		panel.row(
+			String(SLOT_LABELS[SLOTS[i]]), label,
+			PixelUI.C_TEXT_DIM, PixelUI.C_TEXT, PixelUI.SIZE_SUB
+		)
 
 
 func _draw_equip() -> void:
@@ -739,33 +745,37 @@ func _draw_equip() -> void:
 
 	# 付け替え候補。先頭は必ず「はずす」。
 	var list := _gear_list()
-	PixelUI.draw_text(self, origin + Vector2(0, 110), "つけかえる", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	var body := PixelUI.content(BODY_RECT)
+	var panel := UiPanel.inside(self, Rect2(
+		Vector2(origin.x, origin.y + 110.0),
+		Vector2(body.end.x - origin.x - 10.0, body.end.y - origin.y - 112.0)
+	))
+	panel.line("つけかえる", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	panel.skip(4.0)
 	var entries: Array[String] = ["はずす"]
 	for id in list:
 		entries.append(String(Database.gear(id).get("name", id)))
 	for i in entries.size():
-		var at := origin + Vector2(0, 130 + i * 20)
-		if at.y > PixelUI.content(BODY_RECT).end.y - 20:
-			break
+		# **入らない行は `row()` が黙って捨てる**ので、自分で打ち切らなくてよい。
 		var on := i == _gear_index
 		if on:
-			draw_texture(CURSOR_TEX, (at + Vector2(-14, 2)).floor())
-		PixelUI.draw_text(
-			self, at, entries[i], PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
+			draw_texture(CURSOR_TEX, Vector2(origin.x - 14.0, panel.cursor_y() + 2.0).floor())
+		# 効き目は右端で守る。品名が長くても数値は消えない。
+		panel.row(
+			entries[i],
+			"" if i == 0 else GearText.summary(Database.gear(list[i - 1])),
+			PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
 		)
-		if i > 0:
-			var gear := Database.gear(list[i - 1])
-			PixelUI.draw_text_right(
-				self, Vector2(origin.x + 280, at.y + 2), GearText.summary(gear),
-				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-			)
 
 
 func _draw_hint() -> void:
 	PixelUI.draw_window(self, HINT_RECT, WINDOW_TEX)
-	var origin := PixelUI.content(HINT_RECT).position + Vector2(8, 0)
+	var hint := PixelUI.content(HINT_RECT)
+	var origin := hint.position + Vector2(8, 0)
+	var panel := UiPanel.inside(self, Rect2(
+		origin, Vector2(hint.end.x - origin.x, hint.end.y - origin.y)))
 	if _notice.text != "":
-		PixelUI.draw_text(self, origin, _notice.text, PixelUI.C_ACTIVE)
+		panel.line(_notice.text, PixelUI.C_ACTIVE)
 	else:
 		var desc := ""
 		match _state:
