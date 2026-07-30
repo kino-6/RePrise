@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_test_dungeon_determinism()
 	_test_dungeon_reachable()
 	_test_docs_hygiene()
+	_test_no_white_flash()
 	_test_data_integrity()
 	_test_save_migration()
 	_test_save_to_disk()
@@ -289,6 +290,31 @@ func _test_dungeon_reachable() -> void:
 ## 消す事故を 2 度起こした。数えるのは行数ではなく**済んだ行が残っていないか**。
 ##
 ## 済んだ項目は `[x]` を付けて `docs/tasks_archive.md` へ移す（消さない）。
+## 遭遇の演出に白を戻さない。
+##
+## 調査の結論は `docs/screen_transition_design.md`。SFC の明度レジスタは
+## **暗くする方向にしか無い**ので、白飛びはそもそもハードの機能ではなかった。
+## 白い閃光が「FC っぽい」のは趣味ではなく出自の問題で、
+## 一度そこへ戻すと指摘がまた振り出しに戻る。**加算方向を禁じる**関門。
+func _test_no_white_flash() -> void:
+	var shader := FileAccess.get_file_as_string("res://src/ui/mosaic.gdshader")
+	_check("モザイクのシェーダがある", shader != "")
+	# 明るさは**掛ける**（暗くする）だけ。足すと白飛びが復活する。
+	_check("明るさを足していない", not shader.contains("+ brightness"), "(掛ける方向だけ)")
+	_check("明るさを掛けている", shader.contains("c * brightness"))
+
+	var trans := FileAccess.get_file_as_string("res://src/ui/screen_transition.gd")
+	_check("粒は実機と同じ 16 画素まで", trans.contains("16.0]"))
+	# 段つきが SFC の手触りを作る。滑らかに補間すると現代のフェードになる。
+	_check("明るさを 16 段に量子化している", trans.contains("BRIGHT_STEPS"))
+
+	var main := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	var flash := main.substr(main.find("func _flash_into_battle"), 1200)
+	_check("遭遇で幕を白くしていない", not flash.contains("Color(1, 1, 1"), "(白は入れない)")
+	_check("遭遇はモザイクを通る", flash.contains("_transition"))
+	_check("調査の記録がある", FileAccess.file_exists("res://docs/screen_transition_design.md"))
+
+
 func _test_docs_hygiene() -> void:
 	var text := FileAccess.get_file_as_string("res://tasks.md")
 	_check("tasks.md がある", text != "")

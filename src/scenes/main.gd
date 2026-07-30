@@ -523,6 +523,11 @@ func _capture(which: String) -> void:
 					break
 			# 技が増えたときのサブウィンドウの見え方を確かめる。
 			battle.debug_open_spell_menu()
+		"transition":
+			# 遭遇の演出そのものを撮る。待ちは下の `wait` で調整する
+			# （ここで待つと、そのあとの固定待ちが足されて撮り逃す）。
+			_start_run()
+			_on_encounter()
 		"battle":
 			_start_run()
 			_on_encounter()
@@ -551,6 +556,10 @@ func _capture(which: String) -> void:
 		wait = 9.0
 	elif which == "effect" or which == "hitfx":
 		wait = 0.15
+	elif which == "transition":
+		# **崩れている途中**を撮る。入りきると戦闘画面になってしまうので、
+		# 入りの時間の 6 割で切る。
+		wait = ScreenTransition.IN_TIME * 0.6
 	await get_tree().create_timer(wait).timeout
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
@@ -964,8 +973,13 @@ var _curtain: ColorRect = null
 ## 上書きする（戦記を出したのに探索画面が出た、という不具合が実際に起きた）。
 var _fade_tween: Tween = null
 
+## 遭遇のモザイク。幕とは別に持つ（幕は黒板、こちらは画面そのものを崩す）。
+var _transition: ScreenTransition = null
+
 
 func _make_curtain() -> void:
+	_transition = ScreenTransition.new()
+	add_child(_transition)
 	_curtain = ColorRect.new()
 	_curtain.color = Color(0, 0, 0, 0)
 	_curtain.size = Vector2(PixelUI.SCREEN)
@@ -995,24 +1009,28 @@ func _fade_to(mode: Mode) -> void:
 	_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
 
 
-## 遭遇の演出。白く 2 回瞬かせてから戦闘へ移る。
+## 遭遇の演出。画面をモザイクに崩して戦闘へ移る。
 ##
-## 暗転だけだと「画面が切り替わった」で終わってしまう。SFC 期の遭遇は
-## 必ず画面全体に一撃入れてから戦闘に入っていて、それが緊張の合図になっていた。
+## **以前は白く 2 回瞬かせていた。やめた。** 調査の結論は
+## `docs/screen_transition_design.md` にあるが、短く言うとこうなる ――
+## SFC の明度レジスタは暗くする方向にしか無く、白飛びはハードの機能ではない。
+## 逆に FC は全画面演出がパレット差し替えしか無く、必然的に閃光へ寄る。
+## **白い閃光が「FC っぽい」のは趣味ではなく出自の問題**だった。
+##
+## モザイクは画面の中身を残したまま覆うので、歩いていた地形が粗く溶けて
+## 戦闘へ繋がる。暗転や閃光が前後を**切る**のに対し、モザイクは**繋ぐ**。
 func _flash_into_battle() -> void:
 	# 遭遇の瞬間に歩みを止める（理由は _fade_to と同じ）。
 	explore.set_active(false)
+	_cancel_fade()
+	if _transition != null and _transition.available():
+		_transition.play(_apply_mode.bind(Mode.BATTLE))
+		return
+	# シェーダが使えない環境では素の暗転へ落ちる。**切り替えは必ず起きる。**
 	if _curtain == null:
 		_set_mode(Mode.BATTLE)
 		return
-	_cancel_fade()
-	_curtain.color = Color(1, 1, 1, 0)
 	_fade_tween = create_tween()
-	for _i in 2:
-		_fade_tween.tween_property(_curtain, "color:a", 0.85, 0.05)
-		_fade_tween.tween_property(_curtain, "color:a", 0.0, 0.06)
-	# 幕を黒に戻してから暗転で入る（白のまま暗転すると眩しいだけになる）
-	_fade_tween.tween_callback(func() -> void: _curtain.color = Color(0, 0, 0, 0))
 	_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
 	_fade_tween.tween_callback(_apply_mode.bind(Mode.BATTLE))
 	_fade_tween.tween_property(_curtain, "color:a", 0.0, FADE_TIME)
@@ -1023,8 +1041,10 @@ func _cancel_fade() -> void:
 	if _fade_tween != null and _fade_tween.is_valid():
 		_fade_tween.kill()
 	_fade_tween = null
+	if _transition != null:
+		# 演出も一緒に止める。**あとから来た切り替えが必ず勝つ**ようにするため。
+		_transition.cancel()
 	if _curtain != null:
-		# 幕は黒に戻す。白のまま残すと次の暗転が白飛びになる。
 		_curtain.color = Color(0, 0, 0, 0)
 
 
@@ -1329,7 +1349,7 @@ func _close_settings() -> void:
 
 func _refresh_hud() -> void:
 	hud.refresh(
-		GameState.active_party(), GameState.floor_number, GameState.gold, _place_label()
+		GameState.active_party(), GameState.floor_number, _place_label()
 	)
 
 

@@ -7,14 +7,12 @@ const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const TOAST_TIME := 1.8
 
 var members: Array[PartyMember] = []
-var floor_number := 1
 
 ## 左上に出す 1 行。「洞 2階 / 危険度 5」のように、居場所と危険度を並べる。
 ##
 ## 危険度だけだと、同じ数字が世界の上にも洞の中にもあって混乱する。
 ## 居場所を先に書くと「深いところに居るから危ない」が読める。
 var place_label := Terms.DANGER_AT % 1
-var gold := 0
 
 var _toast := ""
 var _toast_timer := 0.0
@@ -25,11 +23,9 @@ func _ready() -> void:
 
 
 func refresh(
-	party: Array[PartyMember], floor_no: int, gold_amount: int, place: String = ""
+	party: Array[PartyMember], floor_no: int, place: String = ""
 ) -> void:
 	members = party
-	floor_number = floor_no
-	gold = gold_amount
 	place_label = place if place != "" else Terms.DANGER_AT % floor_no
 	queue_redraw()
 
@@ -50,20 +46,16 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	PixelUI.ui_frame()
-	# 階層と所持金
+	# 居場所だけを常時表示する。
+	#
+	# ゴールドは店と入手通知で必要なときに読める。探索中まで右上へ固定すると、
+	# その下にある宝箱・人物・入口を隠すため、常設しない。
 	# 封の残りを足したぶん、見出しの窓を広げる（3px 溢れていた）。
 	var head := Rect2(8, 8, 186, 32)
 	PixelUI.draw_window(self, head, WINDOW_TEX)
 	PixelUI.draw_text(
 		self, PixelUI.content(head).position + Vector2(6, 1),
 		place_label, PixelUI.C_TEXT
-	)
-
-	var purse := Rect2(354, 8, 150, 32)
-	PixelUI.draw_window(self, purse, WINDOW_TEX)
-	PixelUI.draw_text_right(
-		self, Vector2(PixelUI.content(purse).end.x - 4, PixelUI.content(purse).position.y + 1),
-		"%d %s" % [gold, Terms.GOLD], PixelUI.C_TEXT
 	)
 
 	# パーティの体力（探索中も常に見えていないと引き際が判断できない）
