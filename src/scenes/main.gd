@@ -659,7 +659,7 @@ func _capture(which: String) -> void:
 			# 実際の切り替えに任せると、どの覆いがいつ鳴るかが撮影と噛み合わない
 			# （世界地図の門を「覆いが出ている」と見間違えた）。直に鳴らす。
 			_start_run()
-			await get_tree().create_timer(0.6).timeout
+			await get_tree().create_timer(0.9).timeout
 			_transition.play_cover("iris_gate", func() -> void: pass)
 		"gearoffer":
 			# 拾った装備を着けるか聞く窓（C-9）。
@@ -723,7 +723,8 @@ func _capture(which: String) -> void:
 			_set_mode(Mode.RESULT)
 	# 戦記の撮影だけは、ローカル AI の文章が届くのを少し待つ。
 	# 戦記だけは AI の文章を待つ。演出は 0.4 秒で終わるので短く撮る。
-	var wait := 0.7
+	# 最長の頁遷移（0.88秒）と入力解放待ちを越えてから、静止画面を撮る。
+	var wait := 1.05
 	if which == "chronicle":
 		wait = 9.0
 	elif which == "effect" or which == "hitfx":

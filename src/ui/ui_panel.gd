@@ -30,6 +30,10 @@ var _overflow := 0
 ## 窓を描いて、その内側を持つ割り付けを返す。
 ##
 ## `title` を渡すと見出しを 1 行目に置く。`texture` は窓の地。
+## 最後に描いた（詰めたあとの）文字。**単独テストが結果を読むための窓口。**
+var last_text := ""
+
+
 static func begin(
 	canvas: CanvasItem, rect: Rect2, texture: Texture2D = null,
 	title: String = "", pad: float = 3.0
@@ -102,10 +106,13 @@ func line(
 		_overflow += 1
 		return
 	var width := _inner.size.x - indent
-	PixelUI.draw_text(
-		_canvas, Vector2(_inner.position.x + indent, _y),
-		_shrink(text, width, size), color, size
-	)
+	var shown := _shrink(text, width, size)
+	last_text = shown
+	# **描き手が居なくても割り付けは進む。** `_canvas` が null なら測るだけ。
+	# 単独テスト（`tests/test_window_system.gd`）が窓を立てずに検査できる。
+	if _canvas != null:
+		PixelUI.draw_text(
+			_canvas, Vector2(_inner.position.x + indent, _y), shown, color, size)
 	_y += PixelUI.LINE
 
 
@@ -126,13 +133,14 @@ func row(
 	# 右の手前に 1 文字ぶんの隙間を置く。詰めた `…` と数値がくっつくと読めない。
 	var gap := PixelUI.text_width("　", size) * 0.5
 	var left_room := _inner.size.x - indent - right_width - gap
-	PixelUI.draw_text(
-		_canvas, Vector2(_inner.position.x + indent, _y),
-		_shrink(left, maxf(left_room, 0.0), size), left_color, size
-	)
-	if right != "":
-		PixelUI.draw_text_right(
-			_canvas, Vector2(_inner.end.x, _y), right, right_color, size)
+	var shown := _shrink(left, maxf(left_room, 0.0), size)
+	last_text = shown
+	if _canvas != null:
+		PixelUI.draw_text(
+			_canvas, Vector2(_inner.position.x + indent, _y), shown, left_color, size)
+		if right != "":
+			PixelUI.draw_text_right(
+				_canvas, Vector2(_inner.end.x, _y), right, right_color, size)
 	_y += PixelUI.LINE
 
 
@@ -156,7 +164,11 @@ func gauge(label: String, ratio: float, fill: Color, previous: float = -1.0) -> 
 	var label_width := 0.0
 	if label != "":
 		label_width = PixelUI.text_width(label) + 4.0
-		PixelUI.draw_text(_canvas, Vector2(_inner.position.x, _y), label)
+		if _canvas != null:
+			PixelUI.draw_text(_canvas, Vector2(_inner.position.x, _y), label)
+	if _canvas == null:
+		_y += PixelUI.LINE
+		return
 	PixelUI.draw_gauge(
 		_canvas,
 		Rect2(

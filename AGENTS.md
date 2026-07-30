@@ -114,6 +114,7 @@ python tools/verify_audio.py                          # 音の検算（無音・
 godot --headless --import                             # class_name を登録（新クラス追加後は必須）
 godot --headless --script res://tests/test_core.gd    # 決定性テスト（常に緑に保つ）
 godot --headless --script res://tests/balance.gd      # 到達率と勝率を実測する
+godot --headless --script tests/test_window_system.gd  # 窓の割り付けを単独で検査
 godot --path . -- --shot=title                        # 画面を 1 枚撮って終了
 godot --path . -- --shot=title --audio                # 音も鳴らす（音を確かめるときだけ）
 godot --path .                                        # 起動

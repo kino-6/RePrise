@@ -374,6 +374,7 @@ func _walk(
 ) -> Vector2i:
 	var path := world.route(from, to)
 	var weighted := 0
+	var walked := 0
 	var at := from
 	for step in path:
 		at = step
@@ -381,11 +382,14 @@ func _walk(
 		state["danger"] = world.danger_at(at.x, at.y)
 		if world.sites.has(at):
 			weighted = 0  # 拠点地の上は安全（ExploreView と同じ扱い）
+			walked = 0
 			continue
 		weighted += world.encounter_weight(at.x, at.y)
-		if not Encounter.should_meet(rng, weighted):
+		walked += 1
+		if not Encounter.should_meet(rng, walked, weighted):
 			continue
 		weighted = 0
+		walked = 0
 		var foes := Encounter.build(rng, int(state["danger"]), 100, world.biome_id_at(at.x, at.y))
 		if foes.is_empty():
 			continue
@@ -412,12 +416,15 @@ func _delve(
 		var biome := String(site.get("biome", ""))
 		var steps := map.route(map.start_pos, map.stairs_pos).size()
 		var weighted := 0
+		var walked := 0
 		for _s in steps:
 			state["steps"] = int(state["steps"]) + 1
 			weighted += 1  # 洞の中は 1 歩 1（ExploreView の _try_move_dungeon と同じ）
-			if not Encounter.should_meet(rng, weighted):
+			walked += 1
+			if not Encounter.should_meet(rng, walked, weighted):
 				continue
 			weighted = 0
+			walked = 0
 			var foes := Encounter.build(rng, here, 100, biome)
 			if foes.is_empty():
 				continue

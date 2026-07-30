@@ -1,6 +1,7 @@
 extends SceneTree
 
 const ChestReward := preload("res://src/dungeon/chest_reward.gd")
+const ConfirmFlow := preload("res://src/game/confirm_flow.gd")
 
 ## 決定性の検証。
 ##
@@ -25,16 +26,19 @@ func _initialize() -> void:
 	_test_cover_and_buff_expiry()
 	_test_dungeon_determinism()
 	_test_dungeon_reachable()
+	_test_encounter_gap()
 	_test_docs_hygiene()
 	_test_no_white_flash()
 	_test_data_integrity()
 	_test_save_migration()
 	_test_save_to_disk()
+	_test_save_erase()
 	_test_suspend()
 	_test_guardian_and_escape()
 	_test_roster()
 	_test_field_poison()
 	_test_settings()
+	_test_run_abandon_confirmation()
 	_test_dungeon_route()
 	_test_world_generation()
 	_test_town_generation()
@@ -281,6 +285,36 @@ func _test_dungeon_reachable() -> void:
 	_check("%d 個のシードすべてで階段に到達できる" % checked, all_ok)
 
 
+## 戦闘直後の連続遭遇防止。地形重みやイベント補正より先に実歩数で止める。
+func _test_encounter_gap() -> void:
+	var first_six_safe := true
+	for walked in range(1, Encounter.MIN_ENCOUNTER_GAP_STEPS + 1):
+		for seed_value in range(1, 33):
+			if Encounter.should_meet(DetRng.new(seed_value), walked, 999, 3):
+				first_six_safe = false
+	_check("戦闘後の最初の6歩は必ず敵が出ない", first_six_safe)
+
+	# 安全期間で乱数を捨てると、その後の編成まで歩数変更だけでずれる。
+	var guarded := DetRng.new(919)
+	var untouched := DetRng.new(919)
+	for walked in range(1, Encounter.MIN_ENCOUNTER_GAP_STEPS + 1):
+		Encounter.should_meet(guarded, walked, 999, 3)
+	_equal("安全な6歩は遭遇乱数を消費しない", guarded.next_u32(), untouched.next_u32())
+
+	var resumes := false
+	for seed_value in range(1, 65):
+		if Encounter.should_meet(
+			DetRng.new(seed_value), Encounter.MIN_ENCOUNTER_GAP_STEPS + 1, 999, 3
+		):
+			resumes = true
+			break
+	_check("7歩目から遭遇抽選が再開する", resumes)
+	_check(
+		"実歩数を満たしても重みが足りなければ出ない",
+		not Encounter.should_meet(DetRng.new(1), 99, Encounter.MIN_SAFE_STEPS - 1, 3)
+	)
+
+
 ## 積んだ「やること」が読める量に収まっているか。
 ##
 ## 長い一覧は読まれない。読まれない一覧は棚卸しされず、
@@ -310,12 +344,55 @@ func _test_no_white_flash() -> void:
 	_check("粒は実機と同じ 16 画素まで", trans.contains("16.0]"))
 	# 段つきが SFC の手触りを作る。滑らかに補間すると現代のフェードになる。
 	_check("明るさを 16 段に量子化している", trans.contains("BRIGHT_STEPS"))
+	_check("全滅には覆い絵を使わない専用暗転がある", trans.contains("func play_defeat"))
+	_check(
+		"全滅の黒を一拍保つ",
+		ScreenTransition.DEFEAT_HOLD_TIME >= 0.35
+		and ScreenTransition.DEFEAT_RESULT_HOLD >= 0.1
+	)
+	_check("覆いは意味ごとの拍を持つ", trans.contains("COVER_TIMES"))
+	_check("全面を覆った状態を一拍保つ", trans.contains("COVER_HOLDS"))
+	_check("遷移の終了を入力Gateへ通知する", trans.contains("signal finished"))
 
 	var main := FileAccess.get_file_as_string("res://src/scenes/main.gd")
 	var flash := main.substr(main.find("func _flash_into_battle"), 1200)
 	_check("遭遇で幕を白くしていない", not flash.contains("Color(1, 1, 1"), "(白は入れない)")
 	_check("遭遇はモザイクを通る", flash.contains("_transition"))
+	_check("全滅から戦記は専用暗転を通る", main.contains("_transition.play_defeat"))
+	_check("全トランジションに入力Gateがある", main.contains("func _begin_transition_input"))
+	_check(
+		"探索は覆いが開ききるまで再開しない",
+		main.contains("mode == Mode.EXPLORE and not _transition_input_locked")
+	)
+	_check(
+		"トランジション終了後にキー解放を待つ",
+		main.contains("TRANSITION_RELEASE_MIN") and main.contains("_transition_action_pressed")
+	)
 	_check("調査の記録がある", FileAccess.file_exists("res://docs/screen_transition_design.md"))
+
+	# 生成された8コマそのものを検査する。初コマに部品が出ていたり、
+	# 途中で穴が戻ったりすると、再生コードが正しくてもちらつく。
+	for kind in ["pixel_dissolve", "iris_gate", "page_turn", "gear_shutter"]:
+		var texture := load("res://assets/transitions/%s.png" % kind) as Texture2D
+		var image := texture.get_image() if texture != null else Image.new()
+		_check("%s の遷移画像が読める" % kind, not image.is_empty())
+		if image.is_empty():
+			continue
+		var coverage: Array[int] = []
+		for frame in 8:
+			var opaque := 0
+			for y in 40:
+				for x in 64:
+					if image.get_pixel(frame * 64 + x, y).a > 0.5:
+						opaque += 1
+			coverage.append(opaque)
+		_check("%s は透明から始まる" % kind, coverage[0] == 0, str(coverage))
+		_check("%s は全面を覆って終わる" % kind, coverage[-1] == 64 * 40, str(coverage))
+		var monotonic := true
+		for i in range(1, coverage.size()):
+			if coverage[i] < coverage[i - 1]:
+				monotonic = false
+		_check("%s の覆い率は戻らない" % kind, monotonic, str(coverage))
 
 
 func _test_docs_hygiene() -> void:
@@ -450,6 +527,41 @@ func _test_settings() -> void:
 	Settings.save_config()
 
 
+## ラン放棄は「確認を2回した」だけでは足りず、各画面で明示的に
+## あきらめる側を選んだときだけ実行段階へ届く。
+func _test_run_abandon_confirmation() -> void:
+	_equal(
+		"放棄1回目のOKは最終確認へ進むだけ",
+		ConfirmFlow.next_run_abandon_stage(1, true), 2
+	)
+	_equal(
+		"放棄2回目のOKで初めて実行段階へ届く",
+		ConfirmFlow.next_run_abandon_stage(2, true), 3
+	)
+	_equal(
+		"放棄1回目を戻れば閉じる",
+		ConfirmFlow.next_run_abandon_stage(1, false), 0
+	)
+	_equal(
+		"放棄2回目を戻っても閉じる",
+		ConfirmFlow.next_run_abandon_stage(2, false), 0
+	)
+
+	var lines := Chronicle.write({
+		"victory": false, "outcome": "abandoned", "floor": 6, "members": [],
+	})
+	var joined := "\n".join(lines)
+	_check("放棄の戦記は帰還として残る", joined.contains("帰還"))
+	_check("放棄を全滅とは書かない", not joined.contains("ついえた"))
+	_equal(
+		"AIへ渡す放棄結果も帰還",
+		String(Chronicle.facts_for_llm({
+			"victory": false, "outcome": "abandoned", "floor": 6,
+		}).get("outcome", "")),
+		Terms.RUN_ABANDON_RESULT
+	)
+
+
 ## 毒の持ち越し。戦闘の外へ出ても効き続けるが、毒だけでは死なない。
 func _test_field_poison() -> void:
 	var m := PartyMember.create("どく", "soldier")
@@ -554,6 +666,7 @@ func _test_save_migration() -> void:
 	_check("覚えた技が残る", "power_slash" in state.roster[0].learned)
 	_check("最深階が残る", state.deepest_floor == 5)
 	_check("無い項目は既定値になる", state.echo == 0 and state.upgrades.is_empty())
+	_check("出撃済みの旧セーブはプロローグ視聴済みへ移行する", state.prologue_seen)
 
 	# 書いて読み直しても同じ（往復で壊れない）
 	state.echo = 42
@@ -563,6 +676,7 @@ func _test_save_migration() -> void:
 	_check("書いて読み直しても資源が残る", round_trip.echo == 42)
 	_check("書いて読み直してもアップグレードが残る", int(round_trip.upgrades.get("shop_stock", 0)) == 2)
 	_check("書いて読み直しても名簿が残る", round_trip.roster.size() == state.roster.size())
+	_check("プロローグ視聴済みがセーブに残る", round_trip.prologue_seen)
 
 	# --- A-2: またぐ物語の永続状態 ---
 	#
@@ -577,6 +691,7 @@ func _test_save_migration() -> void:
 	_check("旧セーブ（版 2）が読める", old.roster.size() == 1)
 	_check("旧セーブでは物語が空に落ちる", String(old.cross_world.get("active_id", "?")) == "")
 	_check("空でも形はそろう", old.cross_world.has("phase_index") and old.cross_world.has("completed"))
+	_check("未出撃の旧セーブはプロローグ前へ移行する", not old.prologue_seen)
 
 	# 書いて読み直しても残る
 	old.cross_world["active_id"] = "chronicle_margins"
@@ -661,6 +776,62 @@ func _test_save_to_disk() -> void:
 	state.free()
 	reloaded.free()
 	healed.free()
+
+
+## プレイヤーが明示的に選ぶ全消去。バックアップだけ残して復旧してしまう事故と、
+## ラン中に消して終了時の自動保存で復活する事故を両方止める。
+func _test_save_erase() -> void:
+	const PREFIX := "user://test_save_erase"
+	var state: Node = load("res://src/game/game_state.gd").new()
+	state.use_save_paths(PREFIX)
+	var paths := [
+		state.save_path, state.backup_path, state.temp_path, state.suspend_path,
+	]
+	var dir := DirAccess.open("user://")
+	for path in paths:
+		if dir.file_exists(path):
+			dir.remove(path)
+
+	var members: Array[PartyMember] = [PartyMember.create("けすひと", "mage")]
+	state.roster = members
+	state.deepest_floor = 9
+	state.runs_attempted = 12
+	state.prologue_seen = true
+	state.echo = 88
+	state.upgrades = {"shop_stock": 2}
+	state.cross_world = CrossWorldArc.empty_state()
+	state.cross_world["completed"] = {"letter_chain": "broadcast"}
+	state.save_game()
+	# 二度目で控えを作る。
+	state.echo = 99
+	state.save_game()
+	var temp := FileAccess.open(state.temp_path, FileAccess.WRITE)
+	temp.store_string("書きかけ")
+	temp.close()
+	var suspend := FileAccess.open(state.suspend_path, FileAccess.WRITE)
+	suspend.store_string("{}")
+	suspend.close()
+
+	_check("消去前はセーブ一式があると分かる", state.has_save_data())
+	state.run_active = true
+	_check("ラン中のセーブ消去を拒否する", not state.erase_save_data())
+	_check("拒否したとき本体セーブを残す", FileAccess.file_exists(state.save_path))
+	state.run_active = false
+	_check("タイトルからセーブ一式を消去できる", state.erase_save_data())
+	var all_gone := true
+	for path in paths:
+		if FileAccess.file_exists(path):
+			all_gone = false
+	_check("本体・控え・書きかけ・中断をすべて消す", all_gone)
+	_check("消去後はセーブ無しと分かる", not state.has_save_data())
+	_equal("最深記録を初期化する", state.deepest_floor, 0)
+	_equal("出撃回数を初期化する", state.runs_attempted, 0)
+	_equal("資源を初期化する", state.echo, 0)
+	_check("アップグレードを初期化する", state.upgrades.is_empty())
+	_check("物語進行を初期化する", state.cross_world["completed"].is_empty())
+	_check("初期メンバーへ戻す", state.roster.size() == state.DEFAULT_PARTY.size())
+	_check("プロローグをもう一度見せる", state.should_show_prologue())
+	state.free()
 
 
 ## 世界の生成。**詰む世界を出さないこと**が最優先の不変条件。
@@ -936,6 +1107,24 @@ func _test_vocabulary() -> void:
 	)
 	_check("Lore の前提が組み立てられる", Lore.WORLD.contains("世界の前提"))
 	_equal("Lore の 3 行がそろう", Lore.DEPART_LINES.size(), 3)
+	_equal("プロローグは 8 拍ある", Lore.PROLOGUE_BEATS.size(), 8)
+	var prologue_complete := true
+	var prologue_fits := true
+	for beat in Lore.PROLOGUE_BEATS:
+		if String(beat.get("scene", "")) == "" \
+			or String(beat.get("location", "")) == "" \
+			or String(beat.get("speaker", "")) == "" \
+			or (beat.get("lines", []) as Array).is_empty() \
+			or String(beat.get("prompt", "")) == "":
+			prologue_complete = false
+		var wrapped_lines := 0
+		for line in beat.get("lines", []):
+			wrapped_lines += PixelUI.wrap(String(line), 468.0, PixelUI.SIZE_TEXT).size()
+		if wrapped_lines > 3:
+			prologue_fits = false
+	_check("プロローグ全拍に絵・場所・話者・本文・入力がある", prologue_complete)
+	_check("プロローグ全拍が本文窓の 3 行へ収まる", prologue_fits)
+	_check("世界分断が前提に明記される", Lore.WORLD.contains("綴じ目") and Lore.WORLD.contains("分かれた"))
 
 
 ## 版の刻印。
@@ -984,10 +1173,23 @@ func _test_event_effects() -> void:
 		"(未登録: %s)" % str(unknown)
 	)
 
-	# 未実装のものは INFORMATIONAL に明示されていること（黙って無視でないこと）
-	_check("未実装のトークンは明示されている", EventEffects.INFORMATIONAL.size() > 0)
-	_check("効果があるトークンは INFORMATIONAL に無い", EventEffects.has_effect("gold"))
-	_check("未実装のトークンは has_effect が false", not EventEffects.has_effect("boss_intel"))
+	# 既知なだけでは不足。none 以外は状態変化か戦闘予約へ必ず解決する。
+	var unresolved: Array[String] = []
+	for event in catalog.get("events", []):
+		for choice in event.get("choices", []):
+			for field in ["costs", "risks", "rewards"]:
+				for token in choice.get(field, []):
+					if EventEffects.resolution_kind(String(token)) == "unknown":
+						var note := "%s/%s" % [field, String(token)]
+						if note not in unresolved:
+							unresolved.append(note)
+			if not EventEffects.choice_has_consequence(choice):
+				unresolved.append("%s/%s" % [
+					String(event.get("id", "")), String(choice.get("id", ""))
+				])
+	_check("全選択肢が状態変化・戦闘・再訪可能な保留へ解決する",
+		unresolved.is_empty(), str(unresolved))
+	_check("主弱体は表示だけでなく状態効果を持つ", EventEffects.has_effect("boss_weaken"))
 
 	# 世界に置かれ、歩いて行けること
 	var placed := 0
@@ -1038,10 +1240,29 @@ func _test_suspend() -> void:
 	state.kills = 12
 	state.add_item("herb", 2)
 	state.world.seals[0]["broken"] = true
+	state.world.seals[1]["known"] = true
 	state.world.story_beat = 3
 	state.world.story_choice = "test_choice"
 	state.event_done[Vector2i(9, 9)] = true
 	state.event_tags["rescue"] = 2
+	state.event_encounter_bias = -2
+	state.event_bias_steps = 23
+	state.event_shop_bonus = 2
+	state.event_boons.assign(["temporary_attack", "temporary_ally"])
+	state.event_boon = "temporary_ally"
+	state.event_boss_intel = 2
+	state.event_boss_weaken = 1
+	state.event_town_service = 1
+	state.event_inn_bonus = 2
+	state.event_service_loss = 1
+	state.event_map_reveals = 1
+	state.event_route_changes = 3
+	var biome_key := "%d,%d" % [state.world_pos.x, state.world_pos.y]
+	var shifted: int = (
+		state.world.biome_index_at(state.world_pos.x, state.world_pos.y) + 1
+	) % WorldMap.BIOMES.size()
+	state.world.set_biome(state.world_pos.x, state.world_pos.y, shifted)
+	state.event_biome_changes[biome_key] = shifted
 	state.lifeline_left = 1
 	state.active_party()[0].hp = 7
 
@@ -1064,10 +1285,24 @@ func _test_suspend() -> void:
 	_equal("撃破数が戻る", back.kills, 12)
 	_equal("持ち物が戻る", int(back.inventory.get("herb", 0)), 2)
 	_check("解いた封が戻る", bool(back.world.seals[0].get("broken", false)))
+	_check("地図で知った封が戻る", bool(back.world.seals[1].get("known", false)))
 	_equal("物語の進みが戻る", back.world.story_beat, 3)
 	_equal("選んだ手が戻る", back.world.story_choice, "test_choice")
 	_check("済んだイベントが戻る", back.event_done.has(Vector2i(9, 9)))
 	_equal("えらび方の記憶が戻る", int(back.event_tags.get("rescue", 0)), 2)
+	_equal("遭遇補正が戻る", back.event_encounter_bias, -2)
+	_equal("イベント効果の残り歩数が戻る", back.event_bias_steps, 23)
+	_equal("店の品数補正が戻る", back.event_shop_bonus, 2)
+	_equal("複数の一時援護が戻る", back.event_boons, state.event_boons)
+	_equal("主の情報段階が戻る", back.event_boss_intel, 2)
+	_equal("主の弱体段階が戻る", back.event_boss_weaken, 1)
+	_equal("町の世話が戻る", back.event_town_service, 1)
+	_equal("宿の効果が戻る", back.event_inn_bonus, 2)
+	_equal("失った世話が戻る", back.event_service_loss, 1)
+	_equal("地図効果の回数が戻る", back.event_map_reveals, 1)
+	_equal("道の変化回数が戻る", back.event_route_changes, 3)
+	_equal("変化した生物相が戻る",
+		back.world.biome_index_at(back.world_pos.x, back.world_pos.y), shifted)
 	_equal("命の綱が戻る", back.lifeline_left, 1)
 	_equal("HP が戻る", back.active_party()[0].hp, 7)
 
