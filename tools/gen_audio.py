@@ -24,8 +24,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from sfc_audio import (  # noqa: E402
-    BASS, BELL, BRASS, CHOIR, FLUTE, HARP, LEAD, LOW_BRASS, OBOE, STRINGS,
-    SAMPLE_RATE, Track, finish,
+    BASS, BELL, BRASS, CHOIR, FLUTE, HARP, LEAD, LOW_BRASS, OBOE, PIANO,
+    PIZZ, SFX_BASS, SFX_BELL, SFX_BRASS, SFX_CHOIR, SFX_FLUTE, SFX_HARP,
+    SFX_LEAD, SFX_LOW_BRASS, SFX_OBOE, SFX_STRINGS, STRINGS, SAMPLE_RATE,
+    Track, finish, finish_loop,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,7 +41,8 @@ class Song:
         self.spb = 60.0 / bpm
         self.beats_per_bar = beats_per_bar
         total_beats = bars * beats_per_bar
-        self.track = Track(total_beats * self.spb + tail)
+        self.loop_seconds = total_beats * self.spb
+        self.track = Track(self.loop_seconds + tail)
 
     def note(self, beat: float, length: float, name: str, inst, amp: float = 1.0) -> None:
         if name in ("r", ""):
@@ -62,11 +65,24 @@ class Song:
     def drum(self, beat: float, kind: str) -> None:
         t = beat * self.spb
         if kind == "kick":
-            self.track.add_noise(t, 0.10, amp=0.34, decay=0.035, pitch=9)
+            self.track.add_note(t, 0.10, "c2", BASS, 0.42)
+            self.track.add_noise(t, 0.055, amp=0.12, decay=0.018, pitch=11)
         elif kind == "snare":
-            self.track.add_noise(t, 0.14, amp=0.24, decay=0.055, pitch=2)
+            self.track.add_note(t, 0.075, "d3", PIZZ, 0.24)
+            self.track.add_noise(t, 0.12, amp=0.18, decay=0.042, pitch=3)
         elif kind == "hat":
-            self.track.add_noise(t, 0.05, amp=0.09, decay=0.018, pitch=1)
+            self.track.add_noise(t, 0.040, amp=0.060, decay=0.012, pitch=2)
+        elif kind == "tom":
+            self.track.add_note(t, 0.16, "a2", PIZZ, 0.36)
+            self.track.add_noise(t, 0.055, amp=0.08, decay=0.024, pitch=7)
+        elif kind == "timpani":
+            self.track.add_note(t, 0.28, "d2", BASS, 0.46)
+            self.track.add_noise(t, 0.075, amp=0.07, decay=0.030, pitch=9)
+
+    def finish(self, path: Path, cutoff: float = 5200.0,
+               echo_ms: float = 126.0, echo_fb: float = 0.30,
+               peak: float = 0.82) -> None:
+        finish_loop(self.track, path, self.loop_seconds, cutoff, echo_ms, echo_fb, peak)
 
 
 # --------------------------------------------------------------------------
@@ -75,35 +91,53 @@ class Song:
 
 CHORDS = {
     "Am": (["a3", "c4", "e4"], "a2", "e3"),
+    "Am9": (["a3", "b3", "c4", "e4"], "a2", "e3"),
     "F":  (["f3", "a3", "c4"], "f2", "c3"),
+    "F6": (["f3", "a3", "c4", "d4"], "f2", "c3"),
     "G":  (["g3", "b3", "d4"], "g2", "d3"),
+    "Gsus": (["g3", "c4", "d4"], "g2", "d3"),
     "C":  (["c4", "e4", "g4"], "c3", "g3"),
+    "C2": (["c4", "d4", "g4"], "c3", "g3"),
+    "C6": (["c4", "e4", "g4", "a4"], "c3", "g3"),
     "Em": (["e3", "g3", "b3"], "e2", "b2"),
     "Dm": (["d3", "f3", "a3"], "d3", "a3"),
+    "Dm9": (["d3", "e3", "f3", "a3"], "d3", "a3"),
     "E":  (["e3", "gs3", "b3"], "e2", "b2"),
+    "E7": (["e3", "gs3", "b3", "d4"], "e2", "b2"),
     "Bf": (["bf3", "d4", "f4"], "bf2", "f3"),
+    "Bf6": (["bf3", "d4", "f4", "g4"], "bf2", "f3"),
 }
 
 
 def lay_backing(song: Song, progression: list[str], march: bool = True,
                 pad_amp: float = 1.0, bass_amp: float = 1.0) -> None:
-    """和音パッドと、八分で刻む低音を敷く。
+    """開いた和声と、旋律として動く低音を敷く。
 
-    低音が休まず動き続けることが「行進している」印象の正体なので、
-    ここは装飾せず淡々と刻む。
+    全小節を三和音パッドとルート連打で埋めると、曲が違っても同じ古い
+    チップチューンに聞こえる。弦は拍の前半だけ、低音は休符と先取りを含める。
     """
     for i, name in enumerate(progression):
         triad, root, fifth = CHORDS[name]
         start = song.bar(i)
-        song.chord(start, song.beats_per_bar, triad, STRINGS, 0.55 * pad_amp)
+        open_voicing = [triad[0], triad[-1]]
+        song.chord(start, 2.65 if song.beats_per_bar >= 4 else 1.8,
+                   open_voicing, STRINGS, 0.38 * pad_amp)
+        if i % 2 == 1:
+            song.note(start + 2.0, 1.45, triad[1], STRINGS, 0.24 * pad_amp)
 
         if march:
-            pattern = [root, root, root, root, fifth, fifth, root, root]
-            for k, pitch in enumerate(pattern):
-                song.note(start + k * 0.5, 0.48, pitch, BASS, 0.72 * bass_amp)
+            # 偶数小節は前へ出て、奇数小節は半拍空ける。ルート連打を避ける。
+            pattern = (
+                [(0.0, root), (1.0, fifth), (2.0, root), (3.5, fifth)]
+                if i % 2 == 0 else
+                [(0.0, root), (1.5, fifth), (2.5, root), (3.25, fifth)]
+            )
+            for beat, pitch in pattern:
+                song.note(start + beat, 0.68 if beat % 1 else 0.82,
+                          pitch, BASS, 0.60 * bass_amp)
         else:
-            song.note(start, 1.9, root, BASS, 0.78 * bass_amp)
-            song.note(start + 2, 1.9, fifth, BASS, 0.70 * bass_amp)
+            song.note(start, 1.65, root, BASS, 0.62 * bass_amp)
+            song.note(start + 2, 1.35, fifth, BASS, 0.48 * bass_amp)
 
 
 def lay_march_drums(song: Song, bars: int) -> None:
@@ -138,39 +172,37 @@ def lay_fill(song: Song, bar_index: int) -> None:
 
 
 def lay_march_drums_range(song: Song, first: int, last: int, hats: bool = True) -> None:
-    """指定した小節だけに行進の打楽器を敷く（B 部で抜くために範囲を取る）。"""
+    """指定範囲に皮物中心の拍を置く。常時ノイズハットにはしない。"""
     for i in range(first, last):
         start = song.bar(i)
         song.drum(start, "kick")
-        song.drum(start + 1, "snare")
-        song.drum(start + 2, "kick")
+        song.drum(start + 2, "tom" if i % 2 == 0 else "kick")
         song.drum(start + 3, "snare")
         if hats:
-            for k in range(8):
-                if k % 2 == 1:
-                    song.drum(start + k * 0.5, "hat")
+            for beat in (1.5, 3.5):
+                song.drum(start + beat, "hat")
 
 
 def lay_arpeggio(song: Song, first: int, last: int, progression: list[str],
                  inst, amp: float = 0.30) -> None:
-    """和音を八分で分散させて内声に置く。
+    """余白へ三音の応答を置く。連続した八分音符の壁にはしない。
 
-    旋律と低音のあいだが空いていると、音数が少ないぶん寂しく聞こえる。
-    ここを埋めるだけで「作り込まれた」印象になる（SFC 期の常套手段）。
+    「空いているから埋める」は音数過多の原因になる。小節後半だけに置き、
+    次の小節では順序を変えて呼吸を作る。
     """
     for i in range(first, last):
         triad, _, _ = CHORDS[progression[i % len(progression)]]
         start = song.bar(i)
-        order = [triad[0], triad[1], triad[2], triad[1]]
-        for k in range(8):
-            song.note(start + k * 0.5, 0.45, order[k % 4], inst, amp)
+        order = [triad[0], triad[-1], triad[1]] if i % 2 == 0 else [triad[-1], triad[1], triad[0]]
+        for k, pitch in enumerate(order):
+            song.note(start + 2.0 + k * 0.5, 0.34, pitch, inst, amp)
 
 
 # 全曲をつなぐ「見届ける動機」。上がったあと主音へ戻らず、B で一度止まる。
 # 約束はできたが結末はまだ決まっていない、という形。終幕曲だけ最後を A に戻す。
-WITNESS = [("a4", 1.0), ("c5", 1.0), ("e5", 1.0), ("b4", 1.0)]
-WITNESS_HIGH = [("a5", 1.0), ("c6", 1.0), ("e6", 1.0), ("b5", 1.0)]
-WITNESS_HOME = [("a4", 1.0), ("c5", 1.0), ("e5", 1.0), ("a5", 1.0)]
+WITNESS = [("a4", 1.5), ("c5", 0.5), ("e5", 1.0), ("b4", 1.0)]
+WITNESS_HIGH = [("a5", 1.5), ("c6", 0.5), ("e6", 1.0), ("b5", 1.0)]
+WITNESS_HOME = [("a4", 1.5), ("c5", 0.5), ("e5", 1.0), ("a5", 1.0)]
 
 
 def lay_witness(song: Song, bar_index: int, inst=OBOE, amp: float = 0.72,
@@ -198,28 +230,14 @@ def lay_heartbeat(song: Song, first: int, last: int, amp: float = 0.22) -> None:
 
 def bgm_stronghold() -> None:
     bars = 32
-    song = Song(bpm=104, bars=bars)
+    song = Song(bpm=98, bars=bars)
 
-    a_prog = ["C", "G", "Am", "Em", "F", "C", "Dm", "G"]
-    b_prog = ["F", "G", "Em", "Am", "Dm", "G", "C", "C"]
-    c_prog = ["Am", "F", "C", "G", "F", "Em", "Dm", "G"]
+    a_prog = ["C2", "Gsus", "Am9", "Em", "F6", "C", "Dm9", "G"]
+    b_prog = ["F6", "G", "Em", "Am9", "Dm9", "Gsus", "C6", "C"]
+    c_prog = ["Am9", "F6", "C2", "G", "F6", "Em", "Dm9", "Gsus"]
     progression = a_prog + b_prog + a_prog + c_prog
 
-    lay_backing(song, progression, march=False, pad_amp=1.0)
-
-    # 低音は二分で歩く（行進というより儀式の歩調）
-    for i, name in enumerate(progression):
-        _, root, fifth = CHORDS[name]
-        start = song.bar(i)
-        # B 部だけ半分の密度にして、息を抜く
-        if 8 <= i < 16:
-            song.note(start, 1.9, root, BASS, 0.70)
-            song.note(start + 2, 1.9, fifth, BASS, 0.58)
-            continue
-        song.note(start, 0.95, root, BASS, 0.80)
-        song.note(start + 1, 0.95, fifth, BASS, 0.62)
-        song.note(start + 2, 0.95, root, BASS, 0.74)
-        song.note(start + 3, 0.95, fifth, BASS, 0.58)
+    lay_backing(song, progression, march=False, pad_amp=0.88, bass_amp=0.78)
 
     a_melody = [
         [("g4", 1), ("c5", 1), ("e5", 1), ("c5", 1)],
@@ -255,20 +273,22 @@ def bgm_stronghold() -> None:
     ]
     melody = a_melody + b_melody + a_melody + c_melody
     for i, phrase in enumerate(melody):
-        song.phrase(song.bar(i), phrase, BRASS, 0.92)
+        inst = OBOE if i < 8 or 16 <= i < 24 else (BRASS if i < 16 else FLUTE)
+        amp = 0.68 if inst is OBOE else (0.58 if inst is BRASS else 0.55)
+        song.phrase(song.bar(i), phrase, inst, amp)
 
-    # 対旋律と内声。B 部と C 部だけに入れて、A 部との差を作る。
-    for i in range(8, 16):
-        song.phrase(song.bar(i), melody[i], FLUTE, 0.32)
-    lay_arpeggio(song, 8, 16, b_prog, BELL, 0.22)
-    for i in range(24, 32):
-        song.phrase(song.bar(i), melody[i], FLUTE, 0.30)
+    # 同じ旋律の薄い重ねではなく、節の終わりへだけ別の声で応答する。
+    for i in (9, 11, 13, 15):
+        triad, _, _ = CHORDS[progression[i]]
+        song.phrase(song.bar(i) + 2, [(triad[1], 1), (triad[-1], 1)],
+                    FLUTE, 0.26)
+    lay_arpeggio(song, 24, 28, c_prog, HARP, 0.15)
 
-    for i in [7, 15, 23, 31]:
-        lay_fill(song, i)
+    for i in (7, 15, 31):
+        song.drum(song.bar(i) + 3, "timpani")
 
-    finish(song.track, AUDIO / "bgm" / "stronghold.wav",
-           cutoff=5400.0, echo_ms=142.0, echo_fb=0.32)
+    song.finish(AUDIO / "bgm" / "stronghold.wav",
+                cutoff=5000.0, echo_ms=142.0, echo_fb=0.29)
 
 
 # --------------------------------------------------------------------------
@@ -346,8 +366,8 @@ def bgm_descent() -> None:
     for i in [7, 15, 23, 31]:
         lay_fill(song, i)
 
-    finish(song.track, AUDIO / "bgm" / "descent.wav",
-           cutoff=5000.0, echo_ms=124.0, echo_fb=0.30)
+    song.finish(AUDIO / "bgm" / "descent.wav",
+                cutoff=4800.0, echo_ms=124.0, echo_fb=0.27)
 
 
 # --------------------------------------------------------------------------
@@ -359,8 +379,8 @@ def bgm_battle() -> None:
     bars = 24
     song = Song(bpm=164, bars=bars)
 
-    a_prog = ["Am", "Am", "F", "G", "Am", "Dm", "E", "Am"]
-    b_prog = ["C", "G", "Dm", "Am", "F", "G", "E", "E"]
+    a_prog = ["Am9", "Am", "F6", "Gsus", "Am", "Dm9", "E7", "Am"]
+    b_prog = ["C2", "G", "Dm9", "Am9", "F6", "Gsus", "E7", "E"]
     progression = a_prog + b_prog + a_prog
 
     lay_backing(song, progression, march=True, pad_amp=0.75)
@@ -391,14 +411,18 @@ def bgm_battle() -> None:
     ]
     melody = a_melody + b_melody + a_melody
     for i, phrase in enumerate(melody):
-        song.phrase(song.bar(i), phrase, LEAD, 1.0)
+        inst = BRASS if i < 8 or i >= 16 else OBOE
+        song.phrase(song.bar(i), phrase, inst, 0.73 if inst is BRASS else 0.61)
 
-    lay_arpeggio(song, 8, 16, b_prog, BELL, 0.26)
+    # 中間部は分散和音で埋めず、低い金管の短い応答で圧を保つ。
+    for i in (9, 11, 13, 15):
+        _, root, fifth = CHORDS[progression[i]]
+        song.phrase(song.bar(i) + 2, [(root, 1), (fifth, 1)], LOW_BRASS, 0.24)
     for i in [7, 15, 23]:
         lay_fill(song, i)
 
-    finish(song.track, AUDIO / "bgm" / "battle.wav",
-           cutoff=5600.0, echo_ms=108.0, echo_fb=0.26)
+    song.finish(AUDIO / "bgm" / "battle.wav",
+                cutoff=5200.0, echo_ms=108.0, echo_fb=0.23, peak=0.84)
 
 
 # --------------------------------------------------------------------------
@@ -410,21 +434,23 @@ def bgm_title() -> None:
     bars = 24
     song = Song(bpm=76, bars=bars, tail=3.5)
     progression = (
-        ["Am", "F", "C", "G", "Am", "Dm", "E", "Am"]
-        + ["F", "C", "G", "Am", "Dm", "F", "E", "E"]
-        + ["Am", "F", "C", "G", "Dm", "E", "Am", "Am"]
+        ["Am9", "F6", "C2", "Gsus", "Am", "Dm9", "E7", "Am"]
+        + ["F6", "C", "Gsus", "Am9", "Dm9", "F", "E7", "E"]
+        + ["Am9", "F6", "C2", "G", "Dm9", "E7", "Am", "Am9"]
     )
 
-    # 砦にも世界にもまだ入っていない。行進を置かず、遠い合唱と単音だけにする。
+    # 砦にも世界にもまだ入っていない。二小節単位の呼吸を作り、
+    # 合唱・低音・撥弦を同時に常駐させない。
     for i, name in enumerate(progression):
         triad, root, fifth = CHORDS[name]
         start = song.bar(i)
-        song.chord(start, 3.9, triad, CHOIR, 0.34)
-        song.note(start, 3.8, root, BASS, 0.42)
-        if i % 2 == 1:
-            song.note(start + 2.0, 1.8, fifth, BASS, 0.26)
-        for beat, pitch in zip([0.0, 1.5, 2.5], [triad[0], triad[2], triad[1]]):
-            song.note(start + beat, 0.75, pitch, HARP, 0.24)
+        if i % 2 == 0:
+            song.chord(start, 6.8, [triad[0], triad[-1]], CHOIR, 0.25)
+            song.note(start, 3.6, root, BASS, 0.34)
+        else:
+            song.note(start + 2.0, 1.6, fifth, BASS, 0.22)
+        for beat, pitch in zip([0.0, 2.5], [triad[0], triad[-1]]):
+            song.note(start + beat, 0.62, pitch, HARP, 0.19)
 
     lay_witness(song, 0, OBOE, 0.66)
     lay_witness(song, 8, FLUTE, 0.52, high=True)
@@ -438,10 +464,11 @@ def bgm_title() -> None:
     ]
     for section in [4, 12, 20]:
         for i, phrase in enumerate(countermelody):
-            song.phrase(song.bar(section + i), phrase, FLUTE, 0.38)
+            if i % 2 == 0:
+                song.phrase(song.bar(section + i), phrase, FLUTE, 0.30)
 
-    finish(song.track, AUDIO / "bgm" / "title.wav",
-           cutoff=5000.0, echo_ms=184.0, echo_fb=0.38, peak=0.78)
+    song.finish(AUDIO / "bgm" / "title.wav",
+                cutoff=4700.0, echo_ms=184.0, echo_fb=0.34, peak=0.76)
 
 
 # --------------------------------------------------------------------------
@@ -451,22 +478,22 @@ def bgm_title() -> None:
 
 def bgm_world() -> None:
     bars = 32
-    song = Song(bpm=116, bars=bars)
-    a_prog = ["Am", "F", "C", "G", "Am", "F", "Dm", "E"]
-    b_prog = ["C", "G", "Am", "Em", "F", "C", "Dm", "E"]
-    c_prog = ["Dm", "Am", "Bf", "F", "C", "G", "E", "Am"]
+    song = Song(bpm=112, bars=bars)
+    a_prog = ["Am9", "F6", "C2", "Gsus", "Am", "F6", "Dm9", "E7"]
+    b_prog = ["C6", "G", "Am9", "Em", "F6", "C2", "Dm9", "E7"]
+    c_prog = ["Dm9", "Am", "Bf6", "F", "C2", "Gsus", "E7", "Am9"]
     progression = a_prog + b_prog + a_prog + c_prog
 
     lay_backing(song, progression, march=True, pad_amp=0.74, bass_amp=0.82)
-    # 通常の軍楽より軽い。スネアを半分にし、旅の歩調を前へ出す。
+    # 軍楽ではなく足取り。中間部では皮物を抜き、景色が開く余白を作る。
     for i in range(bars):
         start = song.bar(i)
+        if 8 <= i < 16:
+            continue
         song.drum(start, "kick")
-        song.drum(start + 2, "kick")
+        song.drum(start + 2.5, "tom")
         if i % 2 == 1:
-            song.drum(start + 3, "snare")
-        for k in [1, 3, 5, 7]:
-            song.drum(start + k * 0.5, "hat")
+            song.drum(start + 3.5, "hat")
 
     a_melody = [
         WITNESS,
@@ -500,14 +527,16 @@ def bgm_world() -> None:
     ]
     melody = a_melody + b_melody + a_melody + c_melody
     for i, phrase in enumerate(melody):
-        song.phrase(song.bar(i), phrase, OBOE if i < 16 else FLUTE, 0.74)
-    lay_arpeggio(song, 8, 16, b_prog, HARP, 0.17)
-    lay_arpeggio(song, 24, 32, c_prog, BELL, 0.16)
+        inst = OBOE if i < 8 or 16 <= i < 24 else FLUTE
+        amp = 0.58 if inst is OBOE else 0.50
+        song.phrase(song.bar(i), phrase, inst, amp)
+    lay_arpeggio(song, 10, 15, b_prog, HARP, 0.14)
+    lay_arpeggio(song, 26, 31, c_prog, PIANO, 0.12)
     for i in [7, 15, 23, 31]:
         lay_fill(song, i)
 
-    finish(song.track, AUDIO / "bgm" / "world.wav",
-           cutoff=5300.0, echo_ms=132.0, echo_fb=0.29)
+    song.finish(AUDIO / "bgm" / "world.wav",
+                cutoff=5000.0, echo_ms=132.0, echo_fb=0.26, peak=0.80)
 
 
 # --------------------------------------------------------------------------
@@ -517,49 +546,56 @@ def bgm_world() -> None:
 
 def bgm_town() -> None:
     bars = 24
-    song = Song(bpm=88, bars=bars, tail=3.0)
-    a_prog = ["C", "Am", "F", "G", "C", "Em", "Dm", "G"]
-    b_prog = ["Am", "Em", "F", "C", "Dm", "Am", "E", "E"]
+    song = Song(bpm=102, bars=bars, beats_per_bar=3, tail=2.6)
+    a_prog = ["C6", "Am9", "F6", "Gsus", "C2", "Em", "Dm9", "G"]
+    b_prog = ["Am9", "Em", "F6", "C2", "Dm9", "Am", "E7", "G"]
     progression = a_prog + b_prog + a_prog
 
-    lay_backing(song, progression, march=False, pad_amp=0.62, bass_amp=0.58)
-    lay_arpeggio(song, 0, bars, progression, HARP, 0.25)
+    # 三拍子の小編成。低音・ピアノ・木管だけで、仮の故郷の人肌を作る。
+    for i, name in enumerate(progression):
+        triad, root, fifth = CHORDS[name]
+        start = song.bar(i)
+        song.note(start, 1.45, root, PIZZ, 0.34)
+        song.chord(start + 1.0, 0.62, [triad[1], triad[-1]], PIANO, 0.24)
+        song.chord(start + 2.0, 0.62, [triad[0], triad[1]], PIANO, 0.20)
+        if i % 4 == 3:
+            song.note(start + 2.5, 0.32, fifth, HARP, 0.13)
 
     melody = [
-        WITNESS,
-        [("a4", 2), ("c5", 2)],
-        [("f5", 1), ("e5", 1), ("c5", 2)],
-        [("d5", 1), ("b4", 1), ("g4", 2)],
-        [("e5", 1), ("g5", 1), ("c6", 2)],
-        [("b5", 2), ("g5", 2)],
-        [("f5", 1), ("d5", 1), ("c5", 1), ("a4", 1)],
-        [("b4", 3), ("r", 1)],
-        [("a4", 1.5), ("c5", 0.5), ("e5", 2)],
-        [("g5", 1), ("e5", 1), ("b4", 2)],
-        [("c5", 1), ("f5", 1), ("a5", 2)],
-        [("g5", 2), ("e5", 2)],
-        [("d5", 1), ("f5", 1), ("a5", 1), ("f5", 1)],
-        [("e5", 2), ("c5", 2)],
-        [("b4", 1), ("gs4", 1), ("b4", 2)],
-        [("e5", 4)],
-    ] + [
-        WITNESS_HOME,
-        [("a4", 2), ("c5", 2)],
-        [("f5", 1), ("e5", 1), ("c5", 2)],
-        [("d5", 1), ("b4", 1), ("g4", 2)],
-        [("e5", 1), ("g5", 1), ("c6", 2)],
-        [("b5", 2), ("g5", 2)],
-        [("f5", 1), ("d5", 1), ("b4", 1), ("d5", 1)],
-        [("c5", 4)],
+        [("c5", 1.0), ("e5", 0.5), ("g5", 0.75), ("d5", 0.75)],
+        [("c5", 1.5), ("a4", 1.5)],
+        [("f5", 0.75), ("e5", 0.75), ("c5", 1.5)],
+        [("d5", 1.0), ("b4", 0.5), ("g4", 1.5)],
+        [("e5", 1.0), ("g5", 0.5), ("c6", 1.5)],
+        [("b5", 1.5), ("g5", 1.5)],
+        [("f5", 0.75), ("d5", 0.75), ("c5", 0.75), ("a4", 0.75)],
+        [("b4", 2.25), ("r", 0.75)],
+        [("a4", 1.0), ("c5", 0.5), ("e5", 1.5)],
+        [("g5", 1.0), ("e5", 0.5), ("b4", 1.5)],
+        [("c5", 0.75), ("f5", 0.75), ("a5", 1.5)],
+        [("g5", 1.5), ("e5", 1.5)],
+        [("d5", 0.75), ("f5", 0.75), ("a5", 0.75), ("f5", 0.75)],
+        [("e5", 1.5), ("c5", 1.5)],
+        [("b4", 0.75), ("gs4", 0.75), ("b4", 1.5)],
+        [("d5", 2.25), ("r", 0.75)],
+        [("c5", 1.0), ("e5", 0.5), ("g5", 0.75), ("c5", 0.75)],
+        [("a4", 1.5), ("c5", 1.5)],
+        [("f5", 0.75), ("e5", 0.75), ("c5", 1.5)],
+        [("d5", 1.0), ("b4", 0.5), ("g4", 1.5)],
+        [("e5", 1.0), ("g5", 0.5), ("c6", 1.5)],
+        [("b5", 1.5), ("g5", 1.5)],
+        [("f5", 0.75), ("d5", 0.75), ("b4", 0.75), ("d5", 0.75)],
+        [("c5", 3.0)],
     ]
     for i, phrase in enumerate(melody):
-        song.phrase(song.bar(i), phrase, OBOE, 0.62)
-    for i in range(8, 16):
+        inst = FLUTE if 8 <= i < 16 else OBOE
+        song.phrase(song.bar(i), phrase, inst, 0.46 if inst is FLUTE else 0.51)
+    for i in (9, 11, 13):
         triad, _, _ = CHORDS[progression[i]]
-        song.note(song.bar(i) + 2, 1.7, triad[2], FLUTE, 0.23)
+        song.note(song.bar(i) + 2.0, 0.72, triad[-1], HARP, 0.15)
 
-    finish(song.track, AUDIO / "bgm" / "town.wav",
-           cutoff=5200.0, echo_ms=154.0, echo_fb=0.32, peak=0.80)
+    song.finish(AUDIO / "bgm" / "town.wav",
+                cutoff=4900.0, echo_ms=154.0, echo_fb=0.29, peak=0.77)
 
 
 # --------------------------------------------------------------------------
@@ -570,20 +606,22 @@ def bgm_town() -> None:
 def bgm_cave() -> None:
     bars = 24
     song = Song(bpm=94, bars=bars, tail=3.2)
-    a_prog = ["Dm", "Am", "Bf", "E", "Dm", "F", "E", "Am"]
-    b_prog = ["Am", "Bf", "Dm", "E", "F", "Dm", "E", "E"]
+    a_prog = ["Dm9", "Am9", "Bf6", "E7", "Dm", "F6", "E7", "Am"]
+    b_prog = ["Am9", "Bf6", "Dm9", "E7", "F6", "Dm", "E7", "E"]
     progression = a_prog + b_prog + a_prog
 
     # 洞では拍を埋めない。長い低音と、空間の奥で返る短い音だけ。
     for i, name in enumerate(progression):
         triad, root, fifth = CHORDS[name]
         start = song.bar(i)
-        song.note(start, 3.8, root, BASS, 0.56)
-        song.note(start + 2, 1.7, fifth, BASS, 0.30)
-        song.chord(start, 3.7, triad, STRINGS, 0.24)
+        song.note(start, 3.5, root, BASS, 0.43)
+        if i % 2 == 1:
+            song.note(start + 2, 1.4, fifth, BASS, 0.23)
         if i % 2 == 0:
-            song.note(start + 0.5, 0.32, triad[2], BELL, 0.25)
-            song.note(start + 2.75, 0.28, triad[1], BELL, 0.19)
+            song.chord(start, 6.6, [triad[0], triad[-1]], STRINGS, 0.18)
+        if i % 2 == 0:
+            song.note(start + 0.5, 0.32, triad[-1], BELL, 0.19)
+            song.note(start + 2.75, 0.28, triad[1], BELL, 0.14)
 
     melody = [
         [("d4", 2), ("a4", 1), ("c5", 1)],
@@ -597,14 +635,18 @@ def bgm_cave() -> None:
     ]
     for section in [0, 8, 16]:
         for i, phrase in enumerate(melody):
+            if section == 8 and i % 2 == 1:
+                continue
+            if section == 16 and i not in (0, 3, 4, 7):
+                continue
             inst = OBOE if section == 8 else FLUTE
-            song.phrase(song.bar(section + i), phrase, inst, 0.46 if section == 8 else 0.40)
+            song.phrase(song.bar(section + i), phrase, inst, 0.38 if section == 8 else 0.34)
     # 地鳴りは規則的にしない。予告として数小節にだけ置く。
     for i in [3, 7, 11, 15, 20, 23]:
         song.drum(song.bar(i) + 3.0, "kick")
 
-    finish(song.track, AUDIO / "bgm" / "cave.wav",
-           cutoff=4200.0, echo_ms=202.0, echo_fb=0.40, peak=0.78)
+    song.finish(AUDIO / "bgm" / "cave.wav",
+                cutoff=4000.0, echo_ms=202.0, echo_fb=0.36, peak=0.75)
 
 
 # --------------------------------------------------------------------------
@@ -616,16 +658,20 @@ def bgm_story() -> None:
     bars = 16
     song = Song(bpm=72, bars=bars, tail=3.6)
     progression = (
-        ["Am", "F", "C", "E", "Am", "Dm", "F", "E"]
-        + ["C", "G", "Am", "F", "Dm", "E", "Am", "Am"]
+        ["Am9", "F6", "C2", "E7", "Am", "Dm9", "F6", "E7"]
+        + ["C6", "Gsus", "Am9", "F6", "Dm9", "E7", "Am", "Am9"]
     )
     for i, name in enumerate(progression):
         triad, root, fifth = CHORDS[name]
         start = song.bar(i)
-        song.chord(start, 3.8, triad, CHOIR, 0.22)
-        song.note(start, 3.7, root, BASS, 0.30)
-        for k, pitch in enumerate([triad[0], triad[2], triad[1], triad[2]]):
-            song.note(start + k, 0.72, pitch, HARP, 0.26)
+        if i % 2 == 0:
+            song.chord(start, 6.8, [triad[0], triad[-1]], CHOIR, 0.16)
+        song.note(start, 2.6, root, BASS, 0.24)
+        if i % 2 == 0:
+            song.note(start + 1.0, 0.62, triad[-1], HARP, 0.20)
+            song.note(start + 2.5, 0.62, triad[1], HARP, 0.16)
+        else:
+            song.note(start + 2.0, 0.68, fifth, PIZZ, 0.15)
 
     lay_witness(song, 0, OBOE, 0.64)
     song.phrase(song.bar(1), [("a4", 2), ("e5", 1), ("d5", 1)], OBOE, 0.50)
@@ -639,10 +685,13 @@ def bgm_story() -> None:
     song.phrase(song.bar(13), [("b4", 1), ("e5", 1), ("gs5", 2)], OBOE, 0.46)
     song.phrase(song.bar(14), [("a5", 2), ("e5", 2)], FLUTE, 0.42)
     lay_witness(song, 15, OBOE, 0.56, resolved=True)
-    lay_heartbeat(song, 0, bars, 0.10)
+    # 心拍はノイズ打楽器ではなく、二小節ごとの低い撥弦に留める。
+    for i in range(0, bars, 2):
+        song.note(song.bar(i), 0.28, "a2", PIZZ, 0.16)
+        song.note(song.bar(i) + 0.75, 0.22, "e3", PIZZ, 0.11)
 
-    finish(song.track, AUDIO / "bgm" / "story.wav",
-           cutoff=4700.0, echo_ms=176.0, echo_fb=0.36, peak=0.77)
+    song.finish(AUDIO / "bgm" / "story.wav",
+                cutoff=4500.0, echo_ms=176.0, echo_fb=0.32, peak=0.74)
 
 
 # --------------------------------------------------------------------------
@@ -653,26 +702,23 @@ def bgm_story() -> None:
 def bgm_boss() -> None:
     bars = 32
     song = Song(bpm=152, bars=bars)
-    a_prog = ["Am", "Bf", "Am", "E", "Am", "F", "Bf", "E"]
-    b_prog = ["Dm", "Am", "Bf", "E", "F", "Dm", "E", "E"]
-    c_prog = ["Bf", "F", "Dm", "Am", "Bf", "E", "Am", "E"]
+    a_prog = ["Am9", "Bf6", "Am", "E7", "Am9", "F6", "Bf", "E7"]
+    b_prog = ["Dm9", "Am", "Bf6", "E7", "F6", "Dm", "E7", "E"]
+    c_prog = ["Bf6", "F", "Dm9", "Am", "Bf", "E7", "Am9", "E7"]
     progression = a_prog + b_prog + a_prog + c_prog
 
-    # 帝国機械の歯車。ルートと五度を八分で交互にし、全小節で止めない。
+    # 帝国機械の歯車。四つの短い歯だけを反復し、隙間を金属打音へ渡す。
     for i, name in enumerate(progression):
         triad, root, fifth = CHORDS[name]
         start = song.bar(i)
-        song.chord(start, 3.8, triad, STRINGS, 0.34)
-        for k in range(8):
-            song.note(start + k * 0.5, 0.44, root if k % 2 == 0 else fifth,
-                      BASS, 0.82)
+        song.chord(start, 2.7, [triad[0], triad[-1]], STRINGS, 0.24)
+        for beat, pitch in ((0.0, root), (0.75, fifth), (2.0, root), (2.75, fifth)):
+            song.note(start + beat, 0.46, pitch, BASS, 0.64)
         song.drum(start, "kick")
-        song.drum(start + 1, "snare")
-        song.drum(start + 2, "kick")
-        song.drum(start + 2.5, "kick")
+        song.drum(start + 1.5, "tom")
         song.drum(start + 3, "snare")
-        for k in [1, 3, 5, 7]:
-            song.drum(start + k * 0.5, "hat")
+        if i % 2 == 1:
+            song.drum(start + 3.5, "hat")
 
     # 見届ける動機を逆から鳴らす。主は約束を諦めさせる側。
     inverse = [
@@ -697,15 +743,16 @@ def bgm_boss() -> None:
     ]
     melody = inverse + answer + inverse + answer
     for i, phrase in enumerate(melody):
-        song.phrase(song.bar(i), phrase, LOW_BRASS if i < 8 or 16 <= i < 24 else LEAD,
-                    0.88)
-    for i in range(8, 16):
-        song.phrase(song.bar(i), melody[i], OBOE, 0.24)
+        inst = LOW_BRASS if i < 8 or 16 <= i < 24 else BRASS
+        song.phrase(song.bar(i), phrase, inst, 0.69 if inst is LOW_BRASS else 0.62)
+    # 人の旋律が答える区間だけ、木管を一音ずつ差し込む。
+    for i in (9, 11, 13, 15):
+        song.note(song.bar(i) + 2.0, 1.5, melody[i][-1][0], OBOE, 0.20)
     for i in [7, 15, 23, 31]:
         lay_fill(song, i)
 
-    finish(song.track, AUDIO / "bgm" / "boss.wav",
-           cutoff=5700.0, echo_ms=96.0, echo_fb=0.24, peak=0.88)
+    song.finish(AUDIO / "bgm" / "boss.wav",
+                cutoff=5300.0, echo_ms=96.0, echo_fb=0.21, peak=0.86)
 
 
 # --------------------------------------------------------------------------
@@ -716,20 +763,22 @@ def bgm_boss() -> None:
 def bgm_chronicle() -> None:
     bars = 24
     song = Song(bpm=80, bars=bars, tail=4.0)
-    a_prog = ["Am", "F", "C", "G", "Am", "Dm", "E", "Am"]
-    b_prog = ["Dm", "Am", "Bf", "F", "Dm", "E", "Am", "E"]
-    c_prog = ["C", "G", "Am", "F", "Dm", "E", "Am", "Am"]
+    a_prog = ["Am9", "F6", "C2", "Gsus", "Am", "Dm9", "E7", "Am"]
+    b_prog = ["Dm9", "Am", "Bf6", "F", "Dm", "E7", "Am9", "E"]
+    c_prog = ["C6", "G", "Am9", "F6", "Dm9", "E7", "Am", "Am9"]
     progression = a_prog + b_prog + c_prog
 
     for i, name in enumerate(progression):
         triad, root, fifth = CHORDS[name]
         start = song.bar(i)
-        song.chord(start, 3.8, triad, STRINGS, 0.34)
-        song.note(start, 1.8, root, BASS, 0.46)
-        song.note(start + 2, 1.8, fifth, BASS, 0.32)
-        # 戦記へ文字が一行ずつ刻まれるような、四分の撥弦。
-        for k, pitch in enumerate([triad[0], triad[1], triad[2], triad[1]]):
-            song.note(start + k, 0.55, pitch, HARP, 0.20)
+        if i % 2 == 0:
+            song.chord(start, 6.7, [triad[0], triad[-1]], STRINGS, 0.22)
+        song.note(start, 1.6, root, BASS, 0.34)
+        song.note(start + 2.25, 1.2, fifth, BASS, 0.22)
+        # 一行ずつ刻む撥弦は小節後半だけ。記録画面の文字と競合させない。
+        if i % 2 == 1:
+            song.note(start + 2.0, 0.48, triad[1], HARP, 0.16)
+            song.note(start + 3.0, 0.48, triad[-1], HARP, 0.13)
 
     lay_witness(song, 0, OBOE, 0.58)
     lay_witness(song, 8, FLUTE, 0.48, high=True)
@@ -744,8 +793,8 @@ def bgm_chronicle() -> None:
     for i, phrase in enumerate(coda):
         song.phrase(song.bar(20 + i), phrase, FLUTE, 0.42)
 
-    finish(song.track, AUDIO / "bgm" / "chronicle.wav",
-           cutoff=4900.0, echo_ms=168.0, echo_fb=0.35, peak=0.79)
+    song.finish(AUDIO / "bgm" / "chronicle.wav",
+                cutoff=4600.0, echo_ms=168.0, echo_fb=0.31, peak=0.76)
 
 
 
@@ -763,6 +812,18 @@ def sfx(name: str, build, seconds: float, cutoff: float = 6800.0,
 
 
 def build_sfx() -> None:
+    # BGM の室内楽音色とは分離する。既存 SE の短い波形と操作感を保つ。
+    LEAD = SFX_LEAD
+    BRASS = SFX_BRASS
+    STRINGS = SFX_STRINGS
+    BASS = SFX_BASS
+    BELL = SFX_BELL
+    FLUTE = SFX_FLUTE
+    OBOE = SFX_OBOE
+    HARP = SFX_HARP
+    CHOIR = SFX_CHOIR
+    LOW_BRASS = SFX_LOW_BRASS
+
     # カーソル移動: 短く硬い。連打されるので余韻を残さない。
     sfx("cursor", lambda t: t.add_note(0.0, 0.030, "e6", LEAD, 0.7), 0.16,
         echo_fb=0.08, peak=0.55)

@@ -106,6 +106,7 @@ static func ui_frame() -> void:
 static func ui_check_reset() -> void:
 	_small_kanji.clear()
 	_clipped.clear()
+	_dropped.clear()
 	_windows.clear()
 	_violations.clear()
 	_animating.clear()
@@ -229,6 +230,23 @@ static var _clipped: Array[String] = []
 
 static func clipped() -> Array[String]:
 	return _clipped
+
+
+## 高さ不足で描画されなかった行。
+##
+## 横幅は `clipped()`、縦方向はこれで追う。`UiPanel` が安全のため行を捨てても、
+## 画面検査がそれを知らなければ「何も描かれていない窓」を正常扱いしてしまう。
+static var _dropped: Array[String] = []
+
+
+static func dropped_lines() -> Array[String]:
+	return _dropped
+
+
+static func note_dropped(text: String, inner: Rect2) -> void:
+	var note := "「%s」を描けない（内側 %s）" % [text.substr(0, 18), str(inner)]
+	if note not in _dropped:
+		_dropped.append(note)
 
 
 ## 14px 未満で描いた漢字（D-5）。

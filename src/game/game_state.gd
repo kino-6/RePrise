@@ -32,6 +32,9 @@ var save_path := SAVE_PATH
 var backup_path := SAVE_BACKUP_PATH
 var temp_path := SAVE_TEMP_PATH
 var suspend_path := SUSPEND_PATH
+## 撮影は検証であって実プレイではない。result / win の撮影が end_run() を通っても
+## プレイヤーの実セーブを書き換えないよう、撮影プロセスはメモリだけで動かす。
+var volatile_session := false
 
 
 ## テスト用。読み書き先を丸ごと別名へ寄せる。
@@ -87,6 +90,12 @@ var echo: int = 0
 ## 買ったアップグレード（upgrade_id -> 段数）。
 var upgrades: Dictionary = {}
 
+## 次の出撃で使う「難しさ / 旅の速さ / 誓約」。
+##
+## 設定ファイルではなく恒久セーブに置く。これは音量のような環境設定ではなく、
+## 敵能力・成長・報酬を変えるゲームロジックへの入力だからである。
+var run_rule_choices: Dictionary = RunRules.default_config()
+
 ## ランをまたぐ物語の進行（`docs/cross_world_story_design.md` の「永続状態」）。
 ##
 ## **生成済みの一型と進行だけ**を持つ。長文はカタログ側にあるので、ここには
@@ -110,6 +119,10 @@ static func empty_cross_world() -> Dictionary:
 # --- ラン中のみ（全滅で消える） ---
 var run_active: bool = false
 var run_seed: int = 0
+
+## 出撃時に確定した規律。拠点側の選択を途中で書き換えても、進行中の世界は変えない。
+## 中断にもこのまま書き、同じ種・同じ規律から同じ戦闘を復元する。
+var active_run_rules: Dictionary = {}
 
 ## その世界。ランごとに丸ごと作り直され、二度と同じものは出ない。
 ## 拠点だけが世界の外にあるので、これを捨ててもメタ進行は残る。
@@ -197,6 +210,17 @@ var inventory: Dictionary = {}
 
 
 func _ready() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if (
+			String(arg).begins_with("--shot=")
+			or String(arg).begins_with("--play=")
+		):
+			volatile_session = true
+			break
+	if volatile_session:
+		roster = _build_default_roster()
+		cross_world = empty_cross_world()
+		return
 	if not load_game():
 		roster = _build_default_roster()
 		cross_world = empty_cross_world()
@@ -317,6 +341,8 @@ func _ensure_active_indices() -> void:
 func start_new_run(seed_value: int = -1) -> void:
 	run_seed = seed_value if seed_value >= 0 else _fresh_seed()
 	rng = DetRng.new(run_seed)
+	run_rule_choices = normalized_rule_choices()
+	active_run_rules = run_rule_choices.duplicate(true)
 	# 世界を先に作る。危険度は「門からの陸路距離」で決まるので、
 	# 地形が決まらないと難度も決まらない。
 	world = WorldGenerator.generate(DetRng.new(run_seed).fork("world"))
@@ -405,11 +431,18 @@ func spend_lifeline() -> bool:
 
 func _apply_upgrades_to_run() -> void:
 	_grant_starting_gear()
-	lifeline_left = upgrade_value("lifeline")
-	gold = upgrade_value("start_gold")
-	var herbs := upgrade_value("start_herb")
-	if herbs > 0:
-		add_item("herb", herbs)
+	lifeline_left = (
+		0 if run_contract_enabled("no_lifeline")
+		else upgrade_value("lifeline")
+	)
+	if not run_contract_enabled("empty_pack"):
+		gold = upgrade_value("start_gold")
+		var herbs := upgrade_value("start_herb")
+		if herbs > 0:
+			add_item("herb", herbs)
+		var waters := upgrade_value("start_water")
+		if waters > 0:
+			add_item("water", waters)
 
 
 ## シードだけは実時間から取る。ここから先は一切の乱数がこの種から決まる。
@@ -663,6 +696,15 @@ func end_run(victory: bool, outcome: String = "") -> Dictionary:
 		"score": score,
 		"echo": earned_echo,
 		"echo_total": echo,
+		"reward_percent": run_reward_percent(),
+		"difficulty_name": run_rule_name(
+			"difficulties",
+			String(run_rule_config().get("difficulty", RunRules.DEFAULT_DIFFICULTY))
+		),
+		"pace_name": run_rule_name(
+			"paces", String(run_rule_config().get("pace", RunRules.DEFAULT_PACE))
+		),
+		"contracts": run_contract_names(),
 		"members": [],
 	}
 	for m in active_party():
@@ -700,6 +742,7 @@ func end_run(victory: bool, outcome: String = "") -> Dictionary:
 	event_biome_changes = {}
 	event_done = {}
 	event_tags = {}
+	active_run_rules = {}
 	save_game()
 	run_ended.emit(victory, summary)
 	return summary
@@ -833,9 +876,9 @@ const SCORE_GOLD_DIVISOR := 4
 const SCORE_VICTORY_BONUS := 600
 ## このスコアごとに残響 1 枚。
 ##
-## 全アップグレードを極めるのに 163 必要なので、10 階を制覇したランで 39、
-## 浅い階で全滅したランで 5〜10 ほど入る計算にしてある。1 回の生還で
-## 全部揃ってしまうと、拠点で選ぶ楽しみがその時点で終わる。
+## 全アップグレードを極めるのに 645 必要。標準の生還で約 39、浅い全滅で
+## 5〜10 ほど入り、難度と誓約を上げればさらに伸びる。1 回の生還で
+## 全部揃わず、後半は「より難しくして早く稼ぐ」こと自体が選択になる。
 const SCORE_PER_ECHO := 50
 
 
@@ -851,8 +894,9 @@ func run_score(victory: bool) -> int:
 
 
 @warning_ignore("integer_division")
-func echo_for_score(score: int) -> int:
-	return score / SCORE_PER_ECHO
+func echo_for_score(score: int, reward_percent: int = -1) -> int:
+	var percent := run_reward_percent() if reward_percent < 0 else reward_percent
+	return (score / SCORE_PER_ECHO) * percent / 100
 
 
 func upgrade_level(id: String) -> int:
@@ -900,6 +944,146 @@ func upgrade_value(effect: String) -> int:
 
 
 # --------------------------------------------------------------------------
+# 旅の規律（難しさ / 加速 / 誓約）
+# --------------------------------------------------------------------------
+
+
+func contract_slot_limit() -> int:
+	return RunRules.BASE_CONTRACT_SLOTS + upgrade_value("contract_slots")
+
+
+func normalized_rule_choices(config: Dictionary = run_rule_choices) -> Dictionary:
+	var normalized := RunRules.normalize(
+		config,
+		upgrade_value("difficulty_tier"),
+		upgrade_value("pace_tier"),
+		contract_slot_limit()
+	)
+	var allowed := available_contract_ids()
+	var contracts: Array = []
+	for id in normalized.get("contracts", []):
+		if id in allowed:
+			contracts.append(id)
+	normalized["contracts"] = contracts
+	return normalized
+
+
+func available_difficulty_ids() -> Array[String]:
+	return RunRules.difficulty_ids(upgrade_value("difficulty_tier"))
+
+
+func available_pace_ids() -> Array[String]:
+	return RunRules.pace_ids(upgrade_value("pace_tier"))
+
+
+## 失う対象をまだ持っていない誓約は出さない。
+##
+## 命の綱を買っていない人が「綱を断つ」で無条件に +15% を得る、といった
+## 見せかけの制約を防ぐ。店・逃走は最初から存在するので条件なし。
+func available_contract_ids() -> Array[String]:
+	var result: Array[String] = []
+	for id in RunRules.contract_ids():
+		var requirements: Array = RunRules.definition(
+			"contracts", id).get("requires_any_effect", [])
+		if requirements.is_empty():
+			result.append(id)
+			continue
+		for effect in requirements:
+			if upgrade_value(String(effect)) > 0:
+				result.append(id)
+				break
+	return result
+
+
+func run_rule_config() -> Dictionary:
+	if run_active and not active_run_rules.is_empty():
+		return active_run_rules
+	return normalized_rule_choices()
+
+
+func run_rule_name(group: String, id: String) -> String:
+	return String(RunRules.definition(group, id).get("name", id))
+
+
+func selected_rule_id(kind: String) -> String:
+	var fallback := RunRules.DEFAULT_DIFFICULTY if kind == "difficulty" else RunRules.DEFAULT_PACE
+	return String(run_rule_choices.get(kind, fallback))
+
+
+func _cycle_rule(kind: String, ids: Array[String], direction: int) -> bool:
+	if run_active or ids.is_empty():
+		return false
+	var current := ids.find(selected_rule_id(kind))
+	if current < 0:
+		current = 0
+	var next := (current + direction + ids.size()) % ids.size()
+	run_rule_choices[kind] = ids[next]
+	run_rule_choices = normalized_rule_choices()
+	save_game()
+	return true
+
+
+func cycle_difficulty(direction: int) -> bool:
+	return _cycle_rule("difficulty", available_difficulty_ids(), direction)
+
+
+func cycle_pace(direction: int) -> bool:
+	return _cycle_rule("pace", available_pace_ids(), direction)
+
+
+func selected_contracts() -> Array:
+	return run_rule_choices.get("contracts", [])
+
+
+func toggle_contract(id: String) -> bool:
+	if run_active or id not in available_contract_ids():
+		return false
+	var selected: Array = selected_contracts().duplicate()
+	if id in selected:
+		selected.erase(id)
+	elif selected.size() < contract_slot_limit():
+		selected.append(id)
+	else:
+		return false
+	run_rule_choices["contracts"] = selected
+	run_rule_choices = normalized_rule_choices()
+	save_game()
+	return true
+
+
+func run_contract_enabled(id: String) -> bool:
+	return RunRules.has_contract(run_rule_config(), id)
+
+
+func run_contract_names() -> Array[String]:
+	var result: Array[String] = []
+	for raw_id in run_rule_config().get("contracts", []):
+		result.append(run_rule_name("contracts", String(raw_id)))
+	return result
+
+
+func run_reward_percent() -> int:
+	return RunRules.reward_percent(run_rule_config())
+
+
+## 周回加速と恒久強化を同じ入口で掛ける。表示する経験値もこの戻り値を使う。
+func run_exp_reward(base_value: int) -> int:
+	var value := RunRules.scaled_value(
+		base_value, RunRules.growth_percent(run_rule_config(), "exp"))
+	return RunRules.scaled_value(value, 100 + upgrade_value("exp_gain"))
+
+
+func run_mastery_reward(base_value: int) -> int:
+	var value := RunRules.scaled_value(
+		base_value, RunRules.growth_percent(run_rule_config(), "mastery"))
+	return RunRules.scaled_value(value, 100 + upgrade_value("mastery_gain"))
+
+
+func apply_run_difficulty(foes: Array[Battler]) -> void:
+	RunRules.apply_enemy_scaling(foes, run_rule_config())
+
+
+# --------------------------------------------------------------------------
 # 拠点
 # --------------------------------------------------------------------------
 
@@ -915,8 +1099,15 @@ func upgrade_value(effect: String) -> int:
 ## レベルは人に付いているので、ラン中に職を変えると同じ強さで別の技一式が
 ## 手に入る。それは承知のうえで許す。乗り換えの自由を取る、という判断。
 func change_job(member: PartyMember, job_id: String) -> bool:
+	# PartyMember.change_job() は能力再計算のため reset_for_run() を通り、装備欄を
+	# 空にする。先に控えないと、適性を変えるための転職でラン内装備が消滅する。
+	var worn: Array[String] = []
+	for gear_id in member.equipment.values():
+		worn.append(String(gear_id))
 	if not member.change_job(job_id):
 		return false
+	for gear_id in worn:
+		gear_stock.append(gear_id)
 	save_game()
 	return true
 
@@ -927,9 +1118,9 @@ func change_job(member: PartyMember, job_id: String) -> bool:
 
 
 ## セーブの形式。上げたら load_from_dict() に旧版の読み方を残すこと。
-## セーブの形式。プロローグ視聴済みを足したので 4 へ。
+## セーブの形式。出撃規律の選択を足したので 5 へ。
 ## **古い版を必ず読めること**（無い項目は空へ落ちる）。
-const SAVE_VERSION := 4
+const SAVE_VERSION := 5
 
 
 ## 恒久データを辞書にする。ファイル入出力と分けてあるので、
@@ -991,6 +1182,7 @@ func to_suspend() -> Dictionary:
 		"story_beat": world.story_beat,
 		"story_choice": world.story_choice,
 		"lifeline": lifeline_left,
+		"run_rules": active_run_rules.duplicate(true),
 		"members": run_members,
 	}
 
@@ -1046,6 +1238,12 @@ func resume() -> bool:
 	gear_stock.assign(d.get("gear_stock", []))
 	runs_attempted = int(d.get("runs_attempted", runs_attempted))
 	lifeline_left = int(d.get("lifeline", 0))
+	active_run_rules = RunRules.normalize(
+		d.get("run_rules", run_rule_choices),
+		upgrade_value("difficulty_tier"),
+		upgrade_value("pace_tier"),
+		contract_slot_limit()
+	)
 	event_tags = d.get("event_tags", {}).duplicate()
 	event_encounter_bias = int(d.get("event_encounter_bias", 0))
 	event_bias_steps = int(d.get("event_bias_steps", 0))
@@ -1134,6 +1332,7 @@ func to_dict() -> Dictionary:
 		"prologue_seen": prologue_seen,
 		"echo": echo,
 		"upgrades": upgrades,
+		"run_rules": run_rule_choices,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
 		"active": active_indices,
 		"cross_world": cross_world,
@@ -1158,6 +1357,13 @@ func load_from_dict(data: Dictionary) -> bool:
 	# version 1 のセーブには残響もアップグレードも無い。既定値で素直に読める。
 	echo = int(data.get("echo", 0))
 	upgrades = data.get("upgrades", {})
+	var raw_rules: Variant = data.get("run_rules", RunRules.default_config())
+	run_rule_choices = (
+		raw_rules.duplicate(true)
+		if typeof(raw_rules) == TYPE_DICTIONARY
+		else RunRules.default_config()
+	)
+	run_rule_choices = normalized_rule_choices()
 	roster.clear()
 	for entry in data.get("roster", []):
 		roster.append(PartyMember.from_dict(entry))
@@ -1187,6 +1393,8 @@ func mark_prologue_seen() -> void:
 ## そこで落ちるとセーブが消えるので、控えに寄せる → 別名で書く → 差し替える、
 ## の順にする。どの時点で落ちても、本体か控えのどちらかは必ず生きている。
 func save_game() -> void:
+	if volatile_session:
+		return
 	var text := JSON.stringify(to_dict(), "  ")
 	_backup_save()
 
@@ -1284,10 +1492,12 @@ func _reset_after_save_erase() -> void:
 	prologue_seen = false
 	echo = 0
 	upgrades = {}
+	run_rule_choices = RunRules.default_config()
 	cross_world = empty_cross_world()
 
 	run_active = false
 	run_seed = 0
+	active_run_rules = {}
 	world = null
 	world_pos = Vector2i.ZERO
 	site = {}

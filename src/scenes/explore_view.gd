@@ -20,7 +20,8 @@ signal menu_requested
 ## （一度きりかどうかを知っているのは向こう側）。
 signal event_reached(pos: Vector2i)
 ## ワールドで拠点地（町・洞・城）を踏んだ。中へ入れるかは main.gd が決める。
-signal site_entered(pos: Vector2i)
+## `from` は踏み込む直前のマス。町から出たとき、元の街道へ戻すために使う。
+signal site_entered(pos: Vector2i, from: Vector2i)
 ## 町の人に話しかけた。
 signal talked(line: String)
 ## 宿の扉を踏んだ。
@@ -74,6 +75,11 @@ var _walked_since_encounter := 0
 ## 開発用の実測値。自動プレイが「本当に何歩空いたか」を報告するときに読む。
 var _last_encounter_gap := 0
 var _active := true
+## 町などから出た直後、同じ拠点地を1回だけ通過させる。
+##
+## ワールドの最短経路上に町があると、町を出た一歩後に同じ町へ踏み戻して
+## 永久に往復する。拠点地を障害物にはせず、その1回だけ入場判定を抑える。
+var _site_entry_suppressed := Vector2i(-1, -1)
 
 
 ## leader_job は先頭キャラの職業。職業ごとに差し色の違うスプライトがある。
@@ -91,8 +97,13 @@ func setup(
 	_steps_since_encounter = 0
 	_walked_since_encounter = 0
 	_last_encounter_gap = 0
+	_site_entry_suppressed = Vector2i(-1, -1)
 	_update_camera()
 	queue_redraw()
+
+
+func suppress_site_once(pos: Vector2i) -> void:
+	_site_entry_suppressed = pos
 
 
 ## 探索へ戻った直後に決定キーを拾わないための待ち時間。
@@ -223,6 +234,7 @@ func _try_move_world(target: Vector2i) -> void:
 		queue_redraw()  # 向きだけ変える
 		return
 
+	var from := player_pos
 	player_pos = target
 	_frame = (_frame + 1) % 3
 	_update_camera()
@@ -236,11 +248,17 @@ func _try_move_world(target: Vector2i) -> void:
 		event_reached.emit(target)
 		return
 	if world.sites.has(target):
+		var suppressed := target == _site_entry_suppressed
+		# 1回の移動で必ず解除する。別方向へ歩いたなら、次に戻ったときは入れる。
+		_site_entry_suppressed = Vector2i(-1, -1)
+		if suppressed:
+			return
 		# 拠点地の上では遭遇しない。踏んだ歩数も数えない（門前で溜めるのを防ぐ）。
 		_steps_since_encounter = 0
 		_walked_since_encounter = 0
-		site_entered.emit(target)
+		site_entered.emit(target, from)
 		return
+	_site_entry_suppressed = Vector2i(-1, -1)
 
 	# 地形で歩きにくさが変わる。草原 1 / 丘 2 / 森 3。
 	# 通れる・通れない以外の意味を地形に持たせないと、ただの模様になる。
@@ -325,13 +343,30 @@ func dev_take_encounter_gap() -> int:
 
 func _update_camera() -> void:
 	var focus := Vector2(player_pos * TILE) + Vector2(TILE, TILE) * 0.5
-	var cam := focus - Vector2(PixelUI.SCREEN) * 0.5
+	# 上の現在地窓と下のパーティ窓を除いた、実際に読める帯の中央へ置く。
+	# 画面全体の中央を使うと、町の南入口に立った主人公が下HUDの裏へ隠れる。
+	const FIELD_TOP := 44.0
+	const FIELD_BOTTOM := 264.0
+	const CHAR_PAD := 16.0
+	var visible_center := Vector2(
+		PixelUI.SCREEN.x * 0.5,
+		(FIELD_TOP + FIELD_BOTTOM) * 0.5
+	)
+	var cam := focus - visible_center
 	var span := Vector2(map.width * TILE, map.height * TILE)
 	var limit := span - Vector2(PixelUI.SCREEN)
 	# **画面より狭い地図は中央へ寄せる。** 端に寄せると片側だけ余白になり、
 	# 「地図が途中で切れている」ように見える（町がそうだった）。
 	cam.x = clampf(cam.x, 0.0, maxf(limit.x, 0.0)) if limit.x > 0.0 else limit.x * 0.5
-	cam.y = clampf(cam.y, 0.0, maxf(limit.y, 0.0)) if limit.y > 0.0 else limit.y * 0.5
+	# キャラはタイルより縦に長いので上下へ1タイル余分に送れるようにする。
+	# 地図端に少し暗い余白が見えても、主人公が窓の下へ消えるよりよい。
+	var min_y := -FIELD_TOP - CHAR_PAD
+	var max_y := span.y - FIELD_BOTTOM + CHAR_PAD
+	cam.y = (
+		clampf(cam.y, min_y, max_y)
+		if max_y >= min_y
+		else (min_y + max_y) * 0.5
+	)
 	position = -cam.floor()
 
 

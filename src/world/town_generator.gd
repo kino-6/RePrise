@@ -172,9 +172,10 @@ static func generate(rng: DetRng, danger: int, tileset: String) -> TownMap:
 	for _i in rng.range_i(8, 18):
 		map.set_tile(rng.range_i(2, w - 3), rng.range_i(2, h - 3), TownMap.T_GROUND_ALT)
 
-	# **出口は 4 辺のどれか。** 下辺固定だと、入るたびに同じ向きから同じ景色になる。
+	# 入口は南辺中央へ固定し、内側の到着余白から町を読み始める。
 	map.exit_pos = _place_exit(map, rng)
 	map.start_pos = _inward_from(map, map.exit_pos)
+	_clear_arrival_space(map)
 
 	# 建物は「区画」に置く。出口から遠い区画を宿と店に使い、残りは空き地。
 	#
@@ -234,6 +235,15 @@ static func _inward_from(map: TownMap, at: Vector2i) -> Vector2i:
 		return inside
 	@warning_ignore("integer_division")
 	return Vector2i(map.width / 2, map.height / 2)
+
+
+## 入口の内側5×2を素の地面へ戻す。装飾の乱数は入口決定より先に撒くため、
+## 最後に予約域を確定させれば乱数列を変えず、毎回同じ読み始めを保証できる。
+static func _clear_arrival_space(map: TownMap) -> void:
+	for y in range(map.height - 3, map.height - 1):
+		for x in range(map.exit_pos.x - 2, map.exit_pos.x + 3):
+			if map.in_bounds(x, y):
+				map.set_tile(x, y, TownMap.T_GROUND)
 
 
 ## 建物を置ける区画。出口から遠い順に返す（入口の真横に宿が建たない）。
@@ -313,7 +323,14 @@ static func _place_folk(map: TownMap, rng: DetRng, danger: int) -> void:
 		var at := Vector2i(rng.range_i(2, map.width - 3), rng.range_i(2, map.height - 3))
 		if map.get_tile(at.x, at.y) not in [TownMap.T_GROUND, TownMap.T_GROUND_ALT]:
 			continue
-		if at == map.start_pos or at == map.exit_pos:
+		if (
+			at == map.start_pos
+			or at == map.exit_pos
+			or (
+				absi(at.x - map.exit_pos.x) <= 2
+				and at.y >= map.height - 3
+			)
+		):
 			continue
 		var near := false
 		for other in spots:

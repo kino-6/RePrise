@@ -189,7 +189,7 @@
       "choices": [
         {"id": "take", "label": "核を持ち去る", "costs": ["encounter_up"], "risks": ["encounter_up"], "rewards": ["equipment", "temporary_attack"]},
         {"id": "seal", "label": "落星を封じる", "costs": ["mp"], "risks": [], "rewards": ["temporary_resist", "boss_weaken"]},
-        {"id": "leave", "label": "触れずに去る", "costs": ["none"], "risks": [], "rewards": ["none"]}
+        {"id": "leave", "label": "触れずに去る", "costs": ["none"], "risks": [], "rewards": ["none"], "defer": true}
       ],
       "skin": {
         "title": ["落星の穴", "白い隕火", "夜を割る石"],
@@ -294,7 +294,7 @@
       "choices": [
         {"id": "bundle", "label": "装備を品束と交換", "costs": ["equipment"], "risks": ["equipment"], "rewards": ["item", "equipment"]},
         {"id": "rumor", "label": "情報だけ買う", "costs": ["gold"], "risks": [], "rewards": ["boss_intel", "quest_reveal"]},
-        {"id": "refuse", "label": "取引しない", "costs": ["none"], "risks": [], "rewards": ["none"]}
+        {"id": "refuse", "label": "取引しない", "costs": ["none"], "risks": [], "rewards": ["none"], "defer": true}
       ],
       "skin": {
         "title": ["夜だけの市", "覆面の露店", "灯裏の取引"],

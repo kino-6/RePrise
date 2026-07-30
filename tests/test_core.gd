@@ -55,8 +55,11 @@ func _initialize() -> void:
 	_test_boss_encounter()
 	_test_every_floor_populated()
 	_test_shop()
+	_test_equipment_catalog()
+	_test_item_catalog()
 	_test_run_loot_rewards()
 	_test_echo_and_upgrades()
+	_test_run_rules()
 	_test_mastery_persists()
 	_test_job_change()
 	_test_advanced_jobs()
@@ -963,6 +966,19 @@ func _test_world_generation() -> void:
 	_check("最初はどれも解けていない", w2.seals_remaining() == 3)
 	_check("封に名と由来が付く", w2.seals.all(func(s: Dictionary) -> bool:
 		return String(s.get("name", "")) != "" and String(s.get("why", "")) != ""))
+	var chart_basics_visible := true
+	var unknown_caves_hidden := true
+	for pos in w2.sites:
+		var kind := String(w2.sites[pos].get("kind", ""))
+		if kind in ["town", "castle"] and not w2.chart_site_visible(pos):
+			chart_basics_visible = false
+		if kind == "cave" and w2.chart_site_visible(pos):
+			unknown_caves_hidden = false
+	_check("地図は町と城を最初から示す", chart_basics_visible)
+	_check("地図は未知の洞を先に明かさない", unknown_caves_hidden)
+	var first_seal_pos: Vector2i = w2.seals[0]["pos"]
+	w2.seals[0]["known"] = true
+	_check("言い伝えを得た封は地図へ増える", w2.chart_site_visible(first_seal_pos))
 	var names := {}
 	for s in w2.seals:
 		names[String(s["name"])] = true
@@ -978,8 +994,22 @@ func _test_town_generation() -> void:
 	var has_folk := true
 	var named := true
 	var folk_blocked := true
-	for seed_value in [1, 9, 77, 4242, 31337]:
+	var entrance_fixed := true
+	var arrival_clear := true
+	for seed_value in range(1, 101):
 		var town := TownGenerator.generate(DetRng.new(seed_value), 3, "dungeon")
+		@warning_ignore("integer_division")
+		var expected_exit := Vector2i(town.width / 2, town.height - 1)
+		if town.exit_pos != expected_exit or town.start_pos != expected_exit + Vector2i.UP:
+			entrance_fixed = false
+		for y in range(town.height - 3, town.height - 1):
+			for x in range(town.exit_pos.x - 2, town.exit_pos.x + 3):
+				var at := Vector2i(x, y)
+				if (
+					town.folk.has(at)
+					or town.get_tile(x, y) != TownMap.T_GROUND
+				):
+					arrival_clear = false
 		var dist := town.distance_field(town.start_pos)
 		for goal in [town.inn_pos, town.shop_pos, town.exit_pos]:
 			# 入口そのものは通行可なので、そこへ届くかを直接見る
@@ -999,6 +1029,8 @@ func _test_town_generation() -> void:
 	_check("町に人が居る", has_folk)
 	_check("町に名前が付く", named)
 	_check("町の人は通り抜けられない", folk_blocked)
+	_check("100町すべて南辺中央が入口", entrance_fixed)
+	_check("入口内側5x2に人・建物・装飾がない", arrival_clear)
 
 	# **町ごとに形が違うこと。** 固定座標で作っていたころは、名前と人の位置
 	# 以外がすべて同じで「街ぜんぶ一緒」になっていた。
@@ -1012,6 +1044,24 @@ func _test_town_generation() -> void:
 	var b := TownGenerator.generate(DetRng.new(555), 3, "dungeon")
 	_check("同じ種から同じ町が出る", a.to_ascii() == b.to_ascii())
 	_check("同じ種なら名前も同じ", a.town_name == b.town_name)
+
+	# ExploreView は Sound Autoload を参照するため、`--headless --script` から
+	# 直接生成できない。入退場の状態契約はソース Gate と実プレイで検証する。
+	var explore_source := FileAccess.get_file_as_string(
+		"res://src/scenes/explore_view.gd"
+	)
+	var main_source := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	_check(
+		"町を出た直後だけ同じ拠点地を通過できる",
+		"func suppress_site_once(pos: Vector2i)" in explore_source
+		and "if suppressed:" in explore_source
+		and "explore.suppress_site_once(site_pos)" in main_source
+	)
+	_check(
+		"町からは入場直前の世界座標へ戻る",
+		"signal site_entered(pos: Vector2i, from: Vector2i)" in explore_source
+		and "_site_return_pos" in main_source
+	)
 
 
 ## AI が書いた文字列の検算。**繋ぐ前にここを固める。**
@@ -1696,6 +1746,29 @@ func _test_shop() -> void:
 	Database.reload()
 	_check("道具が読める", Database.all_items().size() >= 2)
 
+	# 買い物と回復の役割を混ぜると、町の宿へ戻る意味が消える。
+	# UI の実装そのものを Gate にし、出店へ「やすむ」が戻る退行を止める。
+	var shop_source := FileAccess.get_file_as_string("res://src/scenes/shop_view.gd")
+	_check(
+		"出店は買い物だけで休息を扱わない",
+		"REST_BASE_PRICE" not in shop_source and "func _rest()" not in shop_source
+	)
+	_check(
+		"店頭をどうぐ・武器・防具・装飾品に分ける",
+		'const CATEGORY_KEYS: Array[String] = ["item", "weapon", "armor", "accessory"]'
+		in shop_source
+		and 'event.is_action_pressed("ui_left")' in shop_source
+		and 'event.is_action_pressed("ui_right")' in shop_source
+	)
+	var main_source := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	_check(
+		"全回復と毒治療は町の宿が担う",
+		"func _on_inn()" in main_source
+		and "m.hp = m.max_hp()" in main_source
+		and "m.mp = m.max_mp()" in main_source
+		and "m.cure_poison()" in main_source
+	)
+
 	# 深い階ほど品揃えが増える（浅い階に高級品が並ばない）
 	var shallow := Database.item_ids_for_floor(1)
 	var deep := Database.item_ids_for_floor(9)
@@ -1723,6 +1796,128 @@ func _test_shop() -> void:
 			blocked.append(seed_value)
 	_check("出店は 39 シード中の一部にだけ出る", found > 0 and found < 39, str(found))
 	_check("出店が階を詰ませない", blocked.is_empty(), str(blocked))
+
+
+## 装備数だけを増やしても、全職共通なら職業差は増えない。
+## 適性・初期装備・自動装備をまとめて Gate にし、各職に実用候補を残す。
+func _test_equipment_catalog() -> void:
+	Database.reload()
+	var gear_all := Database.all_equipment()
+	_check("装備カタログは30種以上", gear_all.size() >= 30, str(gear_all.size()))
+
+	var malformed: Array[String] = []
+	for gear_id in gear_all:
+		var gear: Dictionary = Database.gear(String(gear_id))
+		var slot := String(gear.get("slot", ""))
+		if slot not in ["weapon", "armor", "accessory"]:
+			malformed.append("%s:slot" % gear_id)
+		if slot in ["weapon", "armor"] and String(gear.get("kind", "")) == "":
+			malformed.append("%s:kind" % gear_id)
+		if int(gear.get("floor_min", 0)) < 1:
+			malformed.append("%s:floor" % gear_id)
+	_check("全装備にスロット・系統・危険度がある", malformed.is_empty(), str(malformed))
+
+	var too_few: Array[String] = []
+	var bad_starts: Array[String] = []
+	for job_id in Database.job_ids():
+		var member := PartyMember.create("検算", String(job_id))
+		var by_slot := {"weapon": 0, "armor": 0, "accessory": 0}
+		for gear_id in gear_all:
+			if member.can_equip(String(gear_id)):
+				var slot := String(Database.gear(String(gear_id)).get("slot", ""))
+				by_slot[slot] = int(by_slot.get(slot, 0)) + 1
+		var total := int(by_slot.weapon) + int(by_slot.armor) + int(by_slot.accessory)
+		if total < 10 or int(by_slot.weapon) < 3 or int(by_slot.armor) < 3:
+			too_few.append("%s:%s" % [job_id, by_slot])
+		for gear_id in Database.job(String(job_id)).get("starting_gear", []):
+			if not member.can_equip(String(gear_id)):
+				bad_starts.append("%s:%s" % [job_id, gear_id])
+	_check("全職に10種以上かつ武器・防具各3種以上", too_few.is_empty(), str(too_few))
+	_check("全職の初期装備が適性内", bad_starts.is_empty(), str(bad_starts))
+
+	var mage := PartyMember.create("術師", "mage")
+	_check("まほうつかいは杖を装備できる", mage.can_equip("oak_staff"))
+	_check("まほうつかいは大斧を装備できない", not mage.can_equip("war_axe"))
+	var plan := BestGear.plan([mage], ["war_axe", "oak_staff"])
+	_check(
+		"さいきょう装備は不適合品を選ばない",
+		plan.size() == 1 and String(plan[0].gear) == "oak_staff",
+		str(plan)
+	)
+	const EQUIP_TEST_PREFIX := "user://test_equipment_catalog"
+	var state = load("res://src/game/game_state.gd").new()
+	state.use_save_paths(EQUIP_TEST_PREFIX)
+	var switching := PartyMember.create("転職者", "soldier")
+	switching.equip("short_sword")
+	_check("装備中でも転職できる", state.change_job(switching, "mage"))
+	_check(
+		"転職で外れた装備は手持ちへ戻る",
+		switching.equipment.is_empty() and state.gear_stock == ["short_sword"],
+		str(state.gear_stock)
+	)
+	var equip_dir := DirAccess.open("user://")
+	for suffix in [".json", ".bak.json", ".tmp.json", ".suspend.json"]:
+		if equip_dir.file_exists(EQUIP_TEST_PREFIX + suffix):
+			equip_dir.remove(EQUIP_TEST_PREFIX + suffix)
+	state.free()
+
+	var crowded_shops: Array[String] = []
+	for danger in range(1, 11):
+		var stock := Database.gear_ids_for_shop(danger)
+		if stock.size() > 15:
+			crowded_shops.append("%d:%d" % [danger, stock.size()])
+	_check("店の装備は基本品と直近品15種以内", crowded_shops.is_empty(), str(crowded_shops))
+
+
+## 道具は回復量違いだけでなく、状態回復・弱点攻撃・行動順という別用途を持つ。
+func _test_item_catalog() -> void:
+	Database.reload()
+	var all_items := Database.all_items()
+	_check("消耗品カタログは12種以上", all_items.size() >= 12, str(all_items.size()))
+	var effects := {}
+	var malformed: Array[String] = []
+	var known_effects := [
+		"heal_hp", "heal_mp", "revive", "cleanse",
+		"heal_cleanse", "item_damage", "haste",
+	]
+	for item_id in all_items:
+		var item: Dictionary = Database.item(String(item_id))
+		var effect := String(item.get("effect", ""))
+		effects[effect] = true
+		if effect not in known_effects:
+			malformed.append("%s:effect=%s" % [item_id, effect])
+		if int(item.get("cost", 0)) <= 0 or int(item.get("stock", 0)) <= 0:
+			malformed.append("%s:cost/stock" % item_id)
+		if effect == "item_damage" and String(item.get("element", "")) not in [
+			"fire", "ice", "lightning", "dark",
+		]:
+			malformed.append("%s:element" % item_id)
+	_check("全消耗品の効果・コスト・在庫が有効", malformed.is_empty(), str(malformed))
+	_check(
+		"道具に回復・複合回復・属性攻撃・行動順の役割がある",
+		effects.has("heal_hp")
+		and effects.has("heal_cleanse")
+		and effects.has("item_damage")
+		and effects.has("haste")
+	)
+
+	var damage_a := _damage_item_result(731)
+	var damage_b := _damage_item_result(731)
+	_equal("攻撃道具も同じシードなら同じ結果", damage_a, damage_b)
+	_check("火炎びんは炎弱点へ固定系ダメージを与える", int(damage_a.damage) >= 75, str(damage_a))
+
+
+func _damage_item_result(seed_value: int) -> Dictionary:
+	var user := _make_battler(510, "道具使い", 12)
+	var target := _make_battler(511, "氷獣", 8, false)
+	target.max_hp = 300
+	target.hp = 300
+	target.weak = ["fire"]
+	var battle := BattleSystem.new()
+	battle.start([user], [target], DetRng.new(seed_value), 4)
+	var before := target.hp
+	var lines := battle.use_item(user, "ember_vial", target)
+	return {"damage": before - target.hp, "lines": lines}
 
 
 ## 宝箱と盗むはラン終了時に失う報酬。恒久資源より大胆にしつつ、
@@ -1856,8 +2051,106 @@ func _test_echo_and_upgrades() -> void:
 	_equal("効果は段数に比例する", gs.upgrade_value(effect), per_level * levels)
 	gs.upgrades.clear()
 	_equal("買っていなければ効果は 0", gs.upgrade_value(effect), 0)
-
 	gs.free()
+
+
+## 難しさ・周回加速・誓約は同じ出撃入力から決まり、報酬だけを増やして
+## 実際の制約が抜けることがないよう一組で検証する。
+func _test_run_rules() -> void:
+	Database.reload()
+	_check("旅の規律データが読める",
+		not Database.run_rule_group("difficulties").is_empty())
+	_equal("難度は4段階", RunRules.difficulty_ids().size(), 4)
+	_equal("旅の速さは3段階", RunRules.pace_ids().size(), 3)
+	_equal("誓約は4種類", RunRules.contract_ids().size(), 4)
+
+	var locked := RunRules.normalize({
+		"difficulty": "ruin",
+		"pace": "sprint",
+		"contracts": ["closed_market", "no_escape"],
+	}, 0, 0, 1)
+	_equal("未解放の難度は標準へ戻る", String(locked["difficulty"]), "standard")
+	_equal("未解放の加速は基準へ戻る", String(locked["pace"]), "steady")
+	_equal("誓約は枠数を超えない", (locked["contracts"] as Array).size(), 1)
+
+	var full := RunRules.normalize({
+		"difficulty": "ruin",
+		"pace": "sprint",
+		"contracts": ["closed_market", "no_escape"],
+	}, 2, 2, 2)
+	_equal("終末と駆け抜けを解放できる", [
+		String(full["difficulty"]), String(full["pace"])
+	], ["ruin", "sprint"])
+	# 170% × 65% = 110%（整数）に、誓約 +25% +20%。
+	_equal("難度・加速・誓約から資源倍率が決まる",
+		RunRules.reward_percent(full), 155)
+
+	var foe_a := _make_battler(401, "検体", 10, false)
+	foe_a.max_hp = 100
+	foe_a.hp = 100
+	foe_a.atk = 50
+	foe_a.mag = 40
+	foe_a.defense = 30
+	var foe_b := _make_battler(402, "検体", 10, false)
+	foe_b.max_hp = 100
+	foe_b.hp = 100
+	foe_b.atk = 50
+	foe_b.mag = 40
+	foe_b.defense = 30
+	var group_a: Array[Battler] = [foe_a]
+	var group_b: Array[Battler] = [foe_b]
+	RunRules.apply_enemy_scaling(group_a, full)
+	RunRules.apply_enemy_scaling(group_b, full)
+	_equal("終末は敵の生命を132%にする", foe_a.max_hp, 132)
+	_equal("終末は敵の力を116%にする", foe_a.atk, 58)
+	_equal("難度補正も同じ入力から再現する",
+		[foe_a.max_hp, foe_a.atk, foe_a.mag, foe_a.defense],
+		[foe_b.max_hp, foe_b.atk, foe_b.mag, foe_b.defense])
+
+	var novice: Node = load("res://src/game/game_state.gd").new()
+	_equal("失う支給が無いとき空身の誓いは出ない",
+		"empty_pack" in novice.available_contract_ids(), false)
+	_equal("命の綱が無いとき綱を断つ誓いは出ない",
+		"no_lifeline" in novice.available_contract_ids(), false)
+	novice.free()
+
+	var state: Node = load("res://src/game/game_state.gd").new()
+	state.roster = _fresh_roster()
+	state.upgrades = {
+		"world_lens": 2,
+		"marching_score": 2,
+		"oath_tablet": 1,
+		"field_manual": 2,
+		"handmemory": 1,
+		"provisions": 3,
+		"preparation": 2,
+		"lifeline": 1,
+	}
+	state.run_rule_choices = {
+		"difficulty": "ruin",
+		"pace": "sprint",
+		"contracts": ["empty_pack", "no_lifeline"],
+	}
+	state.start_new_run(6060)
+	_equal("出撃時に規律が確定する", state.active_run_rules, state.run_rule_choices)
+	_equal("空身の誓いは初期金を止める", state.gold, 0)
+	_equal("空身の誓いは初期道具を止める", state.item_count("herb"), 0)
+	_equal("綱を断つ誓約は命の綱を止める", state.lifeline_left, 0)
+	_check("制約下でも職業の初期装備は支給する",
+		not state.active_party()[0].equipment.is_empty())
+	# 駆け抜け 200% のあと、旅の手引き +30% / 手の記憶 +15%。
+	_equal("加速と強化で経験値が増える", state.run_exp_reward(100), 260)
+	_equal("加速と強化で熟練が増える", state.run_mastery_reward(100), 230)
+	_equal("中断に出撃時の規律を残す",
+		state.to_suspend()["run_rules"], state.active_run_rules)
+
+	var permanent: Dictionary = state.to_dict()
+	var restored: Node = load("res://src/game/game_state.gd").new()
+	_check("規律を含む恒久セーブが読める", restored.load_from_dict(permanent))
+	_equal("次の出撃規律がセーブに残る",
+		restored.run_rule_choices, state.run_rule_choices)
+	state.free()
+	restored.free()
 
 
 func _test_boss_encounter() -> void:

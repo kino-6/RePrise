@@ -27,6 +27,10 @@
 
 ### D-1: イベントの「効果あり」という表示が事実ではない
 
+**2026-07-31 解消。** `EventEffects.INFORMATIONAL` を廃止し、
+`tests/test_world_events.gd` が全トークンの実状態差と戦闘予約を検査する。
+実装内容とGate証跡は `docs/tasks_archive.md` の同じIDに記録した。
+
 `src/quest/event_effects.gd` は11トークンを `INFORMATIONAL` に置き、
 説明だけ出して状態を変えない。対象は64イベント中60件、
 192選択肢中139件に及ぶ。`test_core.gd` は

@@ -35,8 +35,9 @@ static func write(summary: Dictionary) -> PackedStringArray:
 	# 恒久通貨は必ず支払われる。全滅したランも次の足しになる、という手応えを
 	# 数字で見せる場所がここしかない。呼び名は Terms 側にある。
 	lines.append(
-		"道中の記録 %d 点。%sを %d 得た（計 %d）。" % [
+		"道中の記録 %d 点（規律 %d%%）。%sを %d 得た（計 %d）。" % [
 			int(summary.get("score", 0)),
+			int(summary.get("reward_percent", 100)),
 			Terms.ECHO,
 			int(summary.get("echo", 0)),
 			int(summary.get("echo_total", 0)),

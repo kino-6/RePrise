@@ -79,12 +79,14 @@ func _test_row_protects_right() -> void:
 
 ## 高さが足りない行は**描かずに数える**。外へ描かない。
 func _test_drops_rows_that_do_not_fit() -> void:
+	PixelUI.ui_check_reset()
 	# 2 行ぶんだけの高さ。
 	var panel := UiPanel.inside(null, Rect2(0, 0, 200, PixelUI.LINE * 2.0))
 	for i in 5:
 		panel.line("%d 行目" % i)
 	_check("入らない行を外へ描かない", panel.overflowed())
 	_check("捨てた数を数える（3 行）", panel.dropped() == 3, "(%d)" % panel.dropped())
+	_check("捨てた行を全画面Gateへ通知する", PixelUI.dropped_lines().size() == 3)
 
 	var roomy := UiPanel.inside(null, Rect2(0, 0, 200, PixelUI.LINE * 6.0))
 	for i in 5:

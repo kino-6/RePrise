@@ -78,17 +78,23 @@ def envelope_variation(samples: list[float], rate: int) -> float:
     return math.sqrt(var) / mean
 
 
+def rms_window(samples: list[float]) -> float:
+    if not samples:
+        return 0.0
+    return math.sqrt(sum(value * value for value in samples) / len(samples))
+
+
 # 各 BGM の冒頭小節で鳴っているはずの音（和音の構成音）
 EXPECTED = {
-    "bgm/title.wav": ["a2", "a3", "c4", "e4"],
+    "bgm/title.wav": ["a2", "a3", "e4"],
     "bgm/stronghold.wav": ["c3", "g4", "c5", "e5"],
     "bgm/world.wav": ["a3", "c4", "e4"],
     "bgm/town.wav": ["c3", "c4", "e4", "g4"],
-    "bgm/cave.wav": ["d3", "f3", "a3"],
-    "bgm/story.wav": ["a2", "a3", "c4", "e4"],
+    "bgm/cave.wav": ["d3", "a3"],
+    "bgm/story.wav": ["a2", "a3", "e4"],
     "bgm/descent.wav": ["a2", "a3", "c4", "e4", "a4"],
-    "bgm/battle.wav": ["a2", "a3", "c4", "e4"],
-    "bgm/boss.wav": ["a2", "a3", "c4", "e4"],
+    "bgm/battle.wav": ["a3", "e4"],
+    "bgm/boss.wav": ["a2", "a3", "e4"],
     "bgm/chronicle.wav": ["a2", "a3", "c4", "e4"],
 }
 
@@ -140,6 +146,16 @@ def main() -> None:
               "変動 %.2f" % envelope_variation(samples, rate))
 
         if rel in EXPECTED:
+            # Godot は WAV 全体をループする。残響だけの無音尾や境界の段差を
+            # 混入させないことを、冒頭和音とは別の Gate として確認する。
+            edge_jump = abs(samples[-1] - samples[0])
+            tail_size = min(rate // 4, len(samples))
+            tail_rms = rms_window(samples[-tail_size:])
+            check("ループ境界が連続している", edge_jump < 0.01,
+                  "段差 %.5f" % edge_jump)
+            check("無音のループ尾がない", tail_rms > 0.008,
+                  "末尾 RMS %.3f" % tail_rms)
+
             # 冒頭 1 秒に、狙った音程のエネルギーが乗っているかを見る
             head = samples[: rate]
             found = []

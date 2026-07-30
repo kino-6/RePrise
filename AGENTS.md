@@ -284,8 +284,8 @@ godot --path . -- --play=240 --dev-level=8         # レベル 8 から始めて
   **音の無いビルド**ができあがる（エラーは出ない）。
 - **`config/name` を変えると `user://` の保存先も変わる。** `%APPDATA%\Godot\
   app_userdata\<config/name>` なので、改名時は既存の `save.json` を手で移す。
-- 撮影のうち `result` / `win` / `boss` は `end_run()` を通るのでセーブを書き換える。
-  戦績を汚したくないときは事前に `save.json` を退避する。
+- `--shot=` の撮影プロセスは `GameState.volatile_session` で実セーブを読まず、書かない。
+  `result` / `win` が `end_run()` を通っても戦績は汚れない。この隔離を外さない。
 - 鏡像で綴じるドット絵（`build_monster`）は、**右端が合わせ目**。体が中心をまたぐ行の
   右端に輪郭色を置くと、合わせ目で線が二重になって胴が左右に割れる。
 - 48px の枠に骨格を描き込むと必ず潰れる。特徴を 2〜3 個に絞って

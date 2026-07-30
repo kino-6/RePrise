@@ -539,6 +539,8 @@ func _execute(target: Battler) -> void:
 func escape_odds() -> int:
 	if system == null:
 		return 0
+	if GameState.run_contract_enabled("no_escape"):
+		return 0
 	for b in system.enemies:
 		if bool(Database.monster(b.source_id).get("boss", false)):
 			return 0
@@ -552,6 +554,9 @@ func escape_odds() -> int:
 
 
 func _try_escape() -> void:
+	if GameState.run_contract_enabled("no_escape"):
+		_show([Terms.ESCAPE_CLOSED_BY_CONTRACT] as Array[String])
+		return
 	var ours := 0
 	for b in system.living_allies():
 		ours += b.effective_agi()
@@ -663,8 +668,11 @@ func _resolve_outcome() -> void:
 	var lines: Array[String] = []
 	if _victory:
 		var reward := system.rewards()
+		var gained_exp := GameState.run_exp_reward(int(reward["exp"]))
 		lines.append("たたかいに かった！")
-		lines.append("%d の けいけんちと %d %sを えた" % [reward["exp"], reward["gold"], Terms.GOLD])
+		lines.append("%d の けいけんちと %d %sを えた" % [
+			gained_exp, reward["gold"], Terms.GOLD
+		])
 		GameState.earn_gold(int(reward["gold"]))
 		GameState.kills += system.enemies.size()
 
@@ -672,14 +680,13 @@ func _resolve_outcome() -> void:
 		for item_id in reward.get("items", []):
 			GameState.add_item(String(item_id))
 
-		# 「手の記憶」を買っているぶんだけ熟練の入りが良くなる。
-		var mastery := int(reward["mastery"])
-		mastery += mastery * GameState.upgrade_value("mastery_gain") / 100
+		# 旅の速さと「手の記憶」を一つの入口で掛ける。
+		var mastery := GameState.run_mastery_reward(int(reward["mastery"]))
 
 		for m in members:
 			if m.hp <= 0:
 				continue  # 倒れていた者には入らない
-			if m.gain_exp(int(reward["exp"])) > 0:
+			if m.gain_exp(gained_exp) > 0:
 				lines.append("%sは レベル %d に あがった！" % [m.name, m.level])
 			for ability_id in m.gain_mastery(mastery):
 				# ラン中に覚えた技は、全滅しても拠点に残る

@@ -1,5 +1,5 @@
 {
-  "_comment": "道中の出店で買う消耗品。ゴールドはランの中でしか意味を持たない資源なので、ここが唯一の使い道になる。effect: heal_hp / heal_mp / revive。target と cost は abilities.json と同じ語彙・同じ意味（cost は CTB の行動コスト）。stock はその出店に並ぶ数で、買い占めを防ぐ上限。",
+  "_comment": "道中の出店で買う消耗品。effect: heal_hp / heal_mp / revive / cleanse / heal_cleanse / item_damage / haste。item_damage は element で弱点を突ける戦闘専用品。target と cost は abilities.json と同じ語彙・同じ意味（cost は CTB の行動コスト）。stock はその出店に並ぶ数。",
   "herb": {
     "name": "やくそう",
     "desc": "味方ひとりの傷を そこそこ癒す。",
@@ -29,9 +29,9 @@
     "power": 999,
     "target": "one_ally",
     "cost": 70,
-    "price": 120,
-    "stock": 2,
-    "floor_min": 4
+    "price": 260,
+    "stock": 1,
+    "floor_min": 8
   },
   "feather": {
     "name": "めざめの羽",
@@ -65,5 +65,74 @@
     "price": 96,
     "stock": 2,
     "floor_min": 5
+  },
+  "medicine": {
+    "name": "上やくそう",
+    "desc": "味方ひとりの傷を 大きく癒す。",
+    "effect": "heal_hp",
+    "power": 140,
+    "target": "one_ally",
+    "cost": 70,
+    "price": 58,
+    "stock": 3,
+    "floor_min": 4
+  },
+  "remedy": {
+    "name": "万能膏",
+    "desc": "傷をすこし癒し、毒も消す。",
+    "effect": "heal_cleanse",
+    "power": 35,
+    "target": "one_ally",
+    "cost": 65,
+    "price": 44,
+    "stock": 3,
+    "floor_min": 3
+  },
+  "ember_vial": {
+    "name": "火炎びん",
+    "desc": "敵ひとりへ 炎の固定ダメージ。弱点に有効。",
+    "effect": "item_damage",
+    "element": "fire",
+    "power": 60,
+    "target": "one_enemy",
+    "cost": 80,
+    "price": 42,
+    "stock": 3,
+    "floor_min": 2
+  },
+  "frost_vial": {
+    "name": "氷晶びん",
+    "desc": "敵ひとりへ 氷の固定ダメージ。弱点に有効。",
+    "effect": "item_damage",
+    "element": "ice",
+    "power": 60,
+    "target": "one_enemy",
+    "cost": 80,
+    "price": 46,
+    "stock": 3,
+    "floor_min": 3
+  },
+  "thunder_coil": {
+    "name": "雷導コイル",
+    "desc": "敵ひとりへ 雷の固定ダメージ。弱点に有効。",
+    "effect": "item_damage",
+    "element": "lightning",
+    "power": 60,
+    "target": "one_enemy",
+    "cost": 80,
+    "price": 50,
+    "stock": 3,
+    "floor_min": 4
+  },
+  "quick_tonic": {
+    "name": "はやて薬",
+    "desc": "味方ひとりの すばやさを4手番あげる。",
+    "effect": "haste",
+    "power": 0,
+    "target": "one_ally",
+    "cost": 75,
+    "price": 78,
+    "stock": 2,
+    "floor_min": 6
   }
 }

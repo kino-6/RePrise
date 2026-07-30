@@ -37,7 +37,8 @@ var _held := ""
 
 ## 画面の遷移を記録する。同じ画面に貼り付いたままなら詰まっている。
 var _timeline: Array[String] = []
-var _last_mode := ""
+var _last_status := ""
+var _last_screen := ""
 var _mode_time := 0.0
 var _stuck_report: Array[String] = []
 
@@ -60,10 +61,13 @@ var _battles := 0
 ## 1 手番あたりの行数で決まるので、ここは画面側で測るしかない。
 var _battle_started := -1.0
 var _battle_seconds: Array[float] = []
+var _event_started := -1.0
+var _event_seconds: Array[float] = []
 ## 通常遭遇どうしの実歩数。イベント戦・番人・主戦は0なので含めない。
 var _encounter_gaps: Array[int] = []
 var _runs := 0
 var _equipped := 0
+var _shop_categories := {}
 
 ## さいきょう装備を掛け直したいか。開始時と、装備を拾った直後に立てる。
 var _best_gear_due := true
@@ -76,6 +80,8 @@ func start(main_node: Node, seconds: float, seed_value: int = 12345) -> void:
 	DirAccess.make_dir_recursive_absolute(SHOT_DIR)
 	# 自動プレイは人の 10 倍の速さで決定キーを叩くので、鳴らすと騒音にしかならない。
 	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
+	if _main.has_method("dev_reset_facility_metrics"):
+		_main.dev_reset_facility_metrics()
 	set_process(true)
 
 
@@ -131,14 +137,35 @@ func _status() -> String:
 
 
 func _track_mode(delta: float) -> void:
-	var mode := _status()
-	if mode != _last_mode:
-		_timeline.append("%5.1fs %s" % [_elapsed, mode])
+	var status := _status()
+	var screen := _mode()
+	if status.contains("町"):
+		_town_time += delta
+
+	if status != _last_status:
+		_timeline.append("%5.1fs %s" % [_elapsed, status])
+		if status.contains("町") and not _last_status.contains("町"):
+			_town_visits += 1
+		# **表示を変えたらここも変える。** 「地下 N 階」を探したままだったので、
+		# 危険度 10 まで行っても「最も危険 1」と出ていた（2 度目の同じ抜け）。
+		var at := status.find("危険度")
+		if at >= 0:
+			_deepest = maxi(_deepest, int(status.substr(at + 3)))
+
+		# **2 状態のあいだを往復しているのも詰まり。**
+		_recent.append(status)
+		while _recent.size() > OSCILLATION_WINDOW:
+			_recent.pop_front()
+		_check_oscillation()
+		_last_status = status
+
+	if screen != _last_screen:
 		# 「とじる」を押した直後にメニューから出られていれば成功と数える
-		if _close_expect and _last_mode.begins_with("MENU") and mode.begins_with("EXPLORE"):
-			_close_ok += 1
+		if _close_expect and _last_screen == "MENU":
+			if screen == "EXPLORE":
+				_close_ok += 1
 			_close_expect = false
-		if mode.begins_with("BATTLE"):
+		if screen == "BATTLE":
 			_battles += 1
 			_battle_started = _elapsed
 			if _main != null and _main.has_method("dev_take_encounter_gap"):
@@ -149,31 +176,25 @@ func _track_mode(delta: float) -> void:
 			# 戦闘から出た。掛かった秒を控える。
 			_battle_seconds.append(_elapsed - _battle_started)
 			_battle_started = -1.0
-		if mode.begins_with("RESULT"):
+		if screen == "EVENT":
+			_event_started = _elapsed
+		elif _event_started >= 0.0:
+			_event_seconds.append(_elapsed - _event_started)
+			_event_started = -1.0
+		if screen == "RESULT":
 			_runs += 1
-		# **表示を変えたらここも変える。** 「地下 N 階」を探したままだったので、
-		# 危険度 10 まで行っても「最も危険 1」と出ていた（2 度目の同じ抜け）。
-		var at := mode.find("危険度")
-		if at >= 0:
-			_deepest = maxi(_deepest, int(mode.substr(at + 3)))
-		if mode.contains("町"):
-			_town_visits += 1
-
-		# **2 状態のあいだを往復しているのも詰まり。**
-		# 「同じ画面に貼り付く」だけを見ていたので、世界と町を出入りし続ける
-		# 足踏み（実際に起きた）は素通りしていた。
-		_recent.append(mode)
-		while _recent.size() > OSCILLATION_WINDOW:
-			_recent.pop_front()
-		_check_oscillation()
-
-		_last_mode = mode
+		if screen == "SHOP":
+			_shop_visit_categories.clear()
+		_last_screen = screen
 		_mode_time = 0.0
 		return
 	_mode_time += delta
 	# 同じ画面に 25 秒貼り付いたら、そこで詰まっている可能性が高い。
 	if _mode_time > 25.0:
-		_stuck_report.append("%5.1fs %s に %.0f 秒とどまっている" % [_elapsed, mode, _mode_time])
+		_stuck_report.append(
+			"%5.1fs %s に %.0f 秒とどまっている"
+			% [_elapsed, status, _mode_time]
+		)
 		_mode_time = 0.0
 
 
@@ -213,13 +234,21 @@ func _send_input() -> void:
 			else:
 				_press("confirm")
 		"SHOP":
-			# 買い物は実際に踏ませる。すぐ立ち去ると装備も道具も試されない。
-			if _mode_time > LINGER_LIMIT or _rng.chance(8):
+			# 4 分類を左右入力で一巡する。乱数任せでは最初の「どうぐ」だけを
+			# 見て店を出ても気付けない。消耗品だけ実際に1回購入を試す。
+			var category := (
+				String(_main.dev_shop_category())
+				if _main.has_method("dev_shop_category")
+				else ""
+			)
+			if category != "" and not _shop_visit_categories.has(category):
+				_shop_visit_categories[category] = true
+				_shop_categories[category] = true
+				_press("confirm" if category == "item" else "ui_right")
+			elif _shop_visit_categories.size() >= 4 or _mode_time > LINGER_LIMIT:
 				_press("cancel")
-			elif _rng.chance(45):
-				_press(_rng.pick(["ui_up", "ui_down"]))
 			else:
-				_press("confirm")
+				_press("ui_right")
 		"MENU":
 			# 乱数の入力では「そうび → 人 → スロット → 品」の 4 段を踏み抜けない。
 			# ときどき決まった手順で潜らせて、装備の付け替えまで確かめる。
@@ -230,7 +259,11 @@ func _send_input() -> void:
 			elif _rng.chance(25):
 				_scripted = EQUIP_STEPS.duplicate()
 				_press(String(_scripted.pop_front()))
-			elif _rng.chance(30):
+			elif (
+				_rng.chance(30)
+				and _main.has_method("dev_menu_at_root")
+				and bool(_main.dev_menu_at_root())
+			):
 				# 「とじる」で閉じられるかを試す
 				_close_tries += 1
 				_close_expect = true
@@ -252,6 +285,14 @@ func _send_input() -> void:
 			# キー割り当ての待ち状態に入って出られなくなる（実際に 25 秒張り付いた）。
 			# 出口へ向かうのが唯一の正しい振る舞い。
 			_press("cancel")
+		"EVENT":
+			# 読む前に決定を連打すると、出来事を「謎の選択肢が一瞬出た」
+			# としか検査できない。最低1秒は本文と選択肢を画面に残す。
+			if _mode_time >= 1.0:
+				_press("confirm")
+		"MAP":
+			if _mode_time >= 0.8:
+				_press("cancel")
 		_:
 			_press("confirm")
 
@@ -291,6 +332,12 @@ var _town_entered := -1.0
 
 ## 出口へ向かっている最中か。**滞在の再開を止めるための印。**
 var _town_leaving := false
+## 0: 宿 / 1: 住人1 / 2: 住人2 / 3: 店 / 4: 出口。
+var _town_phase := 0
+var _town_inn_baseline := 0
+var _town_shop_baseline := 0
+var _town_talk_baseline := 0
+var _shop_visit_categories := {}
 
 
 ## 町の中の 1 歩。
@@ -303,7 +350,68 @@ func _town_step() -> String:
 	if _town_entered < 0.0:
 		_town_entered = _elapsed
 		_town_leaving = false
-	_town_time += 0.016
+		_town_phase = 0
+		_town_inn_baseline = (
+			int(_main.dev_inn_visits())
+			if _main.has_method("dev_inn_visits")
+			else 0
+		)
+		_town_shop_baseline = (
+			int(_main.dev_shop_opens())
+			if _main.has_method("dev_shop_opens")
+			else 0
+		)
+		_town_talk_baseline = (
+			int(_main.dev_talks())
+			if _main.has_method("dev_talks")
+			else 0
+		)
+	if _town_phase == 0:
+		if (
+			_main.has_method("dev_inn_visits")
+			and int(_main.dev_inn_visits()) > _town_inn_baseline
+		):
+			_town_phase = 1
+		else:
+			var to_inn := String(_main.dev_step_to_inn())
+			if to_inn != "":
+				return to_inn
+			_town_phase = 1
+	if _town_phase == 1:
+		if (
+			_main.has_method("dev_talks")
+			and int(_main.dev_talks()) >= _town_talk_baseline + 1
+		):
+			_town_phase = 2
+		else:
+			var to_talk := String(_main.dev_step_to_talk())
+			if to_talk != "":
+				return to_talk
+			_town_phase = 2
+	if _town_phase == 2:
+		if (
+			_main.has_method("dev_talks")
+			and int(_main.dev_talks()) >= _town_talk_baseline + 2
+		):
+			_town_phase = 3
+		else:
+			var to_second_talk := String(_main.dev_step_to_talk())
+			if to_second_talk != "":
+				return to_second_talk
+			_town_phase = 3
+	if _town_phase == 3:
+		if (
+			_main.has_method("dev_shop_opens")
+			and int(_main.dev_shop_opens()) > _town_shop_baseline
+		):
+			_town_phase = 4
+			_town_leaving = true
+		else:
+			var to_shop := String(_main.dev_step_to_shop())
+			if to_shop != "":
+				return to_shop
+			_town_phase = 4
+			_town_leaving = true
 	# **出ると決めたら出きるまで出口へ向かう。**
 	#
 	# 以前は滞在時間が切れた回に `_town_entered` を戻していたので、
@@ -315,11 +423,7 @@ func _town_step() -> String:
 		var out: String = _main.dev_step_to_exit()
 		if out != "":
 			return out
-	# 店へ向かいつつ、途中で当たった人には自然に話しかかる。
-	if _rng.chance(55):
-		var toward: String = _main.dev_step_to_shop()
-		if toward != "":
-			return toward
+	# 施設が欠けた町でも、滞在上限に達したら酔歩で固まらない。
 	return String(_rng.pick(["ui_up", "ui_down", "ui_left", "ui_right"]))
 
 
@@ -403,6 +507,15 @@ func _report() -> void:
 	print("---")
 	print("最も危険  : 危険度 %d" % _deepest)
 	print("町に入った: %d 回（滞在 %.0f 秒）" % [_town_visits, _town_time])
+	if _main != null and _main.has_method("dev_inn_visits"):
+		print("宿を利用  : %d 回" % int(_main.dev_inn_visits()))
+	if _main != null and _main.has_method("dev_shop_opens"):
+		print("店を利用  : %d 回" % int(_main.dev_shop_opens()))
+	if _main != null and _main.has_method("dev_talks"):
+		print("住人と話す: %d 回" % int(_main.dev_talks()))
+	print("店の分類  : %d / 4（%s）" % [
+		_shop_categories.size(), "・".join(_shop_categories.keys())
+	])
 	print("戦闘      : %d 回" % _battles)
 	if not _encounter_gaps.is_empty():
 		var shortest := _encounter_gaps[0]
@@ -421,6 +534,13 @@ func _report() -> void:
 			longest = maxf(longest, s)
 		print("戦闘の長さ: 平均 %.1f 秒 / 最長 %.1f 秒（%d 戦を計測）" % [
 			total / _battle_seconds.size(), longest, _battle_seconds.size()])
+	if not _event_seconds.is_empty():
+		var event_total := 0.0
+		for seconds in _event_seconds:
+			event_total += seconds
+		print("出来事の滞在: 平均 %.1f 秒（%d 件）" % [
+			event_total / _event_seconds.size(), _event_seconds.size()
+		])
 	print("ランの終了 : %d 回" % _runs)
 	print("装備      : 最大 %d 個" % _equipped)
 	print("メニューを閉じた: %d 回（とじるを試した %d 回）" % [_close_ok, _close_tries])

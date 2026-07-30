@@ -16,7 +16,10 @@ const ChestReward := preload("res://src/dungeon/chest_reward.gd")
 ## 輪が拠点に戻るのが要点。失ったレベルと残った熟練度を並べて見せる場が無いと、
 ## メタ進行が数字の裏側だけで進んでしまう。
 
-enum Mode { TITLE, PROLOGUE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS, RESULT, EVENT, GEAR }
+enum Mode {
+	TITLE, PROLOGUE, STRONGHOLD, EXPLORE, BATTLE, SHOP, MENU, SETTINGS,
+	RESULT, EVENT, GEAR, MAP,
+}
 
 var title: TitleView
 var prologue: PrologueView
@@ -26,6 +29,7 @@ var explore: ExploreView
 var hud: ExploreHud
 var battle: BattleView
 var menu: FieldMenu
+var world_chart: WorldChartView
 var settings: SettingsView
 var result: ResultScreen
 var event_view: EventView
@@ -71,6 +75,13 @@ var _transition_input_locked := false
 var _transition_visual_done := false
 var _transition_release_elapsed := 0.0
 
+## 実プレイ検査で施設の導線が本当に踏まれたかを数える。
+## 「扉へ向かった」だけで成功扱いしないため、実処理側で加算する。
+var _dev_inn_visits := 0
+var _dev_shop_opens := 0
+var _dev_talks := 0
+var _dev_last_talk_line := ""
+
 
 func _ready() -> void:
 	# 「RePrise  v0.1.0」。どのビルドを触っているかがウィンドウ枠だけで分かる。
@@ -112,6 +123,10 @@ func _ready() -> void:
 	menu = FieldMenu.new()
 	menu.visible = false
 	add_child(menu)
+
+	world_chart = WorldChartView.new()
+	world_chart.visible = false
+	add_child(world_chart)
 
 	settings = SettingsView.new()
 	settings.visible = false
@@ -197,9 +212,11 @@ func _ready() -> void:
 	explore.door_nearby.connect(_on_door_nearby)
 	explore.poison_ticked.connect(_on_poison_tick)
 	menu.closed.connect(_close_menu)
+	menu.map_requested.connect(_open_world_chart)
 	menu.settings_requested.connect(_open_settings)
 	menu.suspend_requested.connect(_suspend_run)
 	menu.escape_requested.connect(_escape_site)
+	world_chart.closed.connect(_open_menu)
 	title.settings_requested.connect(_open_settings)
 	settings.closed.connect(_close_settings)
 	settings.save_erase_requested.connect(_erase_save_data)
@@ -370,12 +387,71 @@ func dev_step_to_exit() -> String:
 func dev_step_to_shop() -> String:
 	if _mode != Mode.EXPLORE:
 		return ""
+	if _town != null:
+		return explore.dev_step_toward(_town.shop_pos)
 	if _map == null:
 		var town := _nearest_town()
 		return "" if town.x < 0 else explore.dev_step_toward(town)
 	if _map.shop_pos.x < 0:
 		return ""
 	return explore.dev_step_toward(_map.shop_pos)
+
+
+## 開発用。町の宿へ向かう一歩。町以外なら空文字。
+func dev_step_to_inn() -> String:
+	if _mode != Mode.EXPLORE or _town == null:
+		return ""
+	return explore.dev_step_toward(_town.inn_pos)
+
+
+func dev_reset_facility_metrics() -> void:
+	_dev_inn_visits = 0
+	_dev_shop_opens = 0
+	_dev_talks = 0
+	_dev_last_talk_line = ""
+
+
+func dev_inn_visits() -> int:
+	return _dev_inn_visits
+
+
+func dev_shop_opens() -> int:
+	return _dev_shop_opens
+
+
+func dev_talks() -> int:
+	return _dev_talks
+
+
+func dev_shop_category() -> String:
+	return shop.current_category() if _mode == Mode.SHOP else ""
+
+
+func dev_menu_at_root() -> bool:
+	return _mode == Mode.MENU and menu.is_root()
+
+
+## 開発用。町で最も近い住人へ向かう一歩。
+func dev_step_to_talk() -> String:
+	if _mode != Mode.EXPLORE or _town == null or _town.folk.is_empty():
+		return ""
+	var nearest := Vector2i(-1, -1)
+	var best_length := -1
+	for raw_pos in _town.folk:
+		var pos: Vector2i = raw_pos
+		var candidate_line := String(_town.folk[pos].get("line", ""))
+		if String(_town.folk[pos].get("kind", "")) == "elder":
+			candidate_line = _rumor()
+		if (
+			_dev_last_talk_line != ""
+			and candidate_line == _dev_last_talk_line
+		):
+			continue
+		var route := _town.route(explore.player_pos, pos)
+		if not route.is_empty() and (best_length < 0 or route.size() < best_length):
+			nearest = pos
+			best_length = route.size()
+	return "" if nearest.x < 0 else explore.dev_step_toward(nearest)
 
 
 ## 開発用。その種類の拠点地のうち、門にいちばん近いもの。撮影に使う。
@@ -439,6 +515,20 @@ func _capture(which: String) -> void:
 		"upgrade":
 			_enter_stronghold()
 			stronghold.debug_open_upgrades()
+		"rules":
+			_enter_stronghold()
+			# 最長の名前・最大枠・高い倍率で収まりを見る。
+			GameState.upgrades["world_lens"] = 2
+			GameState.upgrades["marching_score"] = 2
+			GameState.upgrades["oath_tablet"] = 2
+			GameState.upgrades["provisions"] = 1
+			GameState.upgrades["lifeline"] = 1
+			GameState.run_rule_choices = {
+				"difficulty": "ruin",
+				"pace": "sprint",
+				"contracts": ["closed_market", "empty_pack", "no_escape"],
+			}
+			stronghold.debug_open_rules()
 		"explore":
 			_start_run()
 		"items":
@@ -452,15 +542,26 @@ func _capture(which: String) -> void:
 					break
 			battle.debug_open_item_menu()
 		"shop":
-			# 町の品書きを撮る。世界の最初の町へ直に入る。
+			# 町の武器売り場を撮る。物語や重なったイベントを経由すると
+			# 品書きではない画面になるので、撮影時だけ町へ直に入る。
 			_start_run()
 			GameState.gold = 300
 			var town := _first_site("town")
 			if town.x >= 0:
-				_on_site_entered(town)
+				GameState.enter_site(town)
+				_open_town()
+				_on_shop_entered()
+				shop.debug_set_category("weapon")
 		"world":
 			# 世界の全景。歩ける地形と拠点地の見分けを確かめる。
 			_start_run()
+		"map":
+			# 地図イベント後に封と安全路が増えた状態を撮る。
+			_start_run()
+			GameState.event_map_reveals = 1
+			for seal in GameState.world.seals:
+				seal["known"] = true
+			_open_world_chart()
 		"acrosschoice":
 			# またぐ物語の最後の段階（三択）。
 			_enter_stronghold()
@@ -526,12 +627,12 @@ func _capture(which: String) -> void:
 			_on_event_choice(instance.get("choices", [])[1])
 		"town":
 			# 町の中の見え方（宿・店・人）を確かめる。
-			# 物語の拍は町より先に出るので、撮影では飛ばす。
+			# 物語や重なった出来事は町より先に出るので、撮影では直に入る。
 			_start_run()
-			GameState.world.story_beat = 99
 			var town_at := _first_site("town")
 			if town_at.x >= 0:
-				_on_site_entered(town_at)
+				GameState.enter_site(town_at)
+				_open_town()
 		"cave":
 			_start_run()
 			var cave := _first_site("cave")
@@ -756,6 +857,9 @@ func _capture(which: String) -> void:
 		# するので遊ぶ側には見えないが、詰まっていること自体が割り付けの誤り。
 		for note in PixelUI.clipped():
 			print("  詰めた: %s" % note)
+		# 安全のため描画しなかった行も失敗にする。空の窓を正常扱いしない。
+		for note in PixelUI.dropped_lines():
+			print("  行落ち: %s" % note)
 		# **12px の漢字は潰れて読めない**（D-5）。かなと数字だけにする。
 		for note in PixelUI.small_kanji():
 			print("  小さすぎる漢字: %s" % note)
@@ -967,7 +1071,16 @@ func _play_field_bgm() -> void:
 
 
 ## 世界で拠点地を踏んだ。町・洞・城で行き先が変わる。
-func _on_site_entered(pos: Vector2i) -> void:
+## 拠点地へ入る直前の世界座標。町・洞から出たらここへ戻す。
+## 内部の町は南入口へ正規化したまま、ワールド上の接近方向だけを保つ。
+var _site_return_pos := Vector2i(-1, -1)
+
+
+func _on_site_entered(
+	pos: Vector2i, from: Vector2i = Vector2i(-1, -1)
+) -> void:
+	if from.x >= 0 and from != pos:
+		_site_return_pos = from
 	GameState.world_pos = pos
 	# **物語がいちばん先。** 拍 → イベント → 町や洞の中身、の順に出す。
 	# 逆にすると、町へ入ったあとに拍が始まって場面が入れ替わる。
@@ -1012,9 +1125,15 @@ func _on_site_entered(pos: Vector2i) -> void:
 				# **1 マス外へ出す。** 城のマスに立ったままだと、一歩動くたびに
 				# また扉を叩いて足踏みになる（町で直したのと同じ穴で、
 				# 自動プレイが城の前から動けなくなっていた）。
-				GameState.world_pos = GameState.step_outside_site(pos)
+				GameState.world_pos = (
+					_site_return_pos
+					if _site_return_pos.x >= 0
+					else GameState.step_outside_site(pos)
+				)
+				_site_return_pos = Vector2i(-1, -1)
 				GameState.site = {}
 				_enter_world()
+				explore.suppress_site_once(pos)
 				return
 			hud.toast("城の門が ひらいた。ここから先は 戻れない。")
 			_on_boss_reached()
@@ -1101,6 +1220,7 @@ func _on_quest_text(text: String) -> void:
 ## 「誰に話すか」「何を先にするか」がそのまま行動になる。
 func _open_town() -> void:
 	Sound.play("confirm")
+	_dev_last_talk_line = ""
 	_town = TownGenerator.generate(
 		GameState.rng_for("town"), GameState.floor_number,
 		String(GameState.site.get("tileset", "dungeon"))
@@ -1118,6 +1238,8 @@ func _open_town() -> void:
 ## 物知りだけは**封の在り処**を教える。これが町に寄る理由になる
 ## （それ以外の役は世間話のままにする。全員が案内役だと町が掲示板になる）。
 func _on_talked(line: String) -> void:
+	_dev_talks += 1
+	_dev_last_talk_line = line
 	Sound.play("confirm")
 	hud.toast(line)
 
@@ -1135,9 +1257,13 @@ func _rumor() -> String:
 	return "封は すべて やぶれた。あとは 城だけだ。"
 
 
-## 宿。**取り上げるものは無いので、ゴールドも取らない。**
-## 町まで戻ってきた手間がそのまま代金、という扱いにする。
+## 宿。**全回復と毒の治療はここだけ**。出店は購入と補給に専念させる。
+##
+## ゴールドは取らない。危険な街道を町まで戻った手間が代金であり、宿へ戻るか、
+## 手持ちの道具で先へ進むかがラン中の判断になる。イベントで得た世話・物資・
+## 「よく休んだ」効果もここでだけ清算する。
 func _on_inn() -> void:
+	_dev_inn_visits += 1
 	var service := EventEffects.consume_inn(GameState, GameState.rng_for("event_inn"))
 	if bool(service.get("blocked", false)):
 		Sound.play("cancel")
@@ -1163,9 +1289,16 @@ func _on_town_left() -> void:
 
 ## 拠点地から世界へ戻る。**必ず 1 マス外へ出す**（出た直後に再突入しないため）。
 func _leave_site() -> void:
-	GameState.world_pos = GameState.step_outside_site(GameState.world_pos)
+	var site_pos := GameState.world_pos
+	GameState.world_pos = (
+		_site_return_pos
+		if _site_return_pos.x >= 0
+		else GameState.step_outside_site(site_pos)
+	)
+	_site_return_pos = Vector2i(-1, -1)
 	GameState.site = {}
 	_enter_world()
+	explore.suppress_site_once(site_pos)
 
 
 ## 画面の切り替えに挟む暗転の長さ（片道）。
@@ -1347,6 +1480,7 @@ func _apply_mode(mode: Mode) -> void:
 	stronghold.visible = mode == Mode.STRONGHOLD
 	shop.visible = mode == Mode.SHOP
 	menu.visible = mode == Mode.MENU
+	world_chart.visible = mode == Mode.MAP
 	settings.visible = mode == Mode.SETTINGS
 	# メニュー中も探索の絵は出したままにする（メニューを半透明にしてあるので、
 	# 下にダンジョンが見える）。HUD は二重になるので隠す。
@@ -1377,6 +1511,8 @@ func _apply_mode(mode: Mode) -> void:
 		shop.close()
 	if mode != Mode.MENU:
 		menu.close()
+	if mode != Mode.MAP:
+		world_chart.close()
 	if mode != Mode.SETTINGS:
 		settings.close()
 	if mode != Mode.EVENT:
@@ -1592,6 +1728,21 @@ func _close_menu() -> void:
 	_set_mode(Mode.EXPLORE)
 
 
+func _open_world_chart() -> void:
+	if GameState.world == null:
+		_set_mode(Mode.EXPLORE)
+		return
+	var at := GameState.world_pos
+	if _town == null and _map == null and explore.map is WorldMap:
+		at = explore.player_pos
+	world_chart.open(
+		GameState.world,
+		at,
+		GameState.event_map_reveals > 0
+	)
+	_set_mode(Mode.MAP)
+
+
 ## 洞から出る。**用が済んだ洞を最深部まで歩かせない。**
 ##
 ## 封を取ったあとの洞は用が無いので、入口へ戻る手を用意する。
@@ -1740,6 +1891,9 @@ func _begin_battle(foes: Array[Battler], is_boss: bool) -> void:
 		party.append(members[i].to_battler(i))
 
 	_boss_battle = is_boss
+	# 難しさは通常・イベント・番人・主の全経路へ同じ順番で掛ける。
+	# そのあとイベント弱体を掛ければ、プレイヤーが得た支援は難度に関係なく効く。
+	GameState.apply_run_difficulty(foes)
 	EventEffects.prepare_battle(GameState, party, foes, is_boss)
 	var system := BattleSystem.new()
 	system.start(party, foes, _battle_rng, GameState.floor_number)
@@ -1885,17 +2039,23 @@ func _on_descend() -> void:
 
 ## 店。町なら町の在庫（世界が覚える）、洞の中ならその階の在庫。
 func _on_shop_entered() -> void:
+	if GameState.run_contract_enabled("closed_market"):
+		Sound.play("cancel")
+		hud.toast(Terms.SHOP_CLOSED_BY_CONTRACT)
+		return
 	Sound.play("confirm")
 	if _town != null:
 		var key := "town:%d" % int(GameState.site.get("index", 0))
 		if not GameState.world.visited.has(key):
 			GameState.world.visited[key] = {}
 		shop.open(GameState.world.visited[key], GameState.floor_number)
+		_dev_shop_opens += 1
 		_set_mode(Mode.SHOP)
 		return
 	if _map == null:
 		return
 	shop.open(_map.shop_stock, GameState.floor_number)
+	_dev_shop_opens += 1
 	_set_mode(Mode.SHOP)
 
 

@@ -1,11 +1,12 @@
 class_name ShopView
 extends Node2D
 
-## 道中の出店。ゴールドの唯一の使い道。
+## 道中の出店。消耗品と装備を買う場所。
 ##
 ## ゴールドをラン内限定の資源に決めたので、拠点ではなくここが買い物の場になる。
 ## 「今飲むか、あとに取っておくか」をラン中に判断させたいのであって、
 ## 拠点で計画を立てさせたいわけではない。だから店は道中にしか無い。
+## 全回復は町の宿だけが担う。出店で休めると、町へ戻る判断も宿の役割も消える。
 ##
 ## 在庫はフロア（DungeonMap）が持つ。階を降りれば品は戻るが、
 ## 同じ階で買い占めることはできない。
@@ -28,8 +29,9 @@ const MENU_RECT := Rect2(8, 232, 496, 80)
 const ROW_HEIGHT := 24
 const INPUT_LOCK := 0.15
 
-## 休息の値段は階層に比例させる。深いほど「もう一度整える」判断が重くなる。
-const REST_BASE_PRICE := 20
+## 品書きは横で分類を切り替える。装備を取得順の一列へ混ぜると、
+## 武器・防具・装飾品のどれを見ているか分からない。
+const CATEGORY_KEYS: Array[String] = ["item", "weapon", "armor", "accessory"]
 
 ## 在庫の入れ物。**地図ではなく辞書を受け取る。**
 ##
@@ -37,8 +39,9 @@ const REST_BASE_PRICE := 20
 ## 町には地図が無いので、店の側が場所を知っていることになってしまう。
 ## 在庫を持っているのは呼び出し側（町なら世界、洞ならその階）。
 var _stock: Dictionary = {}
-var _floor := 1
+var _catalog: Dictionary = {}
 var _ids: Array = []
+var _category_index := 0
 var _index := 0
 var _notice := Notice.new()
 var _input_lock := 0.0
@@ -46,18 +49,18 @@ var _input_lock := 0.0
 
 func open(stock: Dictionary, floor_number: int) -> void:
 	_stock = stock
-	_floor = floor_number
-	# 消耗品と装備を同じ品書きに並べる。店を 2 つに分けるほどの品数ではない。
-	_ids = Database.item_ids_for_floor(floor_number)
-	_ids.append_array(Database.gear_ids_for_shop(floor_number))
+	_catalog = _catalog_for_floor(floor_number)
 	# 在庫はこのフロアで一度だけ用意する。出入りしても戻らない。
 	if _stock.is_empty():
 		# 「商いの伝手」を買っているぶんだけ品が多く並ぶ。
 		var extra := GameState.upgrade_value("shop_stock") + GameState.event_shop_bonus
-		for id in _ids:
-			var base := int(_entry(String(id)).get("stock", 1))
-			# 装備は 1 点もの。伝手を買っても在庫は増やさない。
-			_stock[id] = base if _is_gear(String(id)) else base + extra
+		for category in CATEGORY_KEYS:
+			for id in _catalog.get(category, []):
+				var base := int(_entry(String(id)).get("stock", 1))
+				# 装備は 1 点もの。伝手を買っても在庫は増やさない。
+				_stock[id] = base if _is_gear(String(id)) else base + extra
+	_category_index = 0
+	_activate_category()
 	_index = 0
 	_notice.clear()
 	_input_lock = INPUT_LOCK
@@ -83,17 +86,8 @@ func _notify(text: String) -> void:
 	queue_redraw()
 
 
-## 品書きの行数。品物 + 「やすむ」 + 「たちさる」。
-func _rest_row() -> int:
-	return _ids.size()
-
-
 func _leave_row() -> int:
-	return _ids.size() + 1
-
-
-func rest_price() -> int:
-	return REST_BASE_PRICE * _floor
+	return _ids.size()
 
 
 ## 値段。「商いの目」を買っているぶん安くなる。
@@ -119,6 +113,71 @@ func _entry(id: String) -> Dictionary:
 	return Database.gear(id) if _is_gear(id) else Database.item(id)
 
 
+## 店頭分類。テストからも使い、装備データの slot と表示がずれないようにする。
+static func category_of(id: String) -> String:
+	var gear := Database.gear(id)
+	return "item" if gear.is_empty() else String(gear.get("slot", ""))
+
+
+static func category_keys() -> Array[String]:
+	return CATEGORY_KEYS.duplicate()
+
+
+static func _catalog_for_floor(floor_number: int) -> Dictionary:
+	var result := {
+		"item": Database.item_ids_for_floor(floor_number),
+		"weapon": [],
+		"armor": [],
+		"accessory": [],
+	}
+	for id in Database.gear_ids_for_shop(floor_number):
+		var category := category_of(String(id))
+		if result.has(category):
+			result[category].append(id)
+	return result
+
+
+func _activate_category() -> void:
+	var key := CATEGORY_KEYS[_category_index]
+	_ids = Array(_catalog.get(key, [])).duplicate()
+	_index = 0
+	_notice.clear()
+
+
+func _move_category(step: int) -> void:
+	_category_index = posmod(_category_index + step, CATEGORY_KEYS.size())
+	_activate_category()
+	Sound.play("cursor")
+	queue_redraw()
+
+
+func _category_label() -> String:
+	match CATEGORY_KEYS[_category_index]:
+		"weapon":
+			return Terms.SHOP_WEAPONS
+		"armor":
+			return Terms.SHOP_ARMOR
+		"accessory":
+			return Terms.SHOP_ACCESSORIES
+		_:
+			return Terms.SHOP_ITEMS
+
+
+## 開発用の実プレイ計測。表示名ではなく安定した分類キーを返す。
+func current_category() -> String:
+	return CATEGORY_KEYS[_category_index]
+
+
+## 撮影用。装備タブの長い品名・能力表示まで実画面で検査する。
+func debug_set_category(category: String) -> void:
+	var found := CATEGORY_KEYS.find(category)
+	if found < 0:
+		return
+	_category_index = found
+	_activate_category()
+	queue_redraw()
+
+
 # --------------------------------------------------------------------------
 # 入力
 # --------------------------------------------------------------------------
@@ -136,6 +195,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_index = (_index - 1 + rows) % rows
 		Sound.play("cursor")
 		queue_redraw()
+	elif event.is_action_pressed("ui_left"):
+		_move_category(-1)
+	elif event.is_action_pressed("ui_right"):
+		_move_category(1)
 	elif event.is_action_pressed("cancel"):
 		Sound.play("cancel")
 		_leave()
@@ -147,8 +210,6 @@ func _decide() -> void:
 	if _index == _leave_row():
 		Sound.play("confirm")
 		_leave()
-	elif _index == _rest_row():
-		_rest()
 	else:
 		_buy(String(_ids[_index]))
 
@@ -177,30 +238,6 @@ func _buy(item_id: String) -> void:
 	_notify("%s を 買った" % _entry(item_id).get("name", item_id))
 
 
-## 全回復。道具と違って手番を消費しないぶん高い。
-func _rest() -> void:
-	var price := rest_price()
-	var party := GameState.active_party()
-	var hurt := false
-	for m in party:
-		if m.hp < m.max_hp() or m.mp < m.max_mp() or m.poison_steps > 0:
-			hurt = true
-	if not hurt:
-		Sound.play("cancel")
-		_notify("休むほどでもない")
-		return
-	if not GameState.spend_gold(price):
-		Sound.play("cancel")
-		_notify("%sが たりない" % Terms.GOLD)
-		return
-	for m in party:
-		m.hp = m.max_hp()
-		m.mp = m.max_mp()
-		m.cure_poison()
-	Sound.play("heal")
-	_notify("すっかり 元気になった")
-
-
 # --------------------------------------------------------------------------
 # 描画
 # --------------------------------------------------------------------------
@@ -218,11 +255,29 @@ func _draw() -> void:
 
 func _draw_header() -> void:
 	PixelUI.draw_window(self, HEADER_RECT, WINDOW_TEX)
-	# 見出しと所持金を 1 行に。**ぶつかったら見出しを詰める**（金は数字なので守る）。
+	# 4 分類を常に並べ、いまいるタブだけ山括弧で示す。
+	# 選択中の分類名だけでは、左右で切り替えられること自体が伝わらない。
+	var tabs: Array[String] = []
+	for i in CATEGORY_KEYS.size():
+		var label := _label_for(CATEGORY_KEYS[i])
+		tabs.append("＜%s＞" % label if i == _category_index else label)
 	UiPanel.inside(self, PixelUI.content(HEADER_RECT)).row(
-		Terms.SHOP, "%d %s" % [GameState.gold, Terms.GOLD],
+		"　".join(tabs),
+		"%d %s" % [GameState.gold, Terms.GOLD],
 		PixelUI.C_ACTIVE, PixelUI.C_TEXT, PixelUI.SIZE_HEAD
 	)
+
+
+func _label_for(category: String) -> String:
+	match category:
+		"weapon":
+			return Terms.SHOP_WEAPONS
+		"armor":
+			return Terms.SHOP_ARMOR
+		"accessory":
+			return Terms.SHOP_ACCESSORIES
+		_:
+			return Terms.SHOP_ITEMS
 
 
 ## 品書きに入る行数。装備を並べたぶん品数が増えたので、ここを超えたら送る。
@@ -245,11 +300,8 @@ func _draw_list() -> void:
 		if _index == row:
 			MenuList.draw_cursor(self, CURSOR_TEX, base)
 
-		if row == _rest_row():
-			_draw_row(base, inner, row, "やすむ", "%dG" % rest_price(), false)
-			continue
 		if row == _leave_row():
-			_draw_row(base, inner, row, "たちさる", "", false)
+			_draw_row(base, inner, row, Terms.SHOP_LEAVE, "", false)
 			continue
 
 		var item_id := String(_ids[row])
@@ -266,7 +318,7 @@ func _draw_list() -> void:
 
 func _draw_row(base: Vector2, inner: Rect2, row: int, label: String, right: String, sold_out: bool) -> void:
 	var tint := PixelUI.C_TEXT if _index == row else PixelUI.C_TEXT_DIM
-	if row >= _rest_row():
+	if row == _leave_row():
 		tint = PixelUI.C_ACTIVE if _index == row else PixelUI.C_TEXT_DIM
 	if sold_out:
 		tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.5)
@@ -279,6 +331,15 @@ func _draw_row(base: Vector2, inner: Rect2, row: int, label: String, right: Stri
 func _draw_detail() -> void:
 	PixelUI.draw_window(self, DETAIL_RECT, WINDOW_TEX)
 	var origin := PixelUI.content(DETAIL_RECT).position
+	if _ids.is_empty():
+		UiPanel.inside(self, Rect2(
+			origin + Vector2(6, 0),
+			Vector2(PixelUI.content(DETAIL_RECT).size.x - 12.0, PixelUI.LINE)
+		)).line(Terms.SHOP_CATEGORY_EMPTY, PixelUI.C_TEXT_DIM)
+		return
+	if _index < _ids.size() and _is_gear(String(_ids[_index])):
+		_draw_gear_fit(origin, String(_ids[_index]))
+		return
 
 	# パーティの体力。何を買うべきかは、この数字を見て決まる。
 	UiPanel.inside(self, Rect2(
@@ -302,6 +363,29 @@ func _draw_detail() -> void:
 		PixelUI.draw_gauge(self, Rect2(row.x, row.y + 19, 224, 5), ratio, PixelUI.hp_color(ratio))
 
 
+## 装備を買う前に、いまのパーティで誰が着けられるかを見せる。
+## 買った後の GearOfferView で初めて不適合と分かるのでは遅い。
+func _draw_gear_fit(origin: Vector2, gear_id: String) -> void:
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 0),
+		Vector2(PixelUI.content(DETAIL_RECT).size.x - 12.0, PixelUI.LINE)
+	)).line(Terms.GEAR_FIT, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	var party := GameState.active_party()
+	for i in party.size():
+		var member: PartyMember = party[i]
+		var can_wear := member.can_equip(gear_id)
+		var row := origin + Vector2(6, 24 + i * 34)
+		UiPanel.inside(self, Rect2(
+			row, Vector2(PixelUI.content(DETAIL_RECT).end.x - 6.0 - row.x, PixelUI.LINE)
+		)).row(
+			member.name,
+			Terms.CAN_EQUIP if can_wear else Terms.CANNOT_EQUIP,
+			PixelUI.C_TEXT if can_wear else PixelUI.C_SHADOW,
+			PixelUI.C_ACTIVE if can_wear else PixelUI.C_TEXT_DIM,
+			PixelUI.SIZE_SUB
+		)
+
+
 func _draw_menu() -> void:
 	PixelUI.draw_window(self, MENU_RECT, WINDOW_TEX)
 	var origin := PixelUI.content(MENU_RECT).position
@@ -314,36 +398,46 @@ func _draw_menu() -> void:
 			# 装備は説明が無いものも多いので、効き目の数字を出す
 			var stats := GearText.summary(Database.gear(id))
 			desc = stats if desc == "" else "%s　%s" % [desc, stats]
-	elif _index == _rest_row():
-		desc = "%d %sで 傷も魔力も すっかり戻す。" % [rest_price(), Terms.GOLD]
 	else:
-		desc = "ダンジョンへ もどる。"
+		desc = Terms.SHOP_LEAVE_DESC
 	# 説明は 1 行で収める。装備は「説明＋能力値」で長くなる。
 	# **幅は窓の内側から取る**（464 と手で書くと、窓を変えた瞬間に古くなる）。
 	_menu_line(origin, 0).line(desc, PixelUI.C_TEXT)
 
-	_menu_line(origin, 26).line("もちもの", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	_menu_line(origin, 26).row(
+		Terms.SHOP_OWNED,
+		Terms.SHOP_CATEGORY_HINT,
+		PixelUI.C_TEXT_DIM,
+		PixelUI.C_ACTIVE,
+		PixelUI.SIZE_SUB
+	)
 	var owned := GameState.inventory_ids()
-	if owned.is_empty():
-		_menu_line(origin, 46).line("なし", PixelUI.C_TEXT_DIM)
-		return
-	for i in owned.size():
-		var item_id := String(owned[i])
-		# 品名は横に並ぶので、1 つぶんの持ち幅で切る。
-		UiPanel.inside(self, Rect2(
-			origin + Vector2(8 + i * OWNED_COL_W, 46),
-			Vector2(OWNED_COL_W - 6.0, PixelUI.LINE)
-		)).line(
-			"%s%d" % [
-				Database.item(item_id).get("name", item_id),
-				GameState.item_count(item_id),
-			],
-			PixelUI.C_TEXT
+	var total_items := 0
+	for item_id in owned:
+		total_items += GameState.item_count(String(item_id))
+	var gear_counts := {"weapon": 0, "armor": 0, "accessory": 0}
+	for gear_id in GameState.gear_stock:
+		var category := category_of(String(gear_id))
+		if gear_counts.has(category):
+			gear_counts[category] += 1
+	var stock_summary := Terms.SHOP_STOCK_SUMMARY % [
+		total_items,
+		int(gear_counts["weapon"]),
+		int(gear_counts["armor"]),
+		int(gear_counts["accessory"]),
+	]
+	var selected_count := ""
+	if _index < _ids.size():
+		var selected_id := String(_ids[_index])
+		selected_count = Terms.SHOP_OWNED_COUNT % (
+			GameState.gear_stock.count(selected_id)
+			if _is_gear(selected_id)
+			else GameState.item_count(selected_id)
 		)
-
-
-## 持ち物を横に並べるときの 1 つぶんの幅。
-const OWNED_COL_W := 118.0
+	_menu_line(origin, 46).row(
+		stock_summary, selected_count,
+		PixelUI.C_TEXT, PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
+	)
 
 
 ## 下の窓の 1 行。**幅は窓の内側から取る。**

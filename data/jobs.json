@@ -4,6 +4,10 @@
     "name": "せんし",
     "desc": "重い一撃。次の手番は遅れる。",
     "cost_scale": 130,
+    "equip": {
+      "weapon": ["blade", "heavy"],
+      "armor": ["heavy", "light"]
+    },
     "growth": {
       "hp": 9,
       "mp": 0,
@@ -42,6 +46,10 @@
     "name": "そうりょ",
     "desc": "軽い補助を高回転で回す。",
     "cost_scale": 90,
+    "equip": {
+      "weapon": ["focus"],
+      "armor": ["robe", "light"]
+    },
     "growth": {
       "hp": 5,
       "mp": 4,
@@ -80,6 +88,10 @@
     "name": "まほうつかい",
     "desc": "強力な魔法。詠唱ぶん手番が重い。",
     "cost_scale": 145,
+    "equip": {
+      "weapon": ["focus"],
+      "armor": ["robe"]
+    },
     "growth": {
       "hp": 4,
       "mp": 6,
@@ -117,6 +129,10 @@
     "name": "とうぞく",
     "desc": "手数で押す。行動コストが安い。",
     "cost_scale": 70,
+    "equip": {
+      "weapon": ["knife", "blade"],
+      "armor": ["light"]
+    },
     "growth": {
       "hp": 6,
       "mp": 1,
@@ -154,6 +170,10 @@
     "name": "せいきし",
     "desc": "護りと癒しを兼ねる。重いが崩れない。",
     "cost_scale": 120,
+    "equip": {
+      "weapon": ["blade", "heavy", "focus"],
+      "armor": ["heavy", "light"]
+    },
     "unlock": {
       "soldier": 2,
       "priest": 2
@@ -196,6 +216,10 @@
     "name": "にんじゃ",
     "desc": "速さのまま魔を使う。守りは薄い。",
     "cost_scale": 80,
+    "equip": {
+      "weapon": ["knife", "blade", "ranged"],
+      "armor": ["light", "robe"]
+    },
     "unlock": {
       "thief": 2,
       "mage": 2
@@ -237,6 +261,10 @@
     "name": "かりびと",
     "desc": "遠くから射る。手数が軽い。",
     "cost_scale": 85,
+    "equip": {
+      "weapon": ["ranged", "blade", "beast"],
+      "armor": ["light"]
+    },
     "unlock": {
       "thief": 2,
       "soldier": 2
@@ -279,6 +307,10 @@
     "name": "まけんし",
     "desc": "刃に魔を乗せる。攻めに寄る。",
     "cost_scale": 115,
+    "equip": {
+      "weapon": ["blade", "focus"],
+      "armor": ["light", "robe"]
+    },
     "unlock": {
       "soldier": 2,
       "mage": 2
@@ -321,6 +353,10 @@
     "name": "しょうかんし",
     "desc": "広く巻き込む。とても重い。",
     "cost_scale": 150,
+    "equip": {
+      "weapon": ["focus", "beast"],
+      "armor": ["robe"]
+    },
     "unlock": {
       "mage": 2,
       "priest": 2
@@ -362,6 +398,10 @@
     "name": "じゅうし",
     "desc": "連射で削る。守りは薄い。",
     "cost_scale": 95,
+    "equip": {
+      "weapon": ["ranged", "knife"],
+      "armor": ["light"]
+    },
     "unlock": {
       "ranger": 2,
       "thief": 2
@@ -396,13 +436,17 @@
       }
     ],
     "starting_gear": [
-      "short_sword"
+      "hunter_bow"
     ]
   },
   "alchemist": {
     "name": "れんきんし",
     "desc": "薬と煙で場を支える。",
     "cost_scale": 105,
+    "equip": {
+      "weapon": ["focus", "ranged", "knife"],
+      "armor": ["robe", "light"]
+    },
     "unlock": {
       "mage": 2,
       "thief": 2
@@ -444,6 +488,10 @@
     "name": "けんじゃ",
     "desc": "癒しと魔を兼ねる。極めるのに時間がかかる。",
     "cost_scale": 135,
+    "equip": {
+      "weapon": ["focus", "blade"],
+      "armor": ["robe", "light"]
+    },
     "unlock": {
       "priest": 3,
       "mage": 3
@@ -486,6 +534,10 @@
     "name": "じじゅつし",
     "desc": "行動順そのものを歪める。",
     "cost_scale": 125,
+    "equip": {
+      "weapon": ["focus", "knife"],
+      "armor": ["robe"]
+    },
     "unlock": {
       "mage": 3,
       "ninja": 2
@@ -527,6 +579,10 @@
     "name": "まじゅうつかい",
     "desc": "獣を放つ。ひと振りが重い。",
     "cost_scale": 110,
+    "equip": {
+      "weapon": ["beast", "heavy", "blade"],
+      "armor": ["heavy", "light"]
+    },
     "unlock": {
       "ranger": 2,
       "soldier": 2
@@ -569,6 +625,10 @@
     "name": "あそびにん",
     "desc": "何をするか読めない。とても軽い。",
     "cost_scale": 75,
+    "equip": {
+      "weapon": ["knife", "ranged", "focus"],
+      "armor": ["light", "robe"]
+    },
     "growth": {
       "hp": 6,
       "mp": 3,
@@ -599,7 +659,7 @@
       }
     ],
     "starting_gear": [
-      "short_sword"
+      "crescent_knife"
     ]
   }
 }

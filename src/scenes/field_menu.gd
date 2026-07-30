@@ -13,6 +13,7 @@ extends Node2D
 
 signal closed
 signal settings_requested
+signal map_requested
 ## ラン途中で保存して閉じる。**世界 1 周が 1 ランなので、途中で閉じられないと無理がある。**
 signal suspend_requested
 ## 用が済んだ洞から出る。最深部まで歩かせないための逃げ道。
@@ -28,10 +29,9 @@ const PARTY_RECT := Rect2(8, 168, 150, 80)
 
 ## 第 1 階層の行送り。
 ##
-## 8 項目（どうぐ〜とじる）が窓の内側 138px に収まる値。
-## 24 のままだと「ぬけだす」と「とじる」が窓の外に出て、**選べるのに見えない**
-## 状態になっていた（画面の外に出た行は、はみ出し検出でも捕まらない）。
+## 1 行の高さ。項目は送って表示し、下に現在位置を残す。
 const ROW := 17
+const ROOT_VISIBLE := 7
 
 ## そうびの 3 スロット。順番は固定する。
 const SLOTS: Array[String] = ["weapon", "armor", "accessory"]
@@ -39,8 +39,9 @@ const SLOT_LABELS := {"weapon": "ぶき", "armor": "よろい", "accessory": "�
 
 enum State { ROOT, MEMBER, ITEM, ITEM_TARGET, STATUS, SLOT, GEAR, JOB }
 
-const ROOT_ITEMS: Array[String] = [
-	"どうぐ", "つよさ", "そうび", "てんしょく", "せってい", "ちゅうだん", "ぬけだす", "とじる",
+static var ROOT_ITEMS: Array[String] = [
+	"どうぐ", "つよさ", "そうび", "てんしょく", Terms.MAP_MENU,
+	"せってい", "ちゅうだん", "ぬけだす", "とじる",
 ]
 
 ## てんしょくの一覧は 2 列。15 職あるので 1 列だと枠から出る。
@@ -79,6 +80,10 @@ func open() -> void:
 func close() -> void:
 	set_process(false)
 	set_process_unhandled_input(false)
+
+
+func is_root() -> bool:
+	return _state == State.ROOT
 
 
 func _process(delta: float) -> void:
@@ -187,17 +192,21 @@ func _input_root(event: InputEvent) -> void:
 				_state = State.MEMBER
 			4:
 				close()
-				settings_requested.emit()
+				map_requested.emit()
 				return
 			5:
 				close()
-				suspend_requested.emit()
+				settings_requested.emit()
 				return
 			6:
 				close()
-				escape_requested.emit()
+				suspend_requested.emit()
 				return
 			7:
+				close()
+				escape_requested.emit()
+				return
+			8:
 				_leave()
 				return
 	queue_redraw()
@@ -515,14 +524,19 @@ func _draw() -> void:
 func _draw_root() -> void:
 	PixelUI.draw_window(self, ROOT_RECT, WINDOW_TEX)
 	var origin := PixelUI.content(ROOT_RECT).position + Vector2(16, 2)
-	for i in ROOT_ITEMS.size():
-		var at := origin + Vector2(0, i * ROW)
+	var shown := MenuList.range_of(_root_index, ROOT_ITEMS.size(), ROOT_VISIBLE)
+	for i in range(shown[0], shown[1]):
+		var at := origin + Vector2(0, (i - shown[0]) * ROW)
 		if i == _root_index:
 			MenuList.draw_cursor(self, CURSOR_TEX, at)
 		var on := i == _root_index and _state == State.ROOT
 		UiPanel.inside(self, Rect2(
 			at, Vector2(PixelUI.content(ROOT_RECT).end.x - 6.0 - at.x, PixelUI.LINE)
 		)).line(ROOT_ITEMS[i], PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
+	MenuList.draw_position(
+		self, PixelUI.content(ROOT_RECT),
+		_root_index, ROOT_ITEMS.size(), ROOT_VISIBLE
+	)
 
 
 ## 左下は常にパーティの並び。誰を選んでいるかがどの階層でも見える。
@@ -568,9 +582,11 @@ func _draw_body() -> void:
 				_draw_status()
 			elif _root_index == 3:
 				_draw_job_notice()
-			elif _root_index == 5:
-				_draw_suspend_notice()
+			elif _root_index == 4:
+				_draw_map_notice()
 			elif _root_index == 6:
+				_draw_suspend_notice()
+			elif _root_index == 7:
 				_draw_escape_notice()
 
 
@@ -600,6 +616,13 @@ func _draw_job_notice() -> void:
 	]
 	for i in lines.size():
 		_note_line(origin, i).line(lines[i], PixelUI.C_TEXT_DIM)
+
+
+func _draw_map_notice() -> void:
+	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
+	_note_head(origin).line(Terms.WORLD_MAP, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	for i in Terms.MAP_MENU_LINES.size():
+		_note_line(origin, i).line(Terms.MAP_MENU_LINES[i], PixelUI.C_TEXT_DIM)
 
 
 ## 職業の一覧。2 列。選べない職業は理由を下に出す。

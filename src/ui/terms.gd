@@ -20,10 +20,46 @@ static var GOLD := Vocabulary.word("terms", "gold", "ゴールド")  ## ラン�
 # --- 場所 ---
 static var STRONGHOLD := Vocabulary.word("terms", "stronghold", "銀の砦")
 static var SHOP := Vocabulary.word("terms", "shop", "みせ")
+static var SHOP_ITEMS := Vocabulary.word("terms", "shop_items", "どうぐ")
+static var SHOP_WEAPONS := Vocabulary.word("terms", "shop_weapons", "ぶき")
+static var SHOP_ARMOR := Vocabulary.word("terms", "shop_armor", "ぼうぐ")
+static var SHOP_ACCESSORIES := Vocabulary.word("terms", "shop_accessories", "かざり")
+static var SHOP_LEAVE := Vocabulary.word("terms", "shop_leave", "たちさる")
+static var SHOP_LEAVE_DESC := Vocabulary.word(
+	"terms", "shop_leave_desc", "道へ もどる。")
+static var SHOP_CATEGORY_EMPTY := Vocabulary.word(
+	"terms", "shop_category_empty", "この ぶんるいの 品は ない。")
+static var SHOP_STOCK_SUMMARY := Vocabulary.word(
+	"terms", "shop_stock_summary", "どうぐ%d　ぶき%d　ぼうぐ%d　かざり%d")
+static var SHOP_OWNED_COUNT := Vocabulary.word(
+	"terms", "shop_owned_count", "もち %dこ")
+static var SHOP_OWNED := Vocabulary.word("terms", "shop_owned", "もちもの")
+static var SHOP_CATEGORY_HINT := Vocabulary.word(
+	"terms", "shop_category_hint", "←→ ぶんるい")
 static var TOWN := Vocabulary.word("terms", "town", "町")
 static var CAVE := Vocabulary.word("terms", "cave", "洞")
 static var CASTLE := Vocabulary.word("terms", "castle", "城")
 static var GATE := Vocabulary.word("terms", "gate", "門")
+static var WORLD_MAP := Vocabulary.word("terms", "world_map", "世界地図")
+static var MAP_LEGEND := Vocabulary.word("terms", "map_legend", "しるし")
+static var MAP_CURRENT := Vocabulary.word("terms", "map_current", "いまいる所")
+static var MAP_TOWN := Vocabulary.word("terms", "map_town", "町")
+static var MAP_SEAL := Vocabulary.word("terms", "map_seal", "判明した封")
+static var MAP_CASTLE := Vocabulary.word("terms", "map_castle", "主の城")
+static var MAP_SAFE_ROUTE := Vocabulary.word("terms", "map_safe_route", "記された道")
+static var MAP_KNOWN_SEALS := Vocabulary.word(
+	"terms", "map_known_seals", "判明した封 %d / %d")
+static var MAP_REVEAL_NOTE := Vocabulary.word(
+	"terms", "map_reveal_note", "読み解いた地図が 城への道を照らす。")
+static var MAP_UNKNOWN_NOTE := Vocabulary.word(
+	"terms", "map_unknown_note", "言い伝えを得ると 封の場所が増える。")
+static var MAP_CLOSE_HINT := Vocabulary.word(
+	"terms", "map_close_hint", "Ｚ／Ｘで もどる")
+static var MAP_MENU := Vocabulary.word("terms", "map_menu", "ちず")
+static var MAP_MENU_LINES: Array[String] = [
+	Vocabulary.word("terms", "map_menu_line_1", "大陸と 町、主の城を たしかめる。"),
+	Vocabulary.word("terms", "map_menu_line_2", "判明した封と 記された道も のこる。"),
+]
 
 # --- 戦績 ---
 ## 難度の軸。もとは「地下 N 階」だったが、世界を歩く形になったので
@@ -35,7 +71,7 @@ static var DEEPEST := Vocabulary.word("terms", "deepest", "最も危険")
 static var FLOOR := Vocabulary.word("terms", "floor", "危険度 %d")
 static var CAVE_FLOOR := Vocabulary.word("terms", "cave_floor", "洞 %d階")
 static var RUNS := Vocabulary.word("terms", "runs", "%d回目")
-static var RUNS_TOTAL := Vocabulary.word("terms", "runs_total", "%d回の潜行")
+static var RUNS_TOTAL := Vocabulary.word("terms", "runs_total", "%d回の遠征")
 
 # --- 能力・コスト ---
 ## 行動の速さ。内部は「待ちコスト」（小さいほど速い）だが、
@@ -52,6 +88,8 @@ static var TO_BAG := Vocabulary.word("terms", "to_bag", "もちものへ")
 static var GOT_GEAR := Vocabulary.word("terms", "got_gear", "%s を みつけた")
 static var TAKES_OFF := Vocabulary.word("terms", "takes_off", "はずれる")
 static var CANNOT_EQUIP := Vocabulary.word("terms", "cannot_equip", "そうびできない")
+static var CAN_EQUIP := Vocabulary.word("terms", "can_equip", "そうびできる")
+static var GEAR_FIT := Vocabulary.word("terms", "gear_fit", "そうびできるか")
 static var BATTLE_ONLY := Vocabulary.word("terms", "battle_only", "戦闘中だけ つかえる")
 static var NO_ONE_CAN := Vocabulary.word(
 	"terms", "no_one_can", "だれも そうびできない")
@@ -65,7 +103,45 @@ static var MAXED := Vocabulary.word("terms", "maxed", "きわみ")
 # --- 拠点の見出し ---
 static var PARTY := Vocabulary.word("terms", "party", "へんせい")
 static var UPGRADE := Vocabulary.word("terms", "upgrade", "アップグレード")
+static var RUN_RULES := Vocabulary.word("terms", "run_rules", "旅の規律")
+static var DIFFICULTY := Vocabulary.word("terms", "difficulty", "難しさ")
+static var PACE := Vocabulary.word("terms", "pace", "旅の速さ")
+static var CONTRACT := Vocabulary.word("terms", "contract", "誓約")
+static var CONTRACT_LIMIT := Vocabulary.word(
+	"terms", "contract_limit", "誓約は %dつまで。")
+static var REWARD_RATE := Vocabulary.word("terms", "reward_rate", "資源倍率")
+static var SHOP_CLOSED_BY_CONTRACT := Vocabulary.word(
+	"terms", "shop_closed_by_contract", "誓約により 商人は いない。")
+static var ESCAPE_CLOSED_BY_CONTRACT := Vocabulary.word(
+	"terms", "escape_closed_by_contract", "退路を断つ 誓約がある！")
 static var DEPART := Vocabulary.word("terms", "depart", "出撃する")
+
+# --- 銀の砦 ---
+## 拠点は現在の世界設定を短く反復する場所。操作説明も含め、View に直書きしない。
+static var STRONGHOLD_BODY_LEVEL := Vocabulary.word(
+	"stronghold", "body_level", "借りる体 Lv1")
+static var STRONGHOLD_DEPART_TITLE := Vocabulary.word(
+	"stronghold", "depart_title", "銀の門を ひらく")
+static var STRONGHOLD_PARTY_CAPACITY := Vocabulary.word(
+	"stronghold", "party_capacity", "銀の門を くぐるのは %d 人。")
+static var STRONGHOLD_PARTY_PICK := Vocabulary.word(
+	"stronghold", "party_pick", "銀の門を くぐる 一行を えらぶ")
+static var STRONGHOLD_PARTY_MARK := Vocabulary.word(
+	"stronghold", "party_mark", "● が 渡る なかま。Ｚで 入れ替える。")
+static var STRONGHOLD_PARTY_REST := Vocabulary.word(
+	"stronghold", "party_rest", "砦に のこる なかまは 熟練を 得ない。")
+static var STRONGHOLD_LEARNED_TITLE := Vocabulary.word(
+	"stronghold", "learned_title", "砦に のこる わざ")
+static var STRONGHOLD_LEARNED_EMPTY := Vocabulary.word(
+	"stronghold", "learned_empty", "まだ 砦へ帰った わざは ない。")
+static var STRONGHOLD_LEARNED_HELP := Vocabulary.word(
+	"stronghold", "learned_help", "世界で 覚えた わざは 次の体にも のこる。")
+static var STRONGHOLD_CONTROLS := Vocabulary.word(
+	"stronghold", "controls", "↑↓ えらぶ　Ｚ けってい　Ｘ もどる")
+static var STRONGHOLD_DEPART_PREP := Vocabulary.word(
+	"stronghold", "depart_prep", "出撃前に 編成と 旅の規律を 確かめる。")
+static var STRONGHOLD_WORLD_ONCE := Vocabulary.word(
+	"stronghold", "world_once", "門が閉じれば 同じ世界へは 二度と届かない。")
 
 # --- セーブ消去 ---
 static var SAVE_ERASE := Vocabulary.word("terms", "save_erase", "セーブを けす")

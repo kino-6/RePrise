@@ -1,0 +1,90 @@
+{
+  "_comment": "出撃ごとの難しさ・加速・誓約。乱数ではなく、プレイヤーが拠点で明示的に選ぶ。強い制約ほど恒久報酬を増やし、加速は周回時間と報酬量を交換する。",
+  "difficulty_order": ["gentle", "standard", "harsh", "ruin"],
+  "difficulties": {
+    "gentle": {
+      "name": "ひかえめ",
+      "desc": "敵の生命と力が下がる。持ち帰る資源は 75%。",
+      "enemy_hp_pct": 88,
+      "enemy_power_pct": 92,
+      "reward_pct": 75,
+      "unlock": 0
+    },
+    "standard": {
+      "name": "標準",
+      "desc": "基準となる手応え。敵も持ち帰る資源も 100%。",
+      "enemy_hp_pct": 100,
+      "enemy_power_pct": 100,
+      "reward_pct": 100,
+      "unlock": 0
+    },
+    "harsh": {
+      "name": "苛烈",
+      "desc": "敵の生命 115%、力 108%。持ち帰る資源は 130%。",
+      "enemy_hp_pct": 115,
+      "enemy_power_pct": 108,
+      "reward_pct": 130,
+      "unlock": 1
+    },
+    "ruin": {
+      "name": "終末",
+      "desc": "敵の生命 132%、力 116%。持ち帰る資源は 170%。",
+      "enemy_hp_pct": 132,
+      "enemy_power_pct": 116,
+      "reward_pct": 170,
+      "unlock": 2
+    }
+  },
+  "pace_order": ["steady", "brisk", "sprint"],
+  "paces": {
+    "steady": {
+      "name": "じっくり",
+      "desc": "経験・熟練・持ち帰る資源は、すべて基準のまま。",
+      "exp_pct": 100,
+      "mastery_pct": 100,
+      "reward_pct": 100,
+      "unlock": 0
+    },
+    "brisk": {
+      "name": "急ぎ足",
+      "desc": "経験と熟練 150%。持ち帰る資源は 85%。",
+      "exp_pct": 150,
+      "mastery_pct": 150,
+      "reward_pct": 85,
+      "unlock": 1
+    },
+    "sprint": {
+      "name": "駆け抜け",
+      "desc": "経験と熟練 200%。持ち帰る資源は 65%。",
+      "exp_pct": 200,
+      "mastery_pct": 200,
+      "reward_pct": 65,
+      "unlock": 2
+    }
+  },
+  "contract_order": ["closed_market", "empty_pack", "no_escape", "no_lifeline"],
+  "contracts": {
+    "closed_market": {
+      "name": "商人なき旅",
+      "desc": "町と洞の店を利用できない。持ち帰る資源に +25%。",
+      "reward_bonus": 25
+    },
+    "empty_pack": {
+      "name": "空身の誓い",
+      "desc": "強化による初期金と初期道具を受け取らない。資源 +20%。",
+      "reward_bonus": 20,
+      "requires_any_effect": ["start_gold", "start_herb", "start_water"]
+    },
+    "no_escape": {
+      "name": "退路を断つ",
+      "desc": "通常戦闘からも逃げられない。持ち帰る資源に +20%。",
+      "reward_bonus": 20
+    },
+    "no_lifeline": {
+      "name": "綱を断つ",
+      "desc": "命の綱を持ち込めない。持ち帰る資源に +15%。",
+      "reward_bonus": 15,
+      "requires_any_effect": ["lifeline"]
+    }
+  }
+}

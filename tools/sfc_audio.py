@@ -58,6 +58,9 @@ class Instrument:
 
     duty はパルス波の幅（0.5 で矩形）。detune は 2 基目の発振器のずれで、
     わずかにずらすと音が太くなる（SFC のストリングス系の常套手段）。
+    partials を渡した harmonic は倍音をあらかじめ波形表へ焼き込む。実機の
+    サンプル再生そのものではないが、生の矩形波・鋸歯状波を前面へ出さず、
+    後期 SFC の「小さな室内楽」に近い役割の読める音色を作れる。
     """
 
     def __init__(
@@ -72,6 +75,7 @@ class Instrument:
         vibrato_depth: float = 0.0,
         detune: float = 0.0,
         gain: float = 1.0,
+        partials: tuple[float, ...] | None = None,
     ):
         self.wave_kind = wave_kind
         self.duty = duty
@@ -83,6 +87,20 @@ class Instrument:
         self.vibrato_depth = vibrato_depth
         self.detune = detune
         self.gain = gain
+        self._table: tuple[float, ...] = ()
+        if wave_kind == "harmonic":
+            weights = partials or (1.0,)
+            size = 2048
+            values = []
+            for i in range(size):
+                phase = i / size
+                value = sum(
+                    weight * math.sin(2.0 * math.pi * phase * (harmonic + 1))
+                    for harmonic, weight in enumerate(weights)
+                )
+                values.append(value)
+            high = max(abs(value) for value in values)
+            self._table = tuple(value / high for value in values)
 
     def sample(self, phase: float) -> float:
         p = phase % 1.0
@@ -97,6 +115,8 @@ class Instrument:
             return 2.0 * p - 1.0
         if kind == "sine":
             return math.sin(2.0 * math.pi * p)
+        if kind == "harmonic":
+            return self._table[int(p * len(self._table)) % len(self._table)]
         raise ValueError(f"未知の波形: {kind}")
 
     def envelope(self, t: float, duration: float) -> float:
@@ -113,28 +133,77 @@ class Instrument:
         return max(self.sustain * (1.0 - k), 0.0)
 
 
-# よく使う音色。SFC の RPG に出てくる基本編成を意識している。
-LEAD = Instrument("pulse", duty=0.28, attack=0.008, decay=0.10, sustain=0.72,
-                  release=0.14, vibrato_hz=5.2, vibrato_depth=0.004, gain=0.62)
-BRASS = Instrument("saw", attack=0.02, decay=0.12, sustain=0.66, release=0.16,
-                   vibrato_hz=4.4, vibrato_depth=0.003, detune=0.006, gain=0.50)
-STRINGS = Instrument("saw", attack=0.14, decay=0.20, sustain=0.62, release=0.34,
-                     vibrato_hz=3.6, vibrato_depth=0.005, detune=0.010, gain=0.34)
-BASS = Instrument("triangle", attack=0.004, decay=0.06, sustain=0.80, release=0.08, gain=0.85)
-BELL = Instrument("sine", attack=0.002, decay=0.45, sustain=0.05, release=0.30, gain=0.65)
-FLUTE = Instrument("triangle", attack=0.05, decay=0.10, sustain=0.75, release=0.20,
-                   vibrato_hz=5.0, vibrato_depth=0.006, gain=0.48)
+# よく使う音色。矩形波・鋸歯状波をそのまま鳴らすと、ローパスを通しても
+# ファミコン的な輪郭が残る。倍音表と包絡を先に作り、少ないパートでも
+# 木管・弦・金管・撥弦の役割が聞き分けられる編成にする。
+LEAD = Instrument("harmonic", attack=0.032, decay=0.13, sustain=0.68,
+                  release=0.20, vibrato_hz=5.0, vibrato_depth=0.004,
+                  gain=0.48, partials=(1.0, 0.30, 0.13, 0.06))
+BRASS = Instrument("harmonic", attack=0.045, decay=0.15, sustain=0.64,
+                   release=0.22, vibrato_hz=4.2, vibrato_depth=0.0025,
+                   detune=0.003, gain=0.43,
+                   partials=(1.0, 0.52, 0.28, 0.17, 0.09, 0.04))
+STRINGS = Instrument("harmonic", attack=0.16, decay=0.22, sustain=0.58,
+                     release=0.42, vibrato_hz=3.7, vibrato_depth=0.0045,
+                     detune=0.007, gain=0.31,
+                     partials=(1.0, 0.36, 0.23, 0.14, 0.09, 0.05))
+BASS = Instrument("harmonic", attack=0.010, decay=0.14, sustain=0.54,
+                  release=0.13, gain=0.66,
+                  partials=(1.0, 0.28, 0.12, 0.05))
+BELL = Instrument("harmonic", attack=0.002, decay=0.48, sustain=0.04,
+                  release=0.34, gain=0.55,
+                  partials=(1.0, 0.04, 0.32, 0.02, 0.15, 0.01, 0.07))
+FLUTE = Instrument("harmonic", attack=0.065, decay=0.12, sustain=0.72,
+                   release=0.24, vibrato_hz=5.1, vibrato_depth=0.0055,
+                   gain=0.43, partials=(1.0, 0.12, 0.035))
 
-# 後期 SFC の「同じ波形でも役割が違って聞こえる」音色。生波形を増やすより、
-# 包絡と揺れを変えたほうが、少ない同時発音で編成を読ませやすい。
-OBOE = Instrument("pulse", duty=0.42, attack=0.025, decay=0.12, sustain=0.68,
-                  release=0.18, vibrato_hz=5.4, vibrato_depth=0.005, gain=0.46)
-HARP = Instrument("triangle", attack=0.002, decay=0.24, sustain=0.08, release=0.26,
-                  gain=0.66)
-CHOIR = Instrument("sine", attack=0.22, decay=0.24, sustain=0.66, release=0.46,
-                   vibrato_hz=3.2, vibrato_depth=0.004, detune=0.008, gain=0.40)
-LOW_BRASS = Instrument("saw", attack=0.015, decay=0.10, sustain=0.72, release=0.14,
-                       vibrato_hz=3.8, vibrato_depth=0.002, detune=0.004, gain=0.58)
+# 後期 SFC の室内楽的な差。差し色ではなく、倍音・立ち上がり・余韻で
+# パートの役割を分ける。
+OBOE = Instrument("harmonic", attack=0.038, decay=0.14, sustain=0.65,
+                  release=0.22, vibrato_hz=5.2, vibrato_depth=0.0045,
+                  gain=0.42, partials=(1.0, 0.48, 0.21, 0.11, 0.05))
+HARP = Instrument("harmonic", attack=0.002, decay=0.30, sustain=0.07,
+                  release=0.32, gain=0.56,
+                  partials=(1.0, 0.33, 0.16, 0.08, 0.035))
+CHOIR = Instrument("harmonic", attack=0.25, decay=0.28, sustain=0.61,
+                   release=0.52, vibrato_hz=3.1, vibrato_depth=0.0035,
+                   detune=0.006, gain=0.34,
+                   partials=(1.0, 0.16, 0.27, 0.08, 0.12))
+LOW_BRASS = Instrument("harmonic", attack=0.035, decay=0.14, sustain=0.66,
+                       release=0.21, vibrato_hz=3.6, vibrato_depth=0.002,
+                       detune=0.002, gain=0.48,
+                       partials=(1.0, 0.58, 0.31, 0.16, 0.07))
+PIANO = Instrument("harmonic", attack=0.002, decay=0.34, sustain=0.20,
+                   release=0.34, gain=0.53,
+                   partials=(1.0, 0.44, 0.20, 0.10, 0.045))
+PIZZ = Instrument("harmonic", attack=0.002, decay=0.20, sustain=0.08,
+                  release=0.18, gain=0.61,
+                  partials=(1.0, 0.30, 0.13, 0.055))
+
+# SE は短い波形の動き自体が識別記号になっている。BGM の音色刷新で既存の
+# 操作感まで変えないよう、従来音色を専用名で保持する。
+SFX_LEAD = Instrument("pulse", duty=0.28, attack=0.008, decay=0.10, sustain=0.72,
+                      release=0.14, vibrato_hz=5.2, vibrato_depth=0.004, gain=0.62)
+SFX_BRASS = Instrument("saw", attack=0.02, decay=0.12, sustain=0.66, release=0.16,
+                       vibrato_hz=4.4, vibrato_depth=0.003, detune=0.006, gain=0.50)
+SFX_STRINGS = Instrument("saw", attack=0.14, decay=0.20, sustain=0.62, release=0.34,
+                         vibrato_hz=3.6, vibrato_depth=0.005, detune=0.010, gain=0.34)
+SFX_BASS = Instrument("triangle", attack=0.004, decay=0.06, sustain=0.80,
+                      release=0.08, gain=0.85)
+SFX_BELL = Instrument("sine", attack=0.002, decay=0.45, sustain=0.05,
+                      release=0.30, gain=0.65)
+SFX_FLUTE = Instrument("triangle", attack=0.05, decay=0.10, sustain=0.75,
+                       release=0.20, vibrato_hz=5.0, vibrato_depth=0.006, gain=0.48)
+SFX_OBOE = Instrument("pulse", duty=0.42, attack=0.025, decay=0.12, sustain=0.68,
+                      release=0.18, vibrato_hz=5.4, vibrato_depth=0.005, gain=0.46)
+SFX_HARP = Instrument("triangle", attack=0.002, decay=0.24, sustain=0.08,
+                      release=0.26, gain=0.66)
+SFX_CHOIR = Instrument("sine", attack=0.22, decay=0.24, sustain=0.66,
+                       release=0.46, vibrato_hz=3.2, vibrato_depth=0.004,
+                       detune=0.008, gain=0.40)
+SFX_LOW_BRASS = Instrument("saw", attack=0.015, decay=0.10, sustain=0.72,
+                           release=0.14, vibrato_hz=3.8, vibrato_depth=0.002,
+                           detune=0.004, gain=0.58)
 
 
 # --------------------------------------------------------------------------
@@ -248,6 +317,20 @@ def echo(data: list[float], delay_ms: float, feedback: float) -> None:
         data[i] += data[i - delay] * feedback
 
 
+def loop_echo(data: list[float], delay_ms: float, feedback: float) -> list[float]:
+    """同じ素材を先に反復してからエコーを掛け、定常部分を 1 周だけ返す。
+
+    通常の echo() を 1 周へ掛けると、曲末の残響が冒頭へ回らず境界で切れる。
+    4 周目を採用すると過去の周回が遅延線へ入り、実際のループ再生と同じ状態になる。
+    """
+    if not data:
+        return []
+    repeated = data * 4
+    echo(repeated, delay_ms, feedback)
+    size = len(data)
+    return repeated[size * 3:size * 4]
+
+
 def remove_dc(data: list[float]) -> None:
     """直流成分を落とす。残っているとスピーカーが無駄に押され、音も濁る。"""
     if not data:
@@ -310,4 +393,46 @@ def finish(track: Track, path: str | Path, cutoff: float = 5200.0,
         remove_dc(channel)
         normalize(channel, peak)
         soft_clip(channel)
+    write_wav(path, left, right)
+
+
+def _fold_tail(data: list[float], loop_samples: int) -> list[float]:
+    """ループ末より後のリリースを次周の冒頭へ折り返す。"""
+    result = list(data[:loop_samples])
+    for i in range(loop_samples, len(data)):
+        result[(i - loop_samples) % loop_samples] += data[i]
+    return result
+
+
+def _close_loop_edge(data: list[float], samples: int = 192) -> None:
+    """末尾のごく短い区間だけを補正し、次の先頭サンプルへ連続させる。"""
+    if len(data) < samples + 1:
+        return
+    gap = data[-1] - data[0]
+    start = len(data) - samples
+    for i in range(samples):
+        data[start + i] -= gap * ((i + 1) / samples)
+
+
+def finish_loop(track: Track, path: str | Path, loop_seconds: float,
+                cutoff: float = 5200.0, echo_ms: float = 126.0,
+                echo_fb: float = 0.30, peak: float = 0.82) -> None:
+    """BGM を無音尾なしの真のループとして仕上げる。
+
+    発音のリリースを次周へ折り返し、左右のエコーにも過去の周回を与える。
+    WAV 全体をループする Godot 側でも、余韻の切断や数秒の無音を挟まない。
+    """
+    loop_samples = min(int(loop_seconds * SAMPLE_RATE), len(track.data))
+    mono = list(track.data)
+    lowpass(mono, cutoff)
+    mono = _fold_tail(mono, loop_samples)
+
+    left = loop_echo(mono, echo_ms, echo_fb)
+    right = loop_echo(mono, echo_ms * 1.27, echo_fb * 0.92)
+
+    for channel in (left, right):
+        remove_dc(channel)
+        normalize(channel, peak)
+        soft_clip(channel)
+        _close_loop_edge(channel)
     write_wav(path, left, right)

@@ -25,8 +25,8 @@ ROOT = Path(__file__).resolve().parent.parent
 # `_capture()` が知っている画面を全部。増えたらここに足す。
 SCREENS = [
     "title", "prologue", "prologue_shatter", "prologue_worlds", "prologue_oath",
-    "stronghold", "job", "depart", "upgrade", "party",
-    "world", "town", "cave", "shop", "event", "event_outcome",
+    "stronghold", "job", "depart", "upgrade", "rules", "party",
+    "world", "map", "town", "cave", "shop", "event", "event_outcome",
     "battle", "commands", "items", "deep", "boss",
     "menu", "status", "equip", "jobmenu", "settings", "save_erase", "run_abandon",
     "result", "win",
@@ -84,6 +84,12 @@ def _check_one(name: str) -> tuple[str, list[str]]:
             "詰めた " + line.split("詰めた:", 1)[1].strip()
             for line in out.splitlines()
             if "詰めた:" in line
+        ]
+        # 高さ不足でUiPanelが描かなかった行。見切れなくても情報が消えている。
+        hits += [
+            "行落ち " + line.split("行落ち:", 1)[1].strip()
+            for line in out.splitlines()
+            if "行落ち:" in line
         ]
         # **14px 未満の漢字も違反**（D-5）。SFC の 12px で漢字は潰れる。
         # 文字列を grep するだけでは足りない ―― 品名も技名も data 側にある。

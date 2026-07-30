@@ -53,7 +53,9 @@ func _draw() -> void:
 	# 封の残りを足したぶん、見出しの窓を広げる（3px 溢れていた）。
 	var head := Rect2(8, 8, 186, 32)
 	PixelUI.draw_window(self, head, WINDOW_TEX)
-	UiPanel.inside(self, PixelUI.content(head).grow(-4.0)).line(
+	# `content()` が枠ぶんの余白を既に引いている。ここをさらに縮めると
+	# 高さが本文1行を下回り、UiPanel が現在地を丸ごと捨ててしまう。
+	UiPanel.inside(self, PixelUI.content(head)).line(
 		place_label, PixelUI.C_TEXT)
 
 	# パーティの体力（探索中も常に見えていないと引き際が判断できない）

@@ -1,5 +1,5 @@
 {
-  "_comment": "拠点の恒久強化。**能力値には触れない**（レベルを失うのがランの土台なので、そこを埋めると土台が消える）。触れる軸は「立ち上がり」「情報」「保険」「値段」の 4 つ。同じ軸ばかり増やすと、数が増えても選ぶ意味が増えない。",
+  "_comment": "拠点の恒久強化。能力値には触れない。立ち上がり・情報・保険・価格に加え、難度解放・誓約枠・周回加速・成長速度を伸ばす。高段階は単なる数値増加ではなく、新しい遊び方を解放する。",
   "provisions": {
     "name": "旅支度",
     "desc": "出撃するとき ゴールドを持って出られる。",
@@ -62,5 +62,50 @@
     "levels": 3,
     "cost": 11,
     "cost_step": 9
+  },
+  "world_lens": {
+    "name": "世界測り",
+    "desc": "1段で「苛烈」、2段で「終末」の難しさを選べる。",
+    "effect": "difficulty_tier",
+    "value": 1,
+    "levels": 2,
+    "cost": 18,
+    "cost_step": 24
+  },
+  "oath_tablet": {
+    "name": "誓約の石板",
+    "desc": "同時に課せる誓約を 1つ増やす。",
+    "effect": "contract_slots",
+    "value": 1,
+    "levels": 2,
+    "cost": 16,
+    "cost_step": 22
+  },
+  "marching_score": {
+    "name": "行軍譜",
+    "desc": "1段で「急ぎ足」、2段で「駆け抜け」を選べる。",
+    "effect": "pace_tier",
+    "value": 1,
+    "levels": 2,
+    "cost": 14,
+    "cost_step": 18
+  },
+  "field_manual": {
+    "name": "旅の手引き",
+    "desc": "戦闘で得る経験値が 15%ずつ増える。",
+    "effect": "exp_gain",
+    "value": 15,
+    "levels": 3,
+    "cost": 12,
+    "cost_step": 10
+  },
+  "spirit_flask": {
+    "name": "霊水の瓶",
+    "desc": "出撃するとき まほうの水を持って出られる。",
+    "effect": "start_water",
+    "value": 1,
+    "levels": 2,
+    "cost": 10,
+    "cost_step": 12
   }
 }

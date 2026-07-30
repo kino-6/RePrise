@@ -17,6 +17,7 @@ static var monsters: Dictionary = {}
 static var items: Dictionary = {}
 static var equipment: Dictionary = {}
 static var upgrades: Dictionary = {}
+static var run_rules: Dictionary = {}
 
 static var _loaded := false
 
@@ -33,6 +34,7 @@ static func reload() -> void:
 	items = _load_json("res://data/items.json")
 	equipment = _load_json("res://data/equipment.json")
 	upgrades = _load_json("res://data/upgrades.json")
+	run_rules = _load_json("res://data/run_rules.json")
 	_loaded = true
 
 
@@ -150,6 +152,11 @@ static func all_upgrades() -> Dictionary:
 static func upgrade(id: String) -> Dictionary:
 	_ensure()
 	return upgrades.get(id, {})
+
+
+static func run_rule_group(id: String) -> Dictionary:
+	_ensure()
+	return run_rules.get(id, {})
 
 
 ## 並び順を確定させてから返す（拠点の一覧が起動ごとに入れ替わらないように）。

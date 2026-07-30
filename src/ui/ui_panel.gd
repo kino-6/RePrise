@@ -104,6 +104,7 @@ func line(
 	if _y + height > _inner.end.y + PixelUI.OVERFLOW_SLACK:
 		# **入らないものは描かない。** 外へ描くと窓の外に文字が出る。
 		_overflow += 1
+		PixelUI.note_dropped(text, _inner)
 		return
 	var width := _inner.size.x - indent
 	var shown := _shrink(text, width, size)
@@ -128,6 +129,7 @@ func row(
 	var height := PixelUI.text_height(size)
 	if _y + height > _inner.end.y + PixelUI.OVERFLOW_SLACK:
 		_overflow += 1
+		PixelUI.note_dropped("%s / %s" % [left, right], _inner)
 		return
 	var right_width := PixelUI.text_width(right, size)
 	# 右の手前に 1 文字ぶんの隙間を置く。詰めた `…` と数値がくっつくと読めない。

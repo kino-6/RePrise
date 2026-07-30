@@ -234,6 +234,22 @@ func site_at(pos: Vector2i) -> Dictionary:
 	return sites.get(pos, {})
 
 
+## 地図に載せてよい拠点地。
+##
+## 町と城は街道の基礎情報として最初から見える。洞は封の言い伝えや
+## 地図イベントで所在を知ったものだけを出し、未知の寄り道は探索に残す。
+func chart_site_visible(pos: Vector2i) -> bool:
+	var kind := String(site_at(pos).get("kind", ""))
+	if kind in ["town", "castle"]:
+		return true
+	if kind != "cave":
+		return false
+	var seal := seal_at(pos)
+	return not seal.is_empty() and (
+		bool(seal.get("known", false)) or bool(seal.get("broken", false))
+	)
+
+
 ## 地形ごとの遭遇しやすさ（歩数に足す重み）。
 ##
 ## 草原は歩きやすく、森と丘は出やすい。全部同じにすると、地形が

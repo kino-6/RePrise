@@ -25,9 +25,9 @@ const ROSTER_RECT := Rect2(8, 50, 176, 164)
 const DETAIL_RECT := Rect2(192, 50, 312, 164)
 const MENU_RECT := Rect2(8, 220, 496, 92)
 
-## 名簿の行送り。4 人 + へんせい/アップグレード/出撃する の 7 行が
-## 窓の内側（150px）に収まる値。23 だと最後の行が 9px 出た。
-const ROW_HEIGHT := 21
+## 名簿の行送り。4 人 + へんせい/アップグレード/旅の規律/出撃 の 8 行を
+## 窓の内側（150px）へ収める。
+const ROW_HEIGHT := 18
 
 
 ## 前の画面を閉じた決定キーが、そのままこの画面の決定として流れ込むのを防ぐ。
@@ -60,7 +60,7 @@ static func portrait_of(job_id: String) -> Texture2D:
 ## 覚えた技の一覧は 4 列 x 3 段。職業 4 x ランク 3 = 12 個で必ず収まる。
 const ABILITY_COLUMNS := 4
 
-enum State { MEMBER, JOB, UPGRADE, PARTY }
+enum State { MEMBER, JOB, UPGRADE, PARTY, RULES }
 
 var members: Array[PartyMember] = []
 
@@ -72,6 +72,7 @@ var _job_index := 0
 var _upgrade_ids: Array = []
 var _party_index := 0
 var _upgrade_index := 0
+var _rule_index := 0
 var _notice := Notice.new()
 var _input_lock := 0.0
 
@@ -81,6 +82,7 @@ func open() -> void:
 	_job_ids = Database.job_ids()
 	_upgrade_ids = Database.upgrade_ids()
 	_upgrade_index = 0
+	_rule_index = 0
 	_state = State.MEMBER
 	_index = 0
 	_notice.clear()
@@ -124,8 +126,12 @@ func _upgrade_row() -> int:
 	return members.size() + 1
 
 
-func _depart_row() -> int:
+func _rules_row() -> int:
 	return members.size() + 2
+
+
+func _depart_row() -> int:
+	return members.size() + 3
 
 
 func _selected() -> PartyMember:
@@ -149,6 +155,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_input_upgrade(event)
 		State.PARTY:
 			_input_party(event)
+		State.RULES:
+			_input_rules(event)
 
 
 func _input_member(event: InputEvent) -> void:
@@ -166,6 +174,10 @@ func _input_member(event: InputEvent) -> void:
 		if _index == _depart_row():
 			close()
 			departed.emit()
+		elif _index == _rules_row():
+			_state = State.RULES
+			_rule_index = 0
+			queue_redraw()
 		elif _index == _upgrade_row():
 			_state = State.UPGRADE
 			_upgrade_index = 0
@@ -192,7 +204,15 @@ func debug_open_upgrades() -> void:
 	queue_redraw()
 
 
-## 開発用。出撃（潜る理由と名簿）の画面を撮るために使う。
+## 開発用。旅の規律（難しさ・加速・誓約）の画面を撮る。
+func debug_open_rules() -> void:
+	_index = _rules_row()
+	_rule_index = 0
+	_state = State.RULES
+	queue_redraw()
+
+
+## 開発用。出撃（門を開く理由と名簿）の画面を撮るために使う。
 func debug_open_depart() -> void:
 	_index = _depart_row()
 	_state = State.MEMBER
@@ -296,6 +316,48 @@ func _input_upgrade(event: InputEvent) -> void:
 		queue_redraw()
 	elif event.is_action_pressed("confirm"):
 		_buy_upgrade()
+
+
+func _rule_row_count() -> int:
+	return 2 + GameState.available_contract_ids().size()
+
+
+func _change_rule(direction: int) -> bool:
+	if _rule_index == 0:
+		return GameState.cycle_difficulty(direction)
+	if _rule_index == 1:
+		return GameState.cycle_pace(direction)
+	return GameState.toggle_contract(String(
+		GameState.available_contract_ids()[_rule_index - 2]))
+
+
+func _input_rules(event: InputEvent) -> void:
+	var rows := _rule_row_count()
+	if event.is_action_pressed("cancel"):
+		Sound.play("cancel")
+		_state = State.MEMBER
+		queue_redraw()
+	elif event.is_action_pressed("ui_down"):
+		_rule_index = (_rule_index + 1) % rows
+		Sound.play("cursor")
+		queue_redraw()
+	elif event.is_action_pressed("ui_up"):
+		_rule_index = (_rule_index - 1 + rows) % rows
+		Sound.play("cursor")
+		queue_redraw()
+	elif event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right"):
+		if _rule_index < 2:
+			var direction := -1 if event.is_action_pressed("ui_left") else 1
+			if _change_rule(direction):
+				Sound.play("cursor")
+			queue_redraw()
+	elif event.is_action_pressed("confirm"):
+		if _change_rule(1):
+			Sound.play("confirm")
+		else:
+			Sound.play("cancel")
+			_notify(Terms.CONTRACT_LIMIT % GameState.contract_slot_limit())
+		queue_redraw()
 
 
 ## 編成。誰を連れて行くかを決め、ここで仲間も迎える。
@@ -459,6 +521,7 @@ func _draw_roster() -> void:
 
 	_draw_roster_row(_party_row(), Terms.PARTY)
 	_draw_roster_row(_upgrade_row(), Terms.UPGRADE)
+	_draw_roster_row(_rules_row(), Terms.RUN_RULES)
 	_draw_roster_row(_depart_row(), Terms.DEPART)
 
 
@@ -479,6 +542,9 @@ func _draw_detail() -> void:
 		return
 	if _index == _upgrade_row():
 		_draw_upgrade_note()
+		return
+	if _index == _rules_row():
+		_draw_rules_note()
 		return
 	if _index == _party_row():
 		_draw_party_note()
@@ -517,7 +583,7 @@ func _draw_detail() -> void:
 		# 3 か所に既に出ていて、4 つ目を置いたせいで 200px に収まらず
 		# `Lv1` まで `…` に化けていた。ここが伝えるのは「じぶんの」ほう ――
 		# 拠点でレベルが常に 1 であること（失ったものの証拠）と、いまの速さ。
-		"じぶん Lv1",
+		Terms.STRONGHOLD_BODY_LEVEL,
 		"%s %d" % [
 			Terms.SPEED,
 			Terms.speed(int(Database.job(shown_job).get("cost_scale", 100))),
@@ -567,6 +633,7 @@ const DEPART_JOB_W := 112.0
 const UPGRADE_NAME_W := 144.0
 const UPGRADE_LEVEL_W := 56.0
 const UPGRADE_PRICE_W := 60.0
+const UPGRADE_ROWS := 7
 const PARTY_NAME_W := 110.0
 ## 技名と職業名を並べる格子の列幅。
 const ABILITY_COL_W := 118.0
@@ -584,8 +651,8 @@ func _draw_departure_note() -> void:
 	var origin := inner.position
 	var width := inner.size.x - 12.0
 	UiPanel.inside(self, Rect2(origin + Vector2(6, 2), Vector2(width, PixelUI.LINE))).line(
-		"地下へ もぐる", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
-	# 1 行目が「なぜもぐるか」、残りが「何を失い、何が残るか」。
+		Terms.STRONGHOLD_DEPART_TITLE, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	# 1 行目が「なぜ門を開くか」、残りが「何を失い、何が残るか」。
 	# 文言は Lore 側（根拠は docs/premise.md）。**外部化した文なので長さを前提にしない** ――
 	# `data/vocabulary.json` で差し替えられるので、はみ出しは呼ぶ側で防ぐ。
 	for i in Lore.DEPART_LINES.size():
@@ -621,7 +688,7 @@ func _draw_party_note() -> void:
 	UiPanel.inside(self, Rect2(origin + Vector2(6, 2), Vector2(width, PixelUI.LINE))).line(
 		Terms.PARTY, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	UiPanel.inside(self, Rect2(origin + Vector2(6, 26), Vector2(width, PixelUI.LINE))).line(
-		"%d 人まで 連れて行ける。" % GameState.PARTY_SIZE, PixelUI.C_TEXT_DIM)
+		Terms.STRONGHOLD_PARTY_CAPACITY % GameState.PARTY_SIZE, PixelUI.C_TEXT_DIM)
 
 	var all_members := GameState.all_members()
 	var rows := all_members.size() + 1
@@ -655,21 +722,23 @@ func _draw_party_note() -> void:
 
 ## 資源の使い道の一覧。何段まで伸ばしたかと、次の 1 段の値段を並べる。
 func _draw_upgrade_note() -> void:
-	var origin := PixelUI.content(DETAIL_RECT).position
+	var inner := PixelUI.content(DETAIL_RECT)
+	var origin := inner.position
 	UiPanel.inside(self, Rect2(
-		origin + Vector2(6, 2),
-		Vector2(PixelUI.content(DETAIL_RECT).size.x - 12.0, PixelUI.LINE)
-	)).line("%s %d" % [Terms.ECHO, GameState.echo], PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
-	# **見出しと説明を削って行に場所を回す。** 7 種に増えて縦が足りなくなった。
-	# 「段 / ひつよう」は数字の形（3/3、12）で読めるので落とす。
-	# 資源の説明も落とす ―― 右上へ寄せたら資源の数字に接触した（縦 6px 差だと
-	# 重なり検出の同一行の閾値もすり抜ける）。数字が読めれば足りる。
+		origin + Vector2(6, 2), Vector2(inner.size.x - 12.0, PixelUI.LINE)
+	)).row(
+		"%s %d" % [Terms.ECHO, GameState.echo],
+		"%d/%d" % [_upgrade_index + 1, _upgrade_ids.size()],
+		PixelUI.C_ACTIVE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_HEAD
+	)
 
-	for i in _upgrade_ids.size():
+	# 強化が増えても 7 行だけを見せる。選択中の行を必ず含めるので、
+	# 8 種目以降が窓の外へ消えず、上下入力で全項目へ届く。
+	var span := MenuList.range_of(_upgrade_index, _upgrade_ids.size(), UPGRADE_ROWS)
+	for i in range(span[0], span[1]):
 		var id := String(_upgrade_ids[i])
 		var u := Database.upgrade(id)
-		# 7 種が窓（内側 150px）に収まる寸法。26 + 6*17 + 文字高 = 150。
-		var row := origin + Vector2(6, 26 + i * 17)
+		var row := origin + Vector2(6, 26 + (i - span[0]) * 17)
 		var level := GameState.upgrade_level(id)
 		var maxed := GameState.upgrade_maxed(id)
 		var on := _state == State.UPGRADE and i == _upgrade_index
@@ -692,12 +761,61 @@ func _draw_upgrade_note() -> void:
 		)).line(price, PixelUI.C_TEXT_DIM)
 
 
+func _draw_rules_note() -> void:
+	var inner := PixelUI.content(DETAIL_RECT)
+	var origin := inner.position
+	var selected_count := GameState.selected_contracts().size()
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 2), Vector2(inner.size.x - 12.0, PixelUI.LINE)
+	)).row(
+		Terms.RUN_RULES,
+		"%s %d%%　%s %d/%d" % [
+			Terms.REWARD_RATE, GameState.run_reward_percent(),
+			Terms.CONTRACT, selected_count, GameState.contract_slot_limit(),
+		],
+		PixelUI.C_ACTIVE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_HEAD
+	)
+
+	var config := GameState.normalized_rule_choices()
+	var contract_ids := GameState.available_contract_ids()
+	for i in _rule_row_count():
+		var row := origin + Vector2(6, 28 + i * 18)
+		var on := _state == State.RULES and i == _rule_index
+		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
+		if on:
+			MenuList.draw_cursor(self, CURSOR_TEX, row)
+		var left := ""
+		var right := ""
+		if i == 0:
+			left = Terms.DIFFICULTY
+			right = GameState.run_rule_name(
+				"difficulties", String(config.get("difficulty", RunRules.DEFAULT_DIFFICULTY)))
+		elif i == 1:
+			left = Terms.PACE
+			right = GameState.run_rule_name(
+				"paces", String(config.get("pace", RunRules.DEFAULT_PACE)))
+		else:
+			var id := String(contract_ids[i - 2])
+			var enabled: bool = id in config.get("contracts", [])
+			left = "%s %s" % ["●" if enabled else "○", GameState.run_rule_name("contracts", id)]
+			right = "+%d%%" % int(
+				RunRules.definition("contracts", id).get("reward_bonus", 0))
+			if enabled:
+				tint = PixelUI.C_ACTIVE
+		UiPanel.inside(self, Rect2(row, Vector2(190, PixelUI.LINE))).line(left, tint)
+		UiPanel.inside(self, Rect2(
+			row + Vector2(190, 0), Vector2(inner.size.x - 202, PixelUI.LINE)
+		)).line(right, PixelUI.C_ACTIVE if on else PixelUI.C_TEXT_DIM)
+
+
 func _draw_menu() -> void:
 	PixelUI.draw_window(self, MENU_RECT, WINDOW_TEX)
 	if _state == State.JOB:
 		_draw_job_menu()
 	elif _state == State.UPGRADE or _index == _upgrade_row():
 		_draw_upgrade_desc()
+	elif _state == State.RULES or _index == _rules_row():
+		_draw_rule_desc()
 	elif _state == State.PARTY or _index == _party_row():
 		_draw_party_hint()
 	elif _index == _depart_row():
@@ -715,9 +833,9 @@ func _menu_line(dy: float) -> UiPanel:
 
 ## 編成のときの案内。名簿の行と操作を分けて書く。
 func _draw_party_hint() -> void:
-	_menu_line(2).line("連れて行く なかまを えらぶ", PixelUI.C_TEXT)
-	_menu_line(28).line("● が 出撃する なかま。Ｚ で 入れ替える。", PixelUI.C_TEXT_DIM)
-	_menu_line(52).line("留守番した なかまは 熟練が 積まれない。", PixelUI.C_TEXT_DIM)
+	_menu_line(2).line(Terms.STRONGHOLD_PARTY_PICK, PixelUI.C_TEXT)
+	_menu_line(28).line(Terms.STRONGHOLD_PARTY_MARK, PixelUI.C_TEXT_DIM)
+	_menu_line(52).line(Terms.STRONGHOLD_PARTY_REST, PixelUI.C_TEXT_DIM)
 
 
 func _draw_upgrade_desc() -> void:
@@ -734,6 +852,25 @@ func _draw_upgrade_desc() -> void:
 	_menu_line(52).line(tail, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 
+func _draw_rule_desc() -> void:
+	var group := ""
+	var id := ""
+	if _rule_index == 0:
+		group = "difficulties"
+		id = GameState.selected_rule_id("difficulty")
+	elif _rule_index == 1:
+		group = "paces"
+		id = GameState.selected_rule_id("pace")
+	else:
+		group = "contracts"
+		id = String(GameState.available_contract_ids()[_rule_index - 2])
+	var rule := RunRules.definition(group, id)
+	_menu_line(2).line(String(rule.get("name", id)), PixelUI.C_ACTIVE)
+	_menu_line(26).line(String(rule.get("desc", "")), PixelUI.C_TEXT)
+	var hint := "←→で きりかえ　Ｘで もどる" if _rule_index < 2 else "Ｚで 誓約を きりかえる"
+	_menu_line(52).line(hint, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+
+
 func _draw_learned() -> void:
 	var member := _selected()
 	if member == null:
@@ -742,12 +879,12 @@ func _draw_learned() -> void:
 	var origin := menu.position
 	var panel := UiPanel.inside(self, Rect2(
 		origin + Vector2(8, 0), Vector2(menu.size.x - 16.0, menu.size.y)))
-	panel.line("おぼえた わざ", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	panel.line(Terms.STRONGHOLD_LEARNED_TITLE, PixelUI.C_TEXT_DIM)
 
 	if member.learned.is_empty():
 		panel.skip(4.0)
-		panel.line("まだ なにも おぼえていない。", PixelUI.C_TEXT_DIM)
-		panel.line("たたかって じゅくれんを あげると おぼえる。", PixelUI.C_TEXT_DIM)
+		panel.line(Terms.STRONGHOLD_LEARNED_EMPTY, PixelUI.C_TEXT_DIM)
+		panel.line(Terms.STRONGHOLD_LEARNED_HELP, PixelUI.C_TEXT_DIM)
 		return
 
 	# 技名は格子に並べる。**列に幅を渡す**ので、長い技名が隣へ食い込まない
@@ -765,9 +902,9 @@ func _draw_learned() -> void:
 
 
 func _draw_hint() -> void:
-	_menu_line(2).line("↑↓ えらぶ　Ｚ けってい　Ｘ もどる", PixelUI.C_TEXT_DIM)
-	_menu_line(28).line("なかまを えらぶと てんしょくできる。", PixelUI.C_TEXT_DIM)
-	_menu_line(52).line("じゅくれんは しょくぎょうごとに のこる。", PixelUI.C_TEXT_DIM)
+	_menu_line(2).line(Terms.STRONGHOLD_CONTROLS, PixelUI.C_TEXT_DIM)
+	_menu_line(28).line(Terms.STRONGHOLD_DEPART_PREP, PixelUI.C_TEXT_DIM)
+	_menu_line(52).line(Terms.STRONGHOLD_WORLD_ONCE, PixelUI.C_TEXT_DIM)
 
 
 func _draw_job_menu() -> void:
