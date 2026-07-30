@@ -26,6 +26,7 @@ func _initialize() -> void:
 	_test_docs_hygiene()
 	_test_data_integrity()
 	_test_save_migration()
+	_test_save_to_disk()
 	_test_roster()
 	_test_field_poison()
 	_test_settings()
@@ -514,6 +515,66 @@ func _test_save_migration() -> void:
 
 	state.free()
 	round_trip.free()
+
+
+## 実際にディスクへ書くところ。
+##
+## 起動のたびに「控えから復帰した」が出る状態になっていたのを直したときに足した。
+## 原因は本体が消えていたことで、`FileAccess.open(WRITE)` が**開いた瞬間に
+## 中身を捨てる**以上、書いている最中に落ちればセーブは消える。
+##
+## **必ず `use_save_paths()` で別名へ寄せてから触ること。** 既定のままだと
+## テストが実データを潰す（過去に名簿を 1 人に減らした。テストは全部緑だった）。
+func _test_save_to_disk() -> void:
+	const PREFIX := "user://test_save"
+	var dir := DirAccess.open("user://")
+	for suffix in [".json", ".bak.json", ".tmp.json"]:
+		if dir.file_exists(PREFIX + suffix):
+			dir.remove(PREFIX + suffix)
+
+	var state: Node = load("res://src/game/game_state.gd").new()
+	state.use_save_paths(PREFIX)
+	_check("実データの側を向いていない", state.save_path != state.SAVE_PATH)
+
+	# roster は Array[PartyMember]。素の Array を代入すると型で弾かれる。
+	var members: Array[PartyMember] = [PartyMember.create("ためし", "soldier")]
+	state.roster = members
+	state.echo = 7
+	state.save_game()
+	_check("セーブが書けている", FileAccess.file_exists(PREFIX + ".json"))
+	_check("書きかけが残っていない", not FileAccess.file_exists(PREFIX + ".tmp.json"))
+	_check("初回は控えを作らない", not FileAccess.file_exists(PREFIX + ".bak.json"))
+
+	# 2 回目で 1 つ前が控えへ寄る
+	state.echo = 99
+	state.save_game()
+	_check("2 回目で控えができる", FileAccess.file_exists(PREFIX + ".bak.json"))
+	var backup: Variant = JSON.parse_string(FileAccess.get_file_as_string(PREFIX + ".bak.json"))
+	_check("控えは 1 つ前の状態", int((backup as Dictionary).get("echo", 0)) == 7)
+
+	var reloaded: Node = load("res://src/game/game_state.gd").new()
+	reloaded.use_save_paths(PREFIX)
+	_check("書いたセーブを読み直せる", reloaded.load_game())
+	_check("読み直した値が合う", reloaded.echo == 99)
+
+	# 本体を壊す。控えから戻り、そのうえで**本体を作り直す**のが肝。
+	# 書き戻さないと次の起動でも同じ警告が出て、鳴りっぱなしの警告は本物を隠す。
+	var broken := FileAccess.open(PREFIX + ".json", FileAccess.WRITE)
+	broken.store_string("{ こわれている")
+	broken.close()
+	var healed: Node = load("res://src/game/game_state.gd").new()
+	healed.use_save_paths(PREFIX)
+	_check("壊れていても控えから復帰する", healed.load_game())
+	_check("控えの値で戻る", healed.echo == 7)
+	var repaired: Variant = JSON.parse_string(FileAccess.get_file_as_string(PREFIX + ".json"))
+	_check("復帰したら本体を書き直す", typeof(repaired) == TYPE_DICTIONARY)
+
+	for suffix in [".json", ".bak.json", ".tmp.json"]:
+		if dir.file_exists(PREFIX + suffix):
+			dir.remove(PREFIX + suffix)
+	state.free()
+	reloaded.free()
+	healed.free()
 
 
 ## 経路探索。オート移動と自動プレイの土台なので、決定性の側に入れて守る。

@@ -12,6 +12,31 @@ const SAVE_PATH := "user://save.json"
 ## 1 世代あれば事故の大半は防げる（書き込み中の異常終了、壊れた JSON、
 ## テストが実データを踏む、など）。世代を増やすより、まず 1 つ持つことが効く。
 const SAVE_BACKUP_PATH := "user://save.bak.json"
+
+## 書きかけの置き場。本体へは差し替えでしか触らない。
+##
+## FileAccess.open(WRITE) は**開いた瞬間に中身を捨てる**ので、本体を直接開くと
+## そこから書き終わるまでのあいだセーブが存在しない状態になる。
+## その隙に落ちると本体が消える（実際に消えた）。
+const SAVE_TEMP_PATH := "user://save.tmp.json"
+
+## 実際に読み書きする先。既定は上の 3 つ。
+##
+## テストから差し替えられるようにしてある。**ここを定数のまま扱うと、
+## セーブを試すテストが実データを潰す。** 一度それで名簿を 1 人にした
+## （テストは全部緑のまま、画面を見て初めて気付いた）。
+var save_path := SAVE_PATH
+var backup_path := SAVE_BACKUP_PATH
+var temp_path := SAVE_TEMP_PATH
+
+
+## テスト用。読み書き先を丸ごと別名へ寄せる。
+func use_save_paths(prefix: String) -> void:
+	save_path = "%s.json" % prefix
+	backup_path = "%s.bak.json" % prefix
+	temp_path = "%s.tmp.json" % prefix
+
+
 const PARTY_SIZE := 4
 
 ## 最終階。ここには下り階段が無く、主の間の扉だけがある。
@@ -529,36 +554,62 @@ func load_from_dict(data: Dictionary) -> bool:
 	return not roster.is_empty()
 
 
+## セーブする。本体は「書き終わったものと差し替える」形でしか触らない。
+##
+## 直接開いて書くと、開いた瞬間から書き終わるまで本体が空になる。
+## そこで落ちるとセーブが消えるので、控えに寄せる → 別名で書く → 差し替える、
+## の順にする。どの時点で落ちても、本体か控えのどちらかは必ず生きている。
 func save_game() -> void:
-	var data := to_dict()
+	var text := JSON.stringify(to_dict(), "  ")
 	_backup_save()
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+
+	var file := FileAccess.open(temp_path, FileAccess.WRITE)
 	if file == null:
-		push_error("セーブに失敗: %s" % SAVE_PATH)
+		push_error("セーブに失敗: %s" % temp_path)
 		return
-	file.store_string(JSON.stringify(data, "  "))
+	file.store_string(text)
+	file.close()  # 差し替える前に確実に閉じる（Windows では開いたままだと動かせない）
+
+	# 書けたものを読み直して確かめる。壊れた JSON で本体を潰すのが最悪なので、
+	# 差し替える前にここで止める。
+	if typeof(JSON.parse_string(FileAccess.get_file_as_string(temp_path))) != TYPE_DICTIONARY:
+		push_error("書いたセーブが読み返せない。差し替えを見送った。")
+		return
+
+	var dir := DirAccess.open("user://")
+	if dir == null:
+		push_error("user:// を開けない。セーブを差し替えられない。")
+		return
+	if dir.file_exists(save_path) and dir.remove(save_path) != OK:
+		push_error("古いセーブを消せない。差し替えを見送った。")
+		return
+	if dir.rename(temp_path, save_path) != OK:
+		push_error("セーブを差し替えられない。控えは %s に残っている。" % backup_path)
 
 
 ## 書く前に 1 つ前を控えへ寄せる。壊れた JSON を書いてしまっても、
 ## 前回の状態までは戻せる。
 func _backup_save() -> void:
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(save_path):
 		return
-	var current := FileAccess.get_file_as_string(SAVE_PATH)
+	var current := FileAccess.get_file_as_string(save_path)
 	if current.strip_edges() == "":
 		return  # 空を控えにしても意味が無い
-	var backup := FileAccess.open(SAVE_BACKUP_PATH, FileAccess.WRITE)
+	var backup := FileAccess.open(backup_path, FileAccess.WRITE)
 	if backup != null:
 		backup.store_string(current)
 
 
 func load_game() -> bool:
-	if _load_file(SAVE_PATH):
+	if _load_file(save_path):
 		return true
 	# 本体が読めないときだけ控えを試す。黙って戻すと「進んでいない」と誤解されるので、
 	# 戻したことは警告に残す。
-	if FileAccess.file_exists(SAVE_BACKUP_PATH) and _load_file(SAVE_BACKUP_PATH):
+	if FileAccess.file_exists(backup_path) and _load_file(backup_path):
 		push_warning("セーブが読めなかったので、1 つ前の控えから復帰した。")
+		# 戻したらその場で本体を作り直す。書き戻さないと次の起動でも同じ警告が出て、
+		# 鳴りっぱなしの警告は本物の異常を隠す。
+		save_game()
 		return true
 	return false
 
