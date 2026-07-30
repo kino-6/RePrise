@@ -218,11 +218,10 @@ func _draw() -> void:
 
 func _draw_header() -> void:
 	PixelUI.draw_window(self, HEADER_RECT, WINDOW_TEX)
-	var inner := PixelUI.content(HEADER_RECT)
-	PixelUI.draw_text(self, inner.position + Vector2(6, 0), Terms.SHOP, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
-	PixelUI.draw_text_right(
-		self, Vector2(inner.end.x - 4, inner.position.y + 3),
-		"%d %s" % [GameState.gold, Terms.GOLD], PixelUI.C_TEXT
+	# 見出しと所持金を 1 行に。**ぶつかったら見出しを詰める**（金は数字なので守る）。
+	UiPanel.inside(self, PixelUI.content(HEADER_RECT)).row(
+		Terms.SHOP, "%d %s" % [GameState.gold, Terms.GOLD],
+		PixelUI.C_ACTIVE, PixelUI.C_TEXT, PixelUI.SIZE_HEAD
 	)
 
 
@@ -271,11 +270,10 @@ func _draw_row(base: Vector2, inner: Rect2, row: int, label: String, right: Stri
 		tint = PixelUI.C_ACTIVE if _index == row else PixelUI.C_TEXT_DIM
 	if sold_out:
 		tint = PixelUI.C_SHADOW.lerp(PixelUI.C_TEXT_DIM, 0.5)
-	PixelUI.draw_text(self, base, label, tint)
-	if right != "":
-		PixelUI.draw_text_right(
-			self, Vector2(inner.end.x - 2, base.y + 2), right, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+	# 品名と値段を 1 行に。**値段は消えては困る**ので、詰まるのは品名のほう。
+	UiPanel.inside(self, Rect2(
+		base, Vector2(inner.end.x - 2.0 - base.x, PixelUI.LINE)
+	)).row(label, right, tint, PixelUI.C_TEXT_DIM)
 
 
 func _draw_detail() -> void:
@@ -290,16 +288,14 @@ func _draw_detail() -> void:
 		var row := origin + Vector2(6, 22 + i * 34)
 		var ratio := float(m.hp) / maxf(float(m.max_hp()), 1.0)
 		var name_color := PixelUI.C_TEXT if m.hp > 0 else PixelUI.C_HP_LOW
-		PixelUI.draw_text(self, row, m.name, name_color)
-		PixelUI.draw_text(
-			self, row + Vector2(66, 2), "%d/%d" % [m.hp, m.max_hp()],
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+		# 名前・HP・MP を 3 列に。列ごとに幅を持つので、名前が長くても数に食い込まない。
+		var line := UiPanel.inside(self, Rect2(
+			row, Vector2(PixelUI.content(DETAIL_RECT).end.x - 6.0 - row.x, PixelUI.LINE)))
+		var cols := line.columns(3, 4.0)
+		cols[0].line(m.name, name_color)
+		cols[1].line("%d/%d" % [m.hp, m.max_hp()], PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 		if m.max_mp() > 0:
-			PixelUI.draw_text(
-				self, row + Vector2(140, 2), "M%d/%d" % [m.mp, m.max_mp()],
-				PixelUI.C_MP, PixelUI.SIZE_SUB
-			)
+			cols[2].line("M%d/%d" % [m.mp, m.max_mp()], PixelUI.C_MP, PixelUI.SIZE_SUB)
 		PixelUI.draw_gauge(self, Rect2(row.x, row.y + 19, 224, 5), ratio, PixelUI.hp_color(ratio))
 
 
