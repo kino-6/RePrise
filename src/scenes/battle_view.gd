@@ -752,7 +752,52 @@ func _draw_ground_shadow(center: Vector2, radius: float) -> void:
 const HORIZON := 118.0
 
 
+## 生物相ごとの戦闘背景。**あれば使い、無ければ階調へ落ちる。**
+##
+## 絵が 1 枚も無くても遊べること、というのが取り込みの前提なので、
+## 階調背景は消さずに残す（`docs/asset_generation_npc_effects.md` の方針）。
+const BATTLE_BG := {
+	"grassland": "grassland_twilight",
+	"forest": "grassland_twilight",
+	"wetland": "drowned_wetland",
+	"snowfield": "snowfield_ruins",
+	"volcano": "volcanic_caldera",
+	"badland": "dungeon_depths",
+	"desert": "dungeon_depths",
+	# 城の中。生物相ではないので `@` を付けて土地の名と混ざらないようにする。
+	"@castle": "imperial_foundry",
+}
+
+static var _bg_cache: Dictionary = {}
+
+
+static func backdrop_of(biome: String) -> Texture2D:
+	if _bg_cache.has(biome):
+		return _bg_cache[biome]
+	var name := String(BATTLE_BG.get(biome, ""))
+	var tex: Texture2D = null
+	if name != "":
+		var path := "res://assets/backgrounds/battle_bg_%s.png" % name
+		tex = load(path) if ResourceLoader.exists(path) else null
+	_bg_cache[biome] = tex
+	return tex
+
+
 func _draw_backdrop() -> void:
+	# 絵があればそれを敷く。2 倍にした敵が広い空白に浮くのを止めるのが目的。
+	# 城の中は生物相ではなく城の絵にする（帝国工廠）。**主戦だけ別の場所に見える。**
+	var here := GameState.biome_here()
+	if String(GameState.site.get("kind", "")) == "castle":
+		here = "@castle"
+	var art := backdrop_of(here)
+	if art != null:
+		draw_texture_rect(art, Rect2(0, 0, PixelUI.SCREEN.x, HORIZON + 58.0), false)
+		return
+	_draw_gradient_backdrop()
+
+
+## 絵が無いときの背景。**消さずに残す**（1 枚も無くても遊べることが前提）。
+func _draw_gradient_backdrop() -> void:
 	var biome := GameState.biome_here()
 	var ground_top: Color = GROUND_TOP.get(biome, GROUND_TOP["_"])
 	var ground_bottom: Color = GROUND_BOTTOM.get(biome, GROUND_BOTTOM["_"])

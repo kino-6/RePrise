@@ -287,8 +287,7 @@ const TASKS_LIMIT := 200
 func _test_docs_hygiene() -> void:
 	var text := FileAccess.get_file_as_string("res://tasks.md")
 	_check("tasks.md がある", text != "")
-	var count := text.split("
-").size()
+	var count := text.split("\n").size()
 	if count > TASKS_LIMIT:
 		print("    tasks.md が %d 行。済んだものを docs/tasks_archive.md へ移すこと" % count)
 	_check("tasks.md が %d 行以内（いま %d 行）" % [TASKS_LIMIT, count], count <= TASKS_LIMIT)

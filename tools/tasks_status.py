@@ -19,11 +19,14 @@ import re
 tasks = pathlib.Path("tasks.md")
 archive = pathlib.Path("docs/tasks_archive.md")
 
-archive_text = archive.read_text(encoding="utf-8")
-done = [ln for ln in archive_text.split("\n") if ln.startswith("- ")]
+archive_text = archive.read_bytes().decode("utf-8")
+done = [
+    ln.rstrip("\r") for ln in archive_text.split("\n")
+    if ln.startswith("- ")
+]
 recent = done[-5:][::-1]
 
-body = tasks.read_text(encoding="utf-8")
+body = tasks.read_bytes().decode("utf-8")
 # 既存のヘッダ（進み具合）だけを捨ててから付け直す。
 # 完了Gateは進み具合と次の仕事の間にあるので、そこまで消さない。
 body = re.sub(r"## 進み具合.*?(?=## 完了Gate|## 次にやる)", "", body, flags=re.S)
@@ -45,10 +48,9 @@ for line in recent:
 header += "\n"
 
 body = body.replace("## 次にやる", header + "## 次にやる", 1)
-# Windows でも Markdown は LF に固定する。既存ファイルへ CRLF を混ぜると、
-# `git diff --check` が全追記行を末尾空白として誤検出する。
-with tasks.open("w", encoding="utf-8", newline="\n") as handle:
-    handle.write(body)
+# 改行を自動変換せず、そのまま戻す。このリポジトリには既存の CRLF があるため、
+# text mode で全行を変換すると、ヘッダ更新だけで全ファイル差分になってしまう。
+tasks.write_bytes(body.encode("utf-8"))
 print("完了記録 %d 行 / 残 %d 件, tasks.md %d 行" % (
     len(done), open_items, len(body.split("\n"))
 ))

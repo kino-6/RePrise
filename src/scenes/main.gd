@@ -414,7 +414,9 @@ func _capture(which: String) -> void:
 				m.mp = m.max_mp()
 			# **世界へ入り直さない。** `_enter_world()` の暗転と主戦の閃光が
 			# かち合って、撮影が世界のままになる。戦闘だけを立てる。
+			# 実プレイと同じく「城の中」にしてから立てる（背景が城の絵になる）。
 			GameState.floor_number = GameState.FINAL_FLOOR
+			GameState.enter_site(GameState.world.castle_pos)
 			_battle_rng = GameState.rng_for("battle")
 			_on_boss_reached()
 			for _i in 60:

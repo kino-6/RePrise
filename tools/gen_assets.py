@@ -1365,6 +1365,27 @@ def _ink_ratio(c: Canvas) -> float:
     return drawn / float(max(len(c.px), 1))
 
 
+## 戦闘背景。512x176 で、戦場（空と地面）をそのまま覆う。
+##
+## 生物相ごとに 1 枚。**欠けていても落ちない** ―― ゲーム側は
+## 「あれば使う、無ければ階調背景」で拾う。
+BATTLE_BACKGROUNDS = [
+    "grassland_twilight", "drowned_wetland", "snowfield_ruins",
+    "volcanic_caldera", "dungeon_depths", "imperial_foundry",
+]
+
+BATTLE_BG_SIZE = (512, 176)
+
+
+def build_battle_backgrounds() -> None:
+    for name in BATTLE_BACKGROUNDS:
+        sheet = _load_sheet(f"candidate_battle_bg_{name}", BATTLE_BG_SIZE)
+        if sheet is None:
+            continue
+        sheet.to_png(ASSETS / "backgrounds" / f"battle_bg_{name}.png")
+        print(f"  取り込み: battle_bg_{name}.png")
+
+
 def build_npcs() -> None:
     for role in NPC_ROLES:
         sheet = _load_sheet(f"candidate_npc_{role}", (24, 32))
@@ -1994,6 +2015,7 @@ def main() -> None:
     build_tileset()
     build_world_tileset()
     build_biomes()
+    build_battle_backgrounds()
     build_npcs()
     build_event_effects()
     build_transitions()
