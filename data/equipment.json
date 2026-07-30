@@ -89,7 +89,7 @@
     "name": "ぬすっとの手袋",
     "slot": "accessory",
     "agi": 2,
-    "desc": "ぬすむ の成功率が上がる。",
+    "desc": "レアを狙いやすくなり、コモン品を 2 こ盗む。",
     "effect": "steal_up",
     "price": 104,
     "floor_min": 3,

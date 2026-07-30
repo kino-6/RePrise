@@ -1,5 +1,7 @@
 extends SceneTree
 
+const ChestReward := preload("res://src/dungeon/chest_reward.gd")
+
 ## 決定性の検証。
 ##
 ##   godot --headless --script res://tests/test_core.gd
@@ -49,6 +51,7 @@ func _initialize() -> void:
 	_test_boss_encounter()
 	_test_every_floor_populated()
 	_test_shop()
+	_test_run_loot_rewards()
 	_test_echo_and_upgrades()
 	_test_mastery_persists()
 	_test_job_change()
@@ -670,8 +673,21 @@ func _test_world_generation() -> void:
 	var gates_on_land := true
 	var danger_spans := true
 	var has_sites := true
+	var world_scale := true
+	var road_contract := true
 	for seed_value in seeds:
 		var w := WorldGenerator.generate(DetRng.new(seed_value))
+		if w.width != WorldGenerator.MAP_W or w.height != WorldGenerator.MAP_H:
+			world_scale = false
+		if w.main_road.size() < WorldGenerator.MIN_WORLD_SPAN + 1:
+			road_contract = false
+		elif w.main_road[0] != w.start_pos or w.main_road[-1] != w.castle_pos:
+			road_contract = false
+		for road_i in range(1, w.main_road.size()):
+			var previous: Vector2i = w.main_road[road_i - 1]
+			var current: Vector2i = w.main_road[road_i]
+			if abs(previous.x - current.x) + abs(previous.y - current.y) != 1:
+				road_contract = false
 		if w.get_tile(w.start_pos.x, w.start_pos.y) != WorldMap.T_GATE:
 			gates_on_land = false
 		if w.get_tile(w.castle_pos.x, w.castle_pos.y) != WorldMap.T_CASTLE:
@@ -694,20 +710,23 @@ func _test_world_generation() -> void:
 					towns += 1
 				"cave":
 					caves += 1
-		# 町が 1 つも無いと、道中で買い物ができないまま城へ着く
-		if towns < 2 or caves < 2:
+		if towns != WorldGenerator.TOWN_COUNT or caves != WorldGenerator.CAVE_COUNT:
 			has_sites = false
 
+	_check("世界は 96x64 の広さを持つ", world_scale)
+	_check("門から城まで 80 歩以上の本街道が連続する", road_contract)
 	_check("どの世界でも城まで歩ける", all_reachable)
 	_check("門と城がその地形として置かれている", gates_on_land)
 	_check("危険度が門 1 から城 %d まで伸びる" % WorldMap.MAX_DANGER, danger_spans)
-	_check("町と洞が最低 2 つずつ置かれる", has_sites)
+	_check("町 4・洞 5 が置かれる", has_sites)
 
 	# 同じ種から同じ世界（決定性）。地形も拠点地の場所も揃うこと。
 	var a := WorldGenerator.generate(DetRng.new(555))
 	var b := WorldGenerator.generate(DetRng.new(555))
 	_check("同じ種から同じ世界が出る", a.to_ascii() == b.to_ascii())
 	_check("同じ種なら拠点地も同じ", a.sites.keys() == b.sites.keys())
+	_check("同じ種なら本街道も同じ", a.main_road == b.main_road)
+	_check("同じ種なら生物相も同じ", a.biomes == b.biomes)
 	_check("違う種なら違う世界", a.to_ascii() != WorldGenerator.generate(DetRng.new(556)).to_ascii())
 
 	# 通れない地形（海・山）の上には拠点地を置かない
@@ -722,13 +741,13 @@ func _test_world_generation() -> void:
 	# 世界は毎回違うので、目で見て確かめられるのはごく一部でしかない。
 	# 生成器に自分の出力を疑わせて、通ったものだけを世界にする。
 	var bad := []
-	for seed_value in range(1, 60):
+	for seed_value in range(1, 102):
 		var w := WorldGenerator.generate(DetRng.new(seed_value * 5171))
 		var problems := WorldGenerator.verify(w)
 		if not problems.is_empty():
 			bad.append("種%d: %s" % [seed_value, "/".join(problems)])
 	_check(
-		"59 個の世界すべてが生成器の検算を通る", bad.is_empty(),
+		"101 個の世界すべてが生成器の検算を通る", bad.is_empty(),
 		"(落ちた: %s)" % str(bad.slice(0, 3))
 	)
 
@@ -741,6 +760,29 @@ func _test_world_generation() -> void:
 	for s in shifted.seals:
 		s["band"] = "low"
 	_check("帯が偏った世界は検算に落ちる", not WorldGenerator.verify(shifted).is_empty())
+	var cut_road := WorldGenerator.generate(DetRng.new(31337))
+	var road_middle: Vector2i = cut_road.main_road[cut_road.main_road.size() / 2]
+	cut_road.set_tile(road_middle.x, road_middle.y, WorldMap.T_PLAIN)
+	_check("本街道が切れた世界は検算に落ちる", not WorldGenerator.verify(cut_road).is_empty())
+	var cut_branch := WorldGenerator.generate(DetRng.new(31337))
+	var cave_pos := Vector2i(-1, -1)
+	for pos in cut_branch.sites:
+		if String(cut_branch.sites[pos].get("kind", "")) == "cave":
+			cave_pos = pos
+			break
+	for direction in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		var neighbor: Vector2i = cave_pos + direction
+		if cut_branch.in_bounds(neighbor.x, neighbor.y) \
+				and cut_branch.get_tile(neighbor.x, neighbor.y) == WorldMap.T_ROAD:
+			cut_branch.set_tile(neighbor.x, neighbor.y, WorldMap.T_PLAIN)
+	_check("洞への枝道が切れた世界は検算に落ちる", not WorldGenerator.verify(cut_branch).is_empty())
+	var checkerboard := WorldGenerator.generate(DetRng.new(31337))
+	for y in checkerboard.height:
+		for x in checkerboard.width:
+			if checkerboard.get_tile(x, y) != WorldMap.T_SEA:
+				checkerboard.biomes[y * checkerboard.width + x] = \
+					0 if (x + y) % 2 == 0 else 1
+	_check("生物相が斑点状の世界は検算に落ちる", not WorldGenerator.verify(checkerboard).is_empty())
 
 	# 封の中身
 	var w2 := WorldGenerator.generate(DetRng.new(2024))
@@ -1446,6 +1488,75 @@ func _test_shop() -> void:
 			blocked.append(seed_value)
 	_check("出店は 39 シード中の一部にだけ出る", found > 0 and found < 39, str(found))
 	_check("出店が階を詰ませない", blocked.is_empty(), str(blocked))
+
+
+## 宝箱と盗むはラン終了時に失う報酬。恒久資源より大胆にしつつ、
+## 空振りと同じ敵からの無限稼ぎを同時に防ぐ。
+func _test_run_loot_rewards() -> void:
+	Database.reload()
+
+	var same_a: Dictionary = ChestReward.roll(DetRng.new(404), 7, 19)
+	var same_b: Dictionary = ChestReward.roll(DetRng.new(404), 7, 19)
+	_equal("宝箱は同じシードなら同じ中身", same_a, same_b)
+
+	var chest_ok := true
+	var saw_gear := false
+	var saw_items := false
+	for seed_value in range(1, 201):
+		var reward: Dictionary = ChestReward.roll(DetRng.new(seed_value), 6, 18)
+		var gear_id := String(reward.get("gear", ""))
+		var item_id := String(reward.get("item", ""))
+		chest_ok = chest_ok and int(reward.get("gold", 0)) > 0
+		chest_ok = chest_ok and ((gear_id != "") != (item_id != ""))
+		if gear_id != "":
+			saw_gear = true
+		if item_id != "":
+			saw_items = true
+			chest_ok = chest_ok and int(reward.get("item_count", 0)) >= 1
+	_check("宝箱は必ずゴールド + 追加報酬", chest_ok)
+	_check("宝箱から装備と物資束の両方が出る", saw_gear and saw_items)
+
+	var thief := _make_battler(1, "ぬすっと", 18)
+	var gel := _make_battler(2, "ゲル", 9, false)
+	gel.source_id = "gel"
+	var battle := BattleSystem.new()
+	battle.start([thief], [gel], DetRng.new(77), 1)
+	battle._steal_from(thief, gel)
+	_equal("初回の盗むはコモン品を得る", battle.stolen_items, ["herb"])
+	var before_items := battle.stolen_items.size()
+	var before_gold := battle.stolen_gold
+	var second_lines := battle._steal_from(thief, gel)
+	_check(
+		"同じ敵から二度取れない",
+		battle.stolen_items.size() == before_items and battle.stolen_gold == before_gold
+	)
+	_check("二度目は空だと伝える", "もう なにも" in String(second_lines[0]))
+
+	var equipped_thief := _make_battler(3, "手練れ", 18)
+	equipped_thief.effects = ["steal_up"]
+	var another_gel := _make_battler(4, "ゲル", 9, false)
+	another_gel.source_id = "gel"
+	var boosted := BattleSystem.new()
+	boosted.start([equipped_thief], [another_gel], DetRng.new(77), 1)
+	boosted._steal_from(equipped_thief, another_gel)
+	_equal("盗賊装備ならコモン品を二つ得る", boosted.stolen_items, ["herb", "herb"])
+
+	# レア枠しか持たない敵も、抽選外れならゴールドになる。全データをなめて
+	# 「手番を使ったのに何も無い」敵が紛れ込まないようにする。
+	var empty_rewards := []
+	var monster_ids := Database.all_monsters().keys()
+	monster_ids.sort()
+	for i in monster_ids.size():
+		var monster_id := String(monster_ids[i])
+		var hunter := _make_battler(1000 + i * 2, "探索者", 16)
+		var target := _make_battler(1001 + i * 2, monster_id, 12, false)
+		target.source_id = monster_id
+		var probe := BattleSystem.new()
+		probe.start([hunter], [target], DetRng.new(9000 + i), 6)
+		probe._steal_from(hunter, target)
+		if probe.stolen_items.is_empty() and probe.stolen_gold <= 0:
+			empty_rewards.append(monster_id)
+	_check("すべての敵で初回の盗むに報酬がある", empty_rewards.is_empty(), str(empty_rewards))
 
 
 ## 恒久通貨「残響」。毎ランのスコアに対して必ず払われることが要点で、

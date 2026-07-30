@@ -9,7 +9,9 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 import sys
 from pathlib import Path
 
@@ -30,9 +32,15 @@ SCREENS = [
 ]
 
 
-def main() -> int:
-    failures: dict[str, list[str]] = {}
-    for name in SCREENS:
+def _check_one(name: str) -> tuple[str, list[str]]:
+    """1 画面を撮って、はみ出しの行だけ返す。
+
+    **撮影に失敗したときは 1 度だけやり直す。** 23 画面を一斉に立てると
+    描画の取り合いで稀に落ち、それを「画面が開かなかった」と報告していた
+    （jobmenu が単独では通るのに関門だけ赤くなる、という嘘が実際に出た）。
+    **嘘をつく関門は無いより悪い。**
+    """
+    for attempt in range(2):
         proc = subprocess.run(
             ["godot", "--path", str(ROOT), "--", f"--shot={name}", "--ui-check"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -44,8 +52,23 @@ def main() -> int:
             for line in out.splitlines()
             if "はみ出し:" in line and "なし" not in line
         ]
-        if "撮影:" not in out:
-            hits.append("画面が開かなかった（撮影に失敗）")
+        if "撮影:" in out:
+            return name, hits
+        if attempt == 0:
+            continue
+        return name, hits + ["画面が開かなかった（撮影に失敗）"]
+    return name, []
+
+
+def main() -> int:
+    failures: dict[str, list[str]] = {}
+    # **並列で立てる。** 23 画面を直列に回すと数分かかり、そのあいだ何も分からない。
+    # 1 画面 1 プロセスなので互いに干渉しない（`user://` は読むだけ）。
+    workers = max(1, min(len(SCREENS), (os.cpu_count() or 4) // 2))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        results = dict(pool.map(_check_one, SCREENS))
+    for name in SCREENS:
+        hits = results[name]
         if hits:
             failures[name] = hits
         print(f"  {'NG' if hits else 'OK'}  {name}" + (f"  {len(hits)} 件" if hits else ""))

@@ -61,6 +61,19 @@ const LINE_DELAY := 0.55
 ## （自動プレイの詰まり検出に引っかかるほど）。
 const AUTO_LINE_DELAY := 0.10
 
+## オート中に窓 1 枚ぶん（3 行）を出したときの待ち。
+##
+## **1 戦の長さを決めていたのは手番数ではなく行数だった。** Sim で測ると
+## 敵 6 体の 1 戦は平均 53 行 = 5.3 秒、長い回は 100 行を超えていた。
+## 遅延を 1 行 0.10 秒からさらに削るのは筋が悪い（0 にすると何が起きたか
+## 読めなくなる）ので、**削るのではなく束ねる**。窓は 3 行ぶんあるので、
+## 3 行を一度に出して 1 回だけ待つ。待ちの回数が 1/3 になるぶん、
+## 1 回の待ちは長くできる ―― 全体は速く、1 行あたりは**今より長く読める**。
+const AUTO_WINDOW_DELAY := 0.16
+
+## 一度に出す行数（窓の高さと同じ）。これを超えると古い行が押し出される。
+const WINDOW_LINES := 3
+
 ## オート中の被弾の点滅。自分で選ぶときより短くする。
 const AUTO_BLINK := 0.12
 const BLINK := 0.3
@@ -111,6 +124,9 @@ var _order_bar: TurnOrderBar = null
 var _victory := false
 var _outcome_shown := false
 var _escaped := false
+
+## 毒の行を挟んだあと、行動へ戻す相手。**手番を飛ばさないための控え。**
+var _resume_actor: Battler = null
 
 ## オート戦闘の作戦。中身は src/battle/auto_tactic.gd にある。
 var _auto: AutoTactic.Mode = AutoTactic.Mode.OFF
@@ -187,14 +203,33 @@ func _begin_turn() -> void:
 
 	# 毒の進行と眠りの判定。眠っていれば手番を飛ばす。
 	var head: Dictionary = system.begin_turn_effects(_actor)
-	if not (head["lines"] as Array).is_empty():
-		var head_lines: Array[String] = []
-		head_lines.assign(head["lines"])
+	var head_lines: Array[String] = []
+	head_lines.assign(head["lines"])
+	if bool(head["skipped"]):
+		# 眠り、または毒で倒れた。行があれば出して、次の者へ。
+		if head_lines.is_empty():
+			return
 		_show(head_lines)
 		return
-	if bool(head["skipped"]):
+	if not head_lines.is_empty():
+		# **毒の行を出しても手番は続く。**
+		#
+		# ここで return していたので、毒を受けている者は**行動せずに手番が
+		# 終わっていた**。しかも Sim（tests/balance.gd）は行動させていたので、
+		# 測っている強さと遊べる強さが別物になっていた。
+		# 行を読ませたあと、同じ者の行動へ戻す。
+		_resume_actor = _actor
+		_show(head_lines)
 		return
 
+	_act_now()
+
+
+## いまの手番の行動へ入る。毒の行を挟んだあとにも同じ経路へ戻す。
+func _act_now() -> void:
+	if _actor == null:
+		_state = State.TURN_START
+		return
 	_refresh()
 	if _actor.is_ally:
 		if _auto != AutoTactic.Mode.OFF:
@@ -570,18 +605,34 @@ func _advance_message() -> void:
 	if _queue.is_empty():
 		_after_messages()
 		return
-	_shown.append(_queue.pop_front())
+	# **オート中は窓 1 枚ぶんまとめて出す。** 1 行ずつ送ると行数がそのまま
+	# 待ち時間になり、群れの回だけ長くなる（同じ手番数でも行数が違う）。
+	# 自分で選んでいるときは 1 行ずつのまま ―― そこは読ませる場面なので。
+	var take := WINDOW_LINES if _auto != AutoTactic.Mode.OFF else 1
+	for _i in take:
+		if _queue.is_empty():
+			break
+		_shown.append(_queue.pop_front())
 	# 窓は 3 行ぶん。溢れたら古い行から捨てる。
-	while _shown.size() > 3:
+	while _shown.size() > WINDOW_LINES:
 		_shown.pop_front()
 	# 文字の速さは設定から取る。オート中は手で押さないので短く固定。
-	_timer = AUTO_LINE_DELAY if _auto != AutoTactic.Mode.OFF else Settings.line_delay()
+	_timer = AUTO_WINDOW_DELAY if _auto != AutoTactic.Mode.OFF else Settings.line_delay()
 	_refresh()
 
 
 func _after_messages() -> void:
 	if _escaped:
 		_finish()
+		return
+	if _resume_actor != null:
+		# 毒の行を読み終えた。**同じ者の行動へ戻る**（新しい手番を始めない）。
+		_actor = _resume_actor
+		_resume_actor = null
+		if system.is_over:
+			_state = State.TURN_START
+			return
+		_act_now()
 		return
 	if system.is_over:
 		# 決着後は結果表示を 1 回だけ挟み、それも読み終えてから画面を閉じる

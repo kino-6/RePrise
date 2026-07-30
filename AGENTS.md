@@ -115,6 +115,7 @@ godot --headless --import                             # class_name を登録（�
 godot --headless --script res://tests/test_core.gd    # 決定性テスト（常に緑に保つ）
 godot --headless --script res://tests/balance.gd      # 到達率と勝率を実測する
 godot --path . -- --shot=title                        # 画面を 1 枚撮って終了
+godot --path . -- --shot=title --audio                # 音も鳴らす（音を確かめるときだけ）
 godot --path .                                        # 起動
 
 python tools/stamp_version.py                         # 版の刻印を git から更新
@@ -122,6 +123,11 @@ godot --headless --export-release "Windows Desktop" build/windows/RePrise.exe   
 ```
 
 書き出しの前提（テンプレートの入れ方を含む）は README の「書き出す（ビルド）」にある。
+
+**自動で走らせているときは音が出ない。** 撮影・自動プレイ・headless は
+人が見ていない実行なので鳴らす理由が無く、`check_ui.py` は 23 画面を並列に
+立てるため鳴ると実際にうるさい（BGM が 23 本同時に鳴る）。
+音そのものを確かめたいときだけ `--audio` を付ける。
 
 `--shot=` に渡せる画面（`src/scenes/main.gd` の `_capture`）:
 

@@ -762,7 +762,7 @@ def world_texture(a: str, b: str, step: int, fleck: str = "", spots: tuple = ())
 
 
 def build_world_tileset() -> None:
-    """ワールドマップのタイル 9 枚（144x16）。
+    """ワールドマップのタイル 14 枚（224x16）。
 
     外で描いたものがあれば採ることも考えたが、判定条件（床と壁の色距離）は
     ダンジョン用に作ったもので、ワールドには 5 種類の地形がある。
@@ -786,6 +786,8 @@ def build_world_tileset() -> None:
         world_texture("f", "F", 3, "S", ((4, 5), (5, 5), (10, 9), (11, 9), (7, 13))),
         # 12 溶岩 — 通れない。赤は世界でここだけなので、遠目でも危険と読める
         world_texture("A", "K", 3, "Y", ((3, 3), (8, 7), (12, 12), (5, 10))),
+        # 13 街道 — 地域をまたいでも同じ土色。本筋と枝道を地図から読めるようにする
+        world_texture("N", "n", 4, "M", ((2, 3), (7, 8), (12, 4), (14, 13))),
     ]
     sheet = Canvas(TILE * len(tiles), TILE)
     for i, t in enumerate(tiles):
@@ -802,8 +804,8 @@ def _report_world_contrast(tiles: list[Canvas]) -> None:
     ここは黙って通さずに数字を出す。海・山（通れない）と草原・森・丘（通れる）
     の代表色が近すぎたら、目で見る前に分かる。
     """
-    names = ["海", "草原", "森", "丘", "山", "", "", "", "", "雪原", "砂漠", "沼", "溶岩"]
-    index = [0, 1, 2, 3, 4, 9, 10, 11, 12]
+    names = ["海", "草原", "森", "丘", "山", "", "", "", "", "雪原", "砂漠", "沼", "溶岩", "街道"]
+    index = [0, 1, 2, 3, 4, 9, 10, 11, 12, 13]
     blocked = {0, 4, 12}
     means = {i: _mean_rgb(tiles[i]) for i in index}
     worst = None

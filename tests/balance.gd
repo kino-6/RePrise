@@ -27,6 +27,12 @@ extends SceneTree
 ## 遠くて届かないのか、道中で削られて死ぬのかが分からない。
 
 ## 何ラン回すか（`--runs=` で上書きできる）。
+## 何ランぶん回すか。
+##
+## **勝率の判定と、1 戦の長さの測定では必要な数がまるで違う。**
+## 勝率は 1 ランに 1 回しか結果が出ないので 200 要るが、戦闘の長さは
+## 1 ランで数十戦あるため 40 ランでも数百〜千戦になる。
+## 長さを見たいだけのときは `--runs=40` で足りる（200 は数分かかる）。
 const DEFAULT_RUNS := 200
 
 ## 1 戦の打ち切り。無限ループ（互いに削れない編成）から抜けるための保険。
@@ -94,6 +100,8 @@ func _run_policy(policy: Policy) -> Dictionary:
 		"death_level_sum": 0, "death_danger_sum": 0,
 		"gold_sum": 0, "gold_runs": 0,
 		"world_span": 0,
+		"turns_by_foes": {},
+		"turns_by_danger": {},
 	}
 	for i in _runs:
 		# 種はランごとに散らす。連番にすると隣のランと似た世界が並ぶ。
@@ -101,6 +109,30 @@ func _run_policy(policy: Policy) -> Dictionary:
 		report["steps"] = int(report["steps"]) + int(result["steps"])
 		report["battles"] = int(report["battles"]) + int(result["battles"])
 		report["world_span"] = int(report["world_span"]) + int(result["span"])
+		var into: Dictionary = report["turns_by_foes"]
+		for key in result["turns_by_foes"]:
+			var add: Array = result["turns_by_foes"][key]
+			var row: Array = into.get(key, [0, 0, 0, 0, 0, 0, 0])
+			into[key] = [
+				int(row[0]) + int(add[0]),
+				int(row[1]) + int(add[1]),
+				maxi(int(row[2]), int(add[2])),
+				int(row[3]) + int(add[3]),
+				maxi(int(row[4]), int(add[4])),
+				int(row[5]) + int(add[5]),
+				maxi(int(row[6]), int(add[6])),
+			]
+		report["turns_by_foes"] = into
+		var dinto: Dictionary = report["turns_by_danger"]
+		for key in result["turns_by_danger"]:
+			var add2: Array = result["turns_by_danger"][key]
+			var row2: Array = dinto.get(key, [0, 0, 0])
+			dinto[key] = [
+				int(row2[0]) + int(add2[0]),
+				int(row2[1]) + int(add2[1]),
+				int(row2[2]) + int(add2[2]),
+			]
+		report["turns_by_danger"] = dinto
 		if bool(result["reached"]):
 			report["reached"] = int(report["reached"]) + 1
 			report["level_sum"] = int(report["level_sum"]) + int(result["level"])
@@ -116,6 +148,22 @@ func _run_policy(policy: Policy) -> Dictionary:
 			var band := int(result["danger"])
 			report["died_at"][band] = int(report["died_at"].get(band, 0)) + 1
 	return report
+
+
+## オート中の待ち。`battle_view.gd` の `AUTO_WINDOW_DELAY` / `WINDOW_LINES` と揃える。
+##
+## **点滅と閃光は待ちと並行に流れるので秒を足さない**（`_process` を見ると
+## `_timer` と同じ枠で減る）。1 戦の長さを決めているのは**行数**だけだった。
+## 手番数から 0.40 秒/手番で見積もっていたが、根拠が無かった。
+## **数字を変えたらここも変える**（合わなくなると測っている意味が無い）。
+const AUTO_WINDOW_DELAY := 0.16
+const WINDOW_LINES := 3
+
+## 直す前の式（1 行ずつ 0.10 秒送り）。**比較のためだけに残す。**
+const OLD_LINE_DELAY := 0.10
+
+## これを超えたら「長い戦」とみなす手番数。0.40 秒 x 30 = 12 秒。
+const LONG_TURNS := 30
 
 
 func _print_report(title: String, r: Dictionary) -> void:
@@ -140,6 +188,40 @@ func _print_report(title: String, r: Dictionary) -> void:
 			int(r["death_level_sum"]) / float(r["died"]),
 			int(r["death_danger_sum"]) / float(r["died"]),
 		])
+	# 敵の数ごとの手番。**1 戦の長さはここでほぼ決まる。**
+	# 秒はこの手番数に「1 手番あたりの遅延」を掛けたものなので、
+	# 遅延を削る前にこの表を見る（削る方向は既に限界まで来ている）。
+	# **新旧を同じ回で並べる。** 自動プレイは回ごとに世界も敵も変わるので
+	# 前後比較には粗すぎた（速くしたのに「遅くなった」数字が出た）。
+	# ここは同じシードの同じ戦闘を両方の式で見るので、差だけが出る。
+	print("  1 戦の長さ   : 敵の数ごと（旧 = 1 行 %.2f 秒 / 新 = %d 行 %.2f 秒）" % [
+		OLD_LINE_DELAY, WINDOW_LINES, AUTO_WINDOW_DELAY])
+	var counts: Array = r["turns_by_foes"].keys()
+	counts.sort()
+	for n in counts:
+		var row: Array = r["turns_by_foes"][n]
+		var fights := float(maxi(int(row[0]), 1))
+		print(
+			"    敵 %d 体 %5d 戦 %5.1f 手番  平均 %4.1f→%4.1f 秒  最長 %4.1f→%4.1f 秒" % [
+				n, int(row[0]), int(row[1]) / fights,
+				int(row[3]) / fights * OLD_LINE_DELAY,
+				int(row[5]) / fights * AUTO_WINDOW_DELAY,
+				int(row[4]) * OLD_LINE_DELAY,
+				int(row[6]) * AUTO_WINDOW_DELAY,
+			]
+		)
+
+	print("  長い戦の在処 : 危険度ごと（%d 手番以上を長いとする）" % LONG_TURNS)
+	var dbands: Array = r["turns_by_danger"].keys()
+	dbands.sort()
+	for band in dbands:
+		var row2: Array = r["turns_by_danger"][band]
+		var total := maxi(int(row2[1]), 1)
+		print("    危険度 %2d  %5d 戦  平均 %5.1f 手番  長い %4d 戦 (%2d%%)" % [
+			band, int(row2[1]), int(row2[2]) / float(total),
+			int(row2[0]), int(row2[0]) * 100 / total,
+		])
+
 	# どこで死ぬかの分布。**ここが一番効く情報。**
 	# 「届かない」のと「届いても勝てない」のは、直し方がまるで違う。
 	print("  倒れた危険度 :")
@@ -214,6 +296,12 @@ func _simulate(seed_value: int, policy: Policy) -> Dictionary:
 	var span := world.route(world.start_pos, world.castle_pos).size()
 	var state := {
 		"steps": 0, "battles": 0, "gold": 0, "danger": 1, "dead": false,
+		# 敵の数ごとの手番数。**「6 体だけが長い」と決めずに測る**ための記録
+		# （数 → [戦闘数, 手番の合計, 最長]）。
+		"turns_by_foes": {},
+		# 長い戦がどこに固まっているか（危険度 → [長い戦, 全戦闘, 手番合計]）。
+		# **敵の数で説明がつかなかった**ので、危険度の側から見る。
+		"turns_by_danger": {},
 	}
 
 	# 行き先の列。
@@ -354,6 +442,8 @@ func _result(
 		"gold": int(state["gold"]),
 		"level": level,
 		"span": span,
+		"turns_by_foes": state["turns_by_foes"],
+		"turns_by_danger": state["turns_by_danger"],
 	}
 
 
@@ -387,6 +477,14 @@ func _fight(
 	system.start(party, foes, rng, danger)
 
 	var turns := 0
+	# **実際に待たされる長さは手番数ではなく行数で決まる。**
+	# オート中は 1 行につき `AUTO_LINE_DELAY` 待つので、
+	# 秒を見積もるならこちらを数えないと外れる（手番だけ見て 0.40 秒/手番と
+	# 見積もっていたが、根拠が無かった）。
+	var lines := 0
+	# 待ちの回数。オート中は窓 1 枚ぶん（3 行）ごとに 1 回待つので、
+	# **秒はこちらに比例する**（行数ではなく）。
+	var waits := 0
 	while not system.is_over and turns < MAX_TURNS:
 		turns += 1
 		var actor := system.begin_turn()
@@ -400,9 +498,36 @@ func _fight(
 			# **画面のオートと同じ判断を使う。** ここに素朴な AI を書くと、
 			# 測っている強さと遊べる強さが別物になる。
 			var plan := AutoTactic.decide(system, actor, AutoTactic.Mode.AGGRESSIVE)
-			system.perform(actor, String(plan["ability"]), plan["target"])
+			var said := system.perform(actor, String(plan["ability"]), plan["target"]).size()
+			lines += said
+			waits += ceili(said / float(WINDOW_LINES))
 		else:
-			system.perform_enemy(actor)
+			var said_e := system.perform_enemy(actor).size()
+			lines += said_e
+			waits += ceili(said_e / float(WINDOW_LINES))
+
+	# **敵の数ごとに手番を数える。** 1 戦の長さは手番数でほぼ決まるので、
+	# 秒を測る前にここを見る（遅延はあとから掛け算するだけ）。
+	var by_danger: Dictionary = state["turns_by_danger"]
+	var drow: Array = by_danger.get(danger, [0, 0, 0])
+	by_danger[danger] = [
+		int(drow[0]) + (1 if turns >= LONG_TURNS else 0),
+		int(drow[1]) + 1,
+		int(drow[2]) + turns,
+	]
+	state["turns_by_danger"] = by_danger
+
+	var tally: Dictionary = state["turns_by_foes"]
+	var key := foes.size()
+	var row: Array = tally.get(key, [0, 0, 0, 0, 0, 0, 0])
+	tally[key] = [
+		int(row[0]) + 1, int(row[1]) + turns, maxi(int(row[2]), turns),
+		int(row[3] if row.size() > 3 else 0) + lines,
+		maxi(int(row[4] if row.size() > 4 else 0), lines),
+		int(row[5] if row.size() > 5 else 0) + waits,
+		maxi(int(row[6] if row.size() > 6 else 0), waits),
+	]
+	state["turns_by_foes"] = tally
 
 	for i in members.size():
 		if i < party.size():

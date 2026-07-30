@@ -54,6 +54,12 @@ const OSCILLATION_WINDOW := 8
 var _recent: Array[String] = []
 var _oscillation_noted := false
 var _battles := 0
+
+## 1 戦の実時間。**秒で測らないと「速くなった」が言えない。**
+## 手番数は Sim（tests/balance.gd）が測るが、実際に待たされる長さは
+## 1 手番あたりの行数で決まるので、ここは画面側で測るしかない。
+var _battle_started := -1.0
+var _battle_seconds: Array[float] = []
 var _runs := 0
 var _equipped := 0
 
@@ -123,6 +129,11 @@ func _track_mode(delta: float) -> void:
 			_close_expect = false
 		if mode.begins_with("BATTLE"):
 			_battles += 1
+			_battle_started = _elapsed
+		elif _battle_started >= 0.0:
+			# 戦闘から出た。掛かった秒を控える。
+			_battle_seconds.append(_elapsed - _battle_started)
+			_battle_started = -1.0
 		if mode.begins_with("RESULT"):
 			_runs += 1
 		# **表示を変えたらここも変える。** 「地下 N 階」を探したままだったので、
@@ -357,6 +368,14 @@ func _report() -> void:
 	print("最も危険  : 危険度 %d" % _deepest)
 	print("町に入った: %d 回（滞在 %.0f 秒）" % [_town_visits, _town_time])
 	print("戦闘      : %d 回" % _battles)
+	if not _battle_seconds.is_empty():
+		var total := 0.0
+		var longest := 0.0
+		for s in _battle_seconds:
+			total += s
+			longest = maxf(longest, s)
+		print("戦闘の長さ: 平均 %.1f 秒 / 最長 %.1f 秒（%d 戦を計測）" % [
+			total / _battle_seconds.size(), longest, _battle_seconds.size()])
 	print("ランの終了 : %d 回" % _runs)
 	print("装備      : 最大 %d 個" % _equipped)
 	print("メニューを閉じた: %d 回（とじるを試した %d 回）" % [_close_ok, _close_tries])

@@ -8,29 +8,39 @@ extends RefCounted
 ##
 ## 作る順番には理由がある。
 ##
-##   1. 陸を作る … 通れる場所を先に決めないと、あとの全部が置けない
-##   2. 門と城を決める … 陸路でいちばん離れた 2 点。これが難度の軸になる
-##   3. 危険度を配る … 門からの陸路距離を 1..10 に伸ばす
-##   4. 地形を塗る … 危険度の帯で草原→森→丘→山。**見た目が難度の予告になる**
-##   5. 拠点地を置く … 町は本筋の上、洞は本筋から外して「寄り道」にする
+##   1. 大陸骨格を作る … 対岸を結ぶ旅程を先に置く
+##   2. 門と城を決める … 骨格の両端。これが難度の軸になる
+##   3. 仮の危険度を配る … 生物相を旅程の帯へ割り当てるため
+##   4. 地形を塊で塗る … 1 マスごとの斑点抽選にしない
+##   5. 本街道を通す … プレイヤーにも本筋を見える形で渡す
+##   6. 危険度を配り直す … 最終地形の実距離と表示を一致させる
+##   7. 拠点地を置く … 町は本街道、洞は枝道の先
 ##
-## 4 と 5 が逆だと、町が山の中に建つ。
+## 4 と 5 が逆だと、せっかく引いた街道を地形の塗りが上書きする。
+const MAP_W := 96
+const MAP_H := 64
 
-const MAP_W := 64
-const MAP_H := 48
+## 大陸の旅程骨格。西岸と東岸の間を 6 地域で結び、その周囲だけ乱歩で膨らませる。
+const REGION_ANCHORS := 6
+const COAST_MARGIN := 6
+const SPINE_BRUSH := 5
+const LOBE_WALKERS := 2
+const LOBE_STEPS := 150
+const LOBE_BRUSH := 2
+const LOBE_RADIUS := 18
 
-## 陸の作り方。中心から乱歩で削り出す（島の形になる）。
-const LAND_WALKERS := 6
-const LAND_STEPS := 420
-const LAND_BRUSH := 2
+## 門から城まで、最低でもこの歩数は旅をさせる。
+const MIN_WORLD_SPAN := 80
 
 ## 拠点地の数。**洞は行かなくても終点に着ける**位置に置く。
 ## 寄るか急ぐかが判断になるのは、寄らない選択が成立するときだけ。
 const TOWN_COUNT := 4
 const CAVE_COUNT := 5
+const CAVE_DETOUR_MIN := 8
+const CAVE_DETOUR_MAX := 20
 
 ## 町と町、洞と洞が近すぎると寄り道の意味が薄れる。
-const SITE_SPACING := 7
+const SITE_SPACING := 8
 
 
 ## 何度まで作り直すか。**検算に落ちた世界は出さない。**
@@ -64,7 +74,11 @@ static func _build(rng: DetRng) -> WorldMap:
 	_spread_danger(map)
 	_assign_biomes(map, rng)
 	_paint_terrain(map, rng)
+	_carve_main_road(map)
+	# 山・溶岩を置いたあとの実距離で危険度を確定する。
+	_spread_danger(map)
 	_place_sites(map, rng)
+	_connect_sites_to_road(map)
 	_place_seals(map, rng)
 	_place_events(map, rng)
 	# 物語は最後。町と洞が置かれていないと拍を土地へ結べない。
@@ -83,23 +97,16 @@ static func _place_events(map: WorldMap, rng: DetRng) -> void:
 	if catalog.is_empty():
 		return
 
-	var from_gate := map.distance_field(map.start_pos)
-	var to_castle := map.distance_field(map.castle_pos)
-	var span := maxi(from_gate[map.castle_pos.y * map.width + map.castle_pos.x], 1)
-
 	# 街道 = 本筋の上で、門から少し離れたところ（1 歩目で出会わせない）。
 	var on_route: Array[Vector2i] = []
-	for y in map.height:
-		for x in map.width:
-			if not map.is_walkable(x, y) or map.sites.has(Vector2i(x, y)):
-				continue
-			var a := from_gate[y * map.width + x]
-			var b := to_castle[y * map.width + x]
-			if a < 0 or b < 0 or a + b - span > 0:
-				continue
-			if a < span / 5 or a > span * 4 / 5:
-				continue
-			on_route.append(Vector2i(x, y))
+	@warning_ignore("integer_division")
+	var route_lo := map.main_road.size() / 5
+	@warning_ignore("integer_division")
+	var route_hi := map.main_road.size() * 4 / 5
+	for i in range(route_lo, route_hi + 1):
+		var at: Vector2i = map.main_road[i]
+		if not map.sites.has(at):
+			on_route.append(at)
 
 	var slots := []
 	if not on_route.is_empty():
@@ -149,6 +156,43 @@ static func verify(map: WorldMap) -> Array[String]:
 	# 1. 城まで歩けること。これが崩れたら他を見るまでもない。
 	if not reachable.call(map.castle_pos):
 		problems.append("城まで歩けない")
+	if map.width != MAP_W or map.height != MAP_H:
+		problems.append("世界の寸法が %dx%d（%dx%d であるべき）" % [
+			map.width, map.height, MAP_W, MAP_H
+		])
+	var span := -1
+	if map.in_bounds(map.castle_pos.x, map.castle_pos.y):
+		span = dist[map.castle_pos.y * map.width + map.castle_pos.x]
+	if span < MIN_WORLD_SPAN:
+		problems.append("門から城が %d 歩（最低 %d 歩）" % [span, MIN_WORLD_SPAN])
+
+	# 本街道は生成器の内部だけでなく、地図で見える旅程でなければならない。
+	if map.main_road.is_empty():
+		problems.append("本街道が無い")
+	else:
+		if map.main_road[0] != map.start_pos or map.main_road[-1] != map.castle_pos:
+			problems.append("本街道の両端が門と城ではない")
+		for i in range(1, map.main_road.size()):
+			if _grid_distance(map.main_road[i - 1], map.main_road[i]) != 1:
+				problems.append("本街道が途中で切れている")
+				break
+		for at in map.main_road:
+			var tile := map.get_tile(at.x, at.y)
+			if tile not in [
+				WorldMap.T_ROAD, WorldMap.T_GATE, WorldMap.T_TOWN, WorldMap.T_CASTLE
+			]:
+				problems.append("本街道が地図に描かれていない: %s" % str(at))
+				break
+
+		var biome_runs := 0
+		var last_biome := -1
+		for at in map.main_road:
+			var biome := map.biome_index_at(at.x, at.y)
+			if biome != last_biome:
+				biome_runs += 1
+				last_biome = biome
+		if biome_runs < 4:
+			problems.append("本街道の地域が %d 種類しかない" % biome_runs)
 
 	# 2. 封が 3 つあること
 	if map.seals.size() != SEAL_COUNT:
@@ -181,6 +225,8 @@ static func verify(map: WorldMap) -> Array[String]:
 			problems.append("イベント（%s）に歩けない" % String(map.events[pos].get("event_id", "?")))
 		if String(map.events[pos].get("event_id", "")) == "":
 			problems.append("イベントに id が無い")
+		if not map.sites.has(at) and map.get_tile(at.x, at.y) != WorldMap.T_ROAD:
+			problems.append("街道イベントが街道の外にある")
 
 	# 6. 物語が成立していること。**筋が通らない世界は出さない。**
 	#    六拍のどれかが土地に結べていないと、そのランは途中で話が切れる。
@@ -205,15 +251,72 @@ static func verify(map: WorldMap) -> Array[String]:
 			elif not reachable.call(at):
 				problems.append("物語の拍（%s）の土地に歩けない" % String(beat.get("id", "?")))
 
-	# 7. 買い物ができること。町に 1 つも歩けないと、備えの手段が宝箱だけになる
+	# 7. 拠点数と街道網。世界を広げても、目的地が乱数で孤立してはいけない。
 	var towns := 0
+	var caves := 0
+	var road_reached := _road_network(map)
 	for pos in map.sites:
-		if String(map.sites[pos].get("kind", "")) == "town" and reachable.call(pos):
+		var kind := String(map.sites[pos].get("kind", ""))
+		if kind == "town" and reachable.call(pos):
 			towns += 1
-	if towns < 1:
-		problems.append("歩いて行ける町が無い")
+		elif kind == "cave" and reachable.call(pos):
+			caves += 1
+		if kind in ["town", "cave"] and not road_reached.has(pos):
+			problems.append("%sが街道網につながっていない: %s" % [kind, str(pos)])
+	if towns != TOWN_COUNT:
+		problems.append("町が %d 個（%d 個であるべき）" % [towns, TOWN_COUNT])
+	if caves != CAVE_COUNT:
+		problems.append("洞が %d 個（%d 個であるべき）" % [caves, CAVE_COUNT])
+
+	# 生物相の境界は少数の面であること。1マス交互の斑模様を検算で落とす。
+	var same_neighbors := 0
+	var neighbor_pairs := 0
+	for y in map.height:
+		for x in map.width:
+			if map.get_tile(x, y) == WorldMap.T_SEA:
+				continue
+			for step in [Vector2i.RIGHT, Vector2i.DOWN]:
+				var other: Vector2i = Vector2i(x, y) + step
+				if not map.in_bounds(other.x, other.y):
+					continue
+				if map.get_tile(other.x, other.y) == WorldMap.T_SEA:
+					continue
+				neighbor_pairs += 1
+				if map.biome_index_at(x, y) == map.biome_index_at(other.x, other.y):
+					same_neighbors += 1
+	if neighbor_pairs > 0 and same_neighbors * 100 / neighbor_pairs < 85:
+		problems.append("生物相が細切れ（同一隣接 %d%%）" % [
+			same_neighbors * 100 / neighbor_pairs
+		])
 
 	return problems
+
+
+static func _grid_distance(a: Vector2i, b: Vector2i) -> int:
+	return absi(a.x - b.x) + absi(a.y - b.y)
+
+
+## 街道、門、町、洞、城だけを辿って届くマス。
+static func _road_network(map: WorldMap) -> Dictionary:
+	var reached := {}
+	if not map.in_bounds(map.start_pos.x, map.start_pos.y):
+		return reached
+	var queue: Array[Vector2i] = [map.start_pos]
+	reached[map.start_pos] = true
+	while not queue.is_empty():
+		var at: Vector2i = queue.pop_front()
+		for step in FieldMap.NEIGHBORS:
+			var next: Vector2i = at + step
+			if reached.has(next) or not map.in_bounds(next.x, next.y):
+				continue
+			if map.get_tile(next.x, next.y) not in [
+				WorldMap.T_ROAD, WorldMap.T_GATE, WorldMap.T_TOWN,
+				WorldMap.T_CAVE, WorldMap.T_CASTLE,
+			]:
+				continue
+			reached[next] = true
+			queue.append(next)
+	return reached
 
 
 # --------------------------------------------------------------------------
@@ -300,27 +403,78 @@ static func _place_seals(map: WorldMap, rng: DetRng) -> void:
 # --------------------------------------------------------------------------
 
 
-## 乱歩で陸を削り出す。部屋と通路（洞のやり方）だと四角い大陸になってしまう。
+## 対岸を結ぶ骨格を先に置き、その周囲を乱歩で膨らませる。
+##
+## 中央から自由な乱歩だけで作ると、地図の広さを増しても中央に小さな島ができる。
+## 両端を結ぶ旅程を固定し、乱数は地域の曲がり方と海岸線へ使う。
 static func _carve_land(map: WorldMap, rng: DetRng) -> void:
-	var center := Vector2i(MAP_W / 2, MAP_H / 2)
-	for w in LAND_WALKERS:
-		var at := center
-		# 歩き手ごとに違う方角へ散らす。全部同じ点から始めると団子になる。
-		for _spread in w * 3:
-			at += FieldMap.NEIGHBORS[rng.range_i(0, 3)]
-		for _step in LAND_STEPS:
-			_brush(map, at)
-			at += FieldMap.NEIGHBORS[rng.range_i(0, 3)]
-			# 縁からは折り返す。海に出た歩き手が戻ってこないと陸が痩せる。
-			at.x = clampi(at.x, LAND_BRUSH + 2, MAP_W - LAND_BRUSH - 3)
-			at.y = clampi(at.y, LAND_BRUSH + 2, MAP_H - LAND_BRUSH - 3)
+	var west_y := rng.range_i(COAST_MARGIN + 8, MAP_H - COAST_MARGIN - 9)
+	var east_y := rng.range_i(COAST_MARGIN + 8, MAP_H - COAST_MARGIN - 9)
+	var anchors: Array[Vector2i] = []
+	for i in REGION_ANCHORS:
+		@warning_ignore("integer_division")
+		var x := COAST_MARGIN + i * (MAP_W - COAST_MARGIN * 2 - 1) / (REGION_ANCHORS - 1)
+		@warning_ignore("integer_division")
+		var y := west_y + (east_y - west_y) * i / (REGION_ANCHORS - 1)
+		if i > 0 and i < REGION_ANCHORS - 1:
+			y += rng.range_i(-10, 10)
+		y = clampi(y, COAST_MARGIN + 6, MAP_H - COAST_MARGIN - 7)
+		anchors.append(Vector2i(x, y))
+
+	# 骨格を幅のある陸で結ぶ。
+	for i in range(anchors.size() - 1):
+		_carve_corridor(map, anchors[i], anchors[i + 1], rng)
+
+	# 各地域を短い乱歩で膨らませる。地域アンカーから離れすぎたら戻すため、
+	# 世界全体を無方向に埋める歩行者にはならない。
+	for center in anchors:
+		for _walker in LOBE_WALKERS:
+			var at := center
+			for _step in LOBE_STEPS:
+				_brush(map, at, LOBE_BRUSH)
+				var next := at + FieldMap.NEIGHBORS[rng.range_i(0, 3)]
+				if _grid_distance(next, center) > LOBE_RADIUS:
+					var dx := signi(center.x - at.x)
+					var dy := signi(center.y - at.y)
+					next = at + (Vector2i(dx, 0) if rng.chance(50) else Vector2i(0, dy))
+				next.x = clampi(next.x, COAST_MARGIN, MAP_W - COAST_MARGIN - 1)
+				next.y = clampi(next.y, COAST_MARGIN, MAP_H - COAST_MARGIN - 1)
+				at = next
+
+	# 大陸の向きは同じにして読みやすくし、進行方向だけ半数で反転する。
+	if rng.chance(50):
+		anchors.reverse()
+	map.start_pos = anchors[0]
+	map.castle_pos = anchors[-1]
 
 
-static func _brush(map: WorldMap, at: Vector2i) -> void:
-	for dy in range(-LAND_BRUSH, LAND_BRUSH + 1):
-		for dx in range(-LAND_BRUSH, LAND_BRUSH + 1):
+static func _carve_corridor(
+	map: WorldMap, from: Vector2i, to: Vector2i, rng: DetRng
+) -> void:
+	var at := from
+	while true:
+		_brush(map, at, SPINE_BRUSH)
+		if at == to:
+			return
+		var dx := absi(to.x - at.x)
+		var dy := absi(to.y - at.y)
+		if dx > 0 and dy > 0:
+			# 残り距離の比率で軸を選び、目的地へ単調に近づく。
+			if rng.range_i(1, dx + dy) <= dx:
+				at.x += signi(to.x - at.x)
+			else:
+				at.y += signi(to.y - at.y)
+		elif dx > 0:
+			at.x += signi(to.x - at.x)
+		else:
+			at.y += signi(to.y - at.y)
+
+
+static func _brush(map: WorldMap, at: Vector2i, radius: int) -> void:
+	for dy in range(-radius, radius + 1):
+		for dx in range(-radius, radius + 1):
 			# 角を落として丸くする。四角い筆だと海岸線が階段状になる。
-			if absi(dx) + absi(dy) > LAND_BRUSH + 1:
+			if absi(dx) + absi(dy) > radius + 1:
 				continue
 			map.set_tile(at.x + dx, at.y + dy, WorldMap.T_PLAIN)
 
@@ -330,27 +484,23 @@ static func _brush(map: WorldMap, at: Vector2i) -> void:
 # --------------------------------------------------------------------------
 
 
-## 陸路でいちばん離れた 2 点を門と城にする。
-##
-## 直線距離で選ぶと、海を挟んだ対岸が「遠い」ことになって、
-## 実際には歩けない。**距離は必ず陸路で測る。**
-static func _place_gate_and_castle(map: WorldMap, rng: DetRng) -> void:
+## 大陸骨格の両端を門と城にする。
+static func _place_gate_and_castle(map: WorldMap, _rng: DetRng) -> void:
 	var land := _land_cells(map)
 	if land.is_empty():
 		# 万一の保険。陸が無いと詰むので中心を陸にする。
 		map.set_tile(MAP_W / 2, MAP_H / 2, WorldMap.T_PLAIN)
 		land = [Vector2i(MAP_W / 2, MAP_H / 2)]
+	if not map.in_bounds(map.start_pos.x, map.start_pos.y):
+		map.start_pos = land[0]
+	if not map.in_bounds(map.castle_pos.x, map.castle_pos.y):
+		map.castle_pos = land[-1]
 
-	# 適当な陸から最遠点、そこからさらに最遠点（木の直径を採る手口）
-	var seed_cell: Vector2i = land[rng.range_i(0, land.size() - 1)]
-	var gate := _farthest_from(map, seed_cell)
-	var castle := _farthest_from(map, gate)
-
-	map.start_pos = gate
-	map.castle_pos = castle
-	map.set_tile(gate.x, gate.y, WorldMap.T_GATE)
-	map.set_tile(castle.x, castle.y, WorldMap.T_CASTLE)
-	map.sites[castle] = {"kind": "castle", "danger": WorldMap.MAX_DANGER, "index": 0}
+	map.set_tile(map.start_pos.x, map.start_pos.y, WorldMap.T_GATE)
+	map.set_tile(map.castle_pos.x, map.castle_pos.y, WorldMap.T_CASTLE)
+	map.sites[map.castle_pos] = {
+		"kind": "castle", "danger": WorldMap.MAX_DANGER, "index": 0
+	}
 
 
 static func _land_cells(map: WorldMap) -> Array[Vector2i]:
@@ -360,19 +510,6 @@ static func _land_cells(map: WorldMap) -> Array[Vector2i]:
 			if map.get_tile(x, y) == WorldMap.T_PLAIN:
 				cells.append(Vector2i(x, y))
 	return cells
-
-
-static func _farthest_from(map: WorldMap, from: Vector2i) -> Vector2i:
-	var dist := map.distance_field(from)
-	var best := from
-	var best_d := -1
-	for y in map.height:
-		for x in map.width:
-			var d := dist[y * map.width + x]
-			if d > best_d:
-				best_d = d
-				best = Vector2i(x, y)
-	return best
 
 
 # --------------------------------------------------------------------------
@@ -401,106 +538,77 @@ static func _spread_danger(map: WorldMap) -> void:
 # --------------------------------------------------------------------------
 
 
-## 生物相を**面**で置く。
+## 生物相を旅程に沿った 5 つの地域として置く。
 ##
-## これが「世界が適当に見える」問題の本体だった。1 マスずつ危険度から
-## 地形を抽くと、草原と森と丘が均一に混ざった斑模様になり、どこも同じ顔になる。
-## 実際の世界地図が世界に見えるのは、**同じ地形がまとまって続く**からで、
-## 「ここは森林地帯」「ここから雪原」と読めることが地図の情報量になる。
-##
-## 種をいくつか撒いて、いちばん近い種の生物相に染める（ボロノイ）。
-## 種ごとの生物相は**その場所の危険度に合うものから選ぶ**ので、
-## 門のそばに火山は来ないし、城の手前が草原になることもない。
-const BIOME_SEEDS := 9
+## ランダムな種をボロノイで広げると面にはなるが、地域の順序に意味が無い。
+## 危険度 1〜2 / 3〜4 / ... / 9〜10 を一つの地域とし、門から城へ進むほど
+## 景色が段階的に変わるようにする。
+const BIOME_REGIONS := 5
 
 
 static func _assign_biomes(map: WorldMap, rng: DetRng) -> void:
-	var land := _land_cells(map)
-	if land.is_empty():
-		return
-
-	# 種を撒く。近すぎる種は地帯が細切れになるので間隔をあける。
-	var seeds: Array[Vector2i] = []
-	var kinds: Array[int] = []
-	for _i in BIOME_SEEDS * 8:
-		if seeds.size() >= BIOME_SEEDS:
-			break
-		var at: Vector2i = land[rng.range_i(0, land.size() - 1)]
-		var too_near := false
-		for other in seeds:
-			if absi(other.x - at.x) + absi(other.y - at.y) < 12:
-				too_near = true
-				break
-		if too_near:
-			continue
-		seeds.append(at)
-		kinds.append(0)
-	if seeds.is_empty():
-		seeds.append(land[0])
-		kinds.append(0)
-
-	# いちばん近い種に染める。距離は素直なマンハッタンでよい
-	# （陸路で測ると地帯が道の形に伸びて、地図として読みにくくなる）。
-	var owner := PackedByteArray()
-	owner.resize(map.width * map.height)
-	var danger_sum := []
-	var cell_count := []
-	danger_sum.resize(seeds.size())
-	cell_count.resize(seeds.size())
-	danger_sum.fill(0)
-	cell_count.fill(0)
+	var kinds: Array[int] = [0]  # 出発地域は草原。
+	var used := {0: true}
+	for region in range(1, BIOME_REGIONS):
+		var danger := region * 2 + 1
+		var candidates := _biomes_for_danger(danger)
+		var fresh: Array[int] = []
+		for candidate in candidates:
+			if candidate != kinds[-1] and not used.has(candidate):
+				fresh.append(candidate)
+		if fresh.is_empty():
+			for candidate in candidates:
+				if candidate != kinds[-1]:
+					fresh.append(candidate)
+		if fresh.is_empty():
+			fresh = candidates
+		var picked: int = fresh[rng.range_i(0, fresh.size() - 1)] if not fresh.is_empty() else 0
+		kinds.append(picked)
+		used[picked] = true
 
 	for y in map.height:
 		for x in map.width:
-			var best := 0
-			var best_d := -1
-			for i in seeds.size():
-				var d := absi(seeds[i].x - x) + absi(seeds[i].y - y)
-				if best_d < 0 or d < best_d:
-					best_d = d
-					best = i
-			owner[y * map.width + x] = best
-			if map.is_walkable(x, y):
-				danger_sum[best] = int(danger_sum[best]) + map.danger_at(x, y)
-				cell_count[best] = int(cell_count[best]) + 1
-
-	# **生物相は「種の危険度」ではなく「その地帯の平均の危険度」で決める。**
-	# 種で決めると、危険度 4 で引いた湿地が門（危険度 1）まで広がってしまう。
-	# 面を先に確定させてから中身を選べば、地帯と危険度が必ず噛み合う。
-	for i in seeds.size():
-		var mean := 1
-		if int(cell_count[i]) > 0:
-			mean = int(danger_sum[i]) / int(cell_count[i])
-		kinds[i] = _biome_for_danger(mean, rng)
-
-	for y in map.height:
-		for x in map.width:
-			map.set_biome(x, y, kinds[owner[y * map.width + x]])
+			if map.get_tile(x, y) == WorldMap.T_SEA:
+				continue
+			@warning_ignore("integer_division")
+			var region := clampi((map.danger_at(x, y) - 1) / 2, 0, BIOME_REGIONS - 1)
+			map.set_biome(x, y, kinds[region])
 
 
-## その危険度に置いてよい生物相から 1 つ選ぶ。
-static func _biome_for_danger(danger: int, rng: DetRng) -> int:
+static func _biomes_for_danger(danger: int) -> Array[int]:
 	var candidates: Array[int] = []
 	for i in WorldMap.BIOMES.size():
 		var band: Array = WorldMap.BIOMES[i].get("danger", [1, 10])
 		if danger >= int(band[0]) and danger <= int(band[1]):
 			candidates.append(i)
-	if candidates.is_empty():
-		return 0
-	return candidates[rng.range_i(0, candidates.size() - 1)]
+	return candidates
 
-
-## 生物相の候補から 1 マスずつ塗る。
+## 地域を代表地形で塗り、別地形を半径 2〜5 のパッチで重ねる。
 ##
-## 帯の中の揺れは残す（同じタイルで埋めると地帯が単調な板になる）。
-## 大事なのは「地帯の中では傾向が揃っていること」で、完全な均一ではない。
+## 1 マスごとに候補を引くと、同じ生物相でも斑点模様になる。
+## 乱数は「森がどこに固まるか」「溶岩湖がどこにあるか」へ使う。
 static func _paint_terrain(map: WorldMap, rng: DetRng) -> void:
+	var land: Array[Vector2i] = []
 	for y in map.height:
 		for x in map.width:
 			if map.get_tile(x, y) != WorldMap.T_PLAIN:
 				continue  # 海と、既に置いた門・城には触らない
 			var palette: Array = map.biome_at(x, y).get("tiles", [WorldMap.T_PLAIN])
-			map.set_tile(x, y, int(palette[rng.range_i(0, palette.size() - 1)]))
+			map.set_tile(x, y, _walkable_base_tile(palette))
+			land.append(Vector2i(x, y))
+
+	# 地域ごとに十分な数のパッチを置く。面積に比例させるため、
+	# 世界を広げても粒の大きさだけが変わることはない。
+	@warning_ignore("integer_division")
+	var patches := maxi(land.size() / 28, 1)
+	for _i in patches:
+		var center: Vector2i = land[rng.range_i(0, land.size() - 1)]
+		var biome_index := map.biome_index_at(center.x, center.y)
+		var palette: Array = map.biome_at(center.x, center.y).get("tiles", [WorldMap.T_PLAIN])
+		if palette.size() < 2:
+			continue
+		var tile := int(palette[rng.range_i(1, palette.size() - 1)])
+		_paint_patch(map, center, biome_index, tile, rng.range_i(2, 5), rng)
 
 	# 門と城のまわりは必ず歩けるようにしておく。生物相の抽選で溶岩や山に
 	# 囲まれると、そこだけで詰む。
@@ -514,6 +622,37 @@ static func _paint_terrain(map: WorldMap, rng: DetRng) -> void:
 	# 山と溶岩で城が孤立していないか確かめ、閉じていたら道を通す。
 	# **生成物は必ず到達可能でなければならない**（詰む世界を出さない）。
 	_ensure_reachable(map)
+
+
+static func _walkable_base_tile(palette: Array) -> int:
+	for value in palette:
+		var tile := int(value)
+		if tile not in [WorldMap.T_SEA, WorldMap.T_MOUNTAIN, WorldMap.T_LAVA]:
+			return tile
+	return WorldMap.T_HILL
+
+
+static func _paint_patch(
+	map: WorldMap, center: Vector2i, biome_index: int, tile: int, radius: int, rng: DetRng
+) -> void:
+	for dy in range(-radius, radius + 1):
+		for dx in range(-radius, radius + 1):
+			var distance := absi(dx) + absi(dy)
+			if distance > radius + 1:
+				continue
+			# 外周を少し欠かし、四角や完全な菱形に見えないようにする。
+			if distance >= radius and rng.chance(35):
+				continue
+			var at := center + Vector2i(dx, dy)
+			if not map.in_bounds(at.x, at.y):
+				continue
+			if at in [map.start_pos, map.castle_pos]:
+				continue
+			if map.get_tile(at.x, at.y) == WorldMap.T_SEA:
+				continue
+			if map.biome_index_at(at.x, at.y) != biome_index:
+				continue
+			map.set_tile(at.x, at.y, tile)
 
 
 ## 城まで歩けることを保証する。届かないなら、届く場所から山を削って繋ぐ。
@@ -552,6 +691,17 @@ static func _ensure_reachable(map: WorldMap) -> void:
 			return
 
 
+## 最終地形の最短路を、画面で読める本街道へ変える。
+static func _carve_main_road(map: WorldMap) -> void:
+	var path := map.route(map.start_pos, map.castle_pos)
+	map.main_road = [map.start_pos]
+	map.main_road.append_array(path)
+	for at in map.main_road:
+		if at in [map.start_pos, map.castle_pos]:
+			continue
+		map.set_tile(at.x, at.y, WorldMap.T_ROAD)
+
+
 # --------------------------------------------------------------------------
 # 5. 拠点地
 # --------------------------------------------------------------------------
@@ -566,8 +716,13 @@ static func _place_sites(map: WorldMap, rng: DetRng) -> void:
 	var from_gate := map.distance_field(map.start_pos)
 	var span := maxi(from_gate[map.castle_pos.y * map.width + map.castle_pos.x], 1)
 
-	# 本筋 = 門から城への最短経路の近く。そこに沿って町を置く。
+	# 町は、画面にも描かれている本街道へ置く。
 	var on_route: Array[Vector2i] = []
+	for at in map.main_road:
+		if at not in [map.start_pos, map.castle_pos]:
+			on_route.append(at)
+
+	# 洞は本街道から外し、危険度の各帯へ散らす。
 	var off_route: Array[Vector2i] = []
 	for y in map.height:
 		for x in map.width:
@@ -579,9 +734,9 @@ static func _place_sites(map: WorldMap, rng: DetRng) -> void:
 				continue
 			# 遠回り度。0 なら最短経路の上にいる。
 			var detour := a + b - span
-			if detour <= 2:
-				on_route.append(Vector2i(x, y))
-			elif detour >= 6:
+			# 洞は街道の外へ置くが、世界を広げたぶんだけ枝道まで際限なく
+			# 長くしない。遠回り度は概ね街道からの往復距離になる。
+			if detour >= CAVE_DETOUR_MIN and detour <= CAVE_DETOUR_MAX:
 				off_route.append(Vector2i(x, y))
 
 	_scatter(map, rng, on_route, "town", TOWN_COUNT, from_gate, span)
@@ -623,6 +778,29 @@ static func _scatter(
 			}
 			placed += 1
 			break
+
+
+## 洞から本街道へ枝道を伸ばす。目的地は任意だが、見つける根拠は地図へ残す。
+static func _connect_sites_to_road(map: WorldMap) -> void:
+	if map.main_road.is_empty():
+		return
+	for pos in map.sites:
+		var kind := String(map.sites[pos].get("kind", ""))
+		if kind != "cave":
+			continue
+		var site_at: Vector2i = pos
+		var nearest := map.main_road[0]
+		var nearest_distance := _grid_distance(site_at, nearest)
+		for road_at in map.main_road:
+			var distance := _grid_distance(site_at, road_at)
+			if distance < nearest_distance:
+				nearest = road_at
+				nearest_distance = distance
+		var spur := map.route(site_at, nearest)
+		for at in spur:
+			if at == nearest or map.sites.has(at):
+				continue
+			map.set_tile(at.x, at.y, WorldMap.T_ROAD)
 
 
 static func _too_close(map: WorldMap, at: Vector2i) -> bool:

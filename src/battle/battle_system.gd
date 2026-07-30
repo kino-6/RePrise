@@ -62,6 +62,8 @@ var is_over: bool = false
 var stolen_gold: int = 0
 ## ぬすんだ道具の ID。戦闘後に GameState が持ち物へ入れる。
 var stolen_items: Array[String] = []
+## 一度中身を取った敵。id で持ち、同じ敵からの反復稼ぎを防ぐ。
+var stolen_targets: Dictionary = {}
 
 ## 直近に実行された技。演出側が効果音を選ぶのに使う。
 var last_ability_id: String = ""
@@ -80,6 +82,7 @@ func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_n
 	is_over = false
 	stolen_gold = 0
 	stolen_items.clear()
+	stolen_targets.clear()
 	# 前の戦闘の残りかす（かばい・素早さ変化・状態異常）を持ち越さない。
 	for b in party + foes:
 		b.protected_by = null
@@ -447,39 +450,45 @@ func _is_boss(b: Battler) -> bool:
 	return bool(Database.monster(b.source_id).get("boss", false))
 
 
-## ぬすむ。金だけを少額落とす設計だと「選ばない方が得」になるので、必ず道具を狙う。
-## コモン枠とレア枠を持たせ、成功率は相手との素早さ差で決める（docs/battle_design.md）。
+## ぬすむ。手番を使う以上、初回は必ずラン内資源を得る。
+## 代わりに同じ敵から取れるのは一度だけ。レア枠だけを確率抽選し、
+## 外れた場合はコモン枠、コモンが無ければまとまったゴールドを得る。
 func _steal_from(actor: Battler, target: Battler) -> Array[String]:
 	var lines: Array[String] = []
+	if stolen_targets.has(target.id):
+		lines.append("%sは　もう なにも もっていない" % target.name)
+		return lines
+
 	var table: Dictionary = Database.monster(target.source_id).get("steal", {})
 	var bonus := 20 if actor.has_effect("steal_up") else 0
+	var agi_edge := maxi(actor.effective_agi() - target.effective_agi(), 0) / 2
+	var rare_odds := mini(20 + bonus + agi_edge, 70)
 
 	var rare_id := String(table.get("rare", ""))
-	if rare_id != "" and rng.chance(18 + bonus / 2):
+	if rare_id != "" and rng.chance(rare_odds):
 		stolen_items.append(rare_id)
+		stolen_targets[target.id] = true
 		lines.append("%sから　%s を ぬすんだ！" % [
 			target.name, Database.item(rare_id).get("name", rare_id)
 		])
 		return lines
 
 	var common_id := String(table.get("common", ""))
-	# 手番を 1 つ使う技なので、空振りが続くと選ばれなくなる。
-	var odds := 60 + bonus + maxi(actor.effective_agi() - target.effective_agi(), 0)
-	if common_id != "" and rng.chance(mini(odds, 90)):
-		stolen_items.append(common_id)
-		lines.append("%sから　%s を ぬすんだ！" % [
-			target.name, Database.item(common_id).get("name", common_id)
+	if common_id != "":
+		var count := 2 if actor.has_effect("steal_up") else 1
+		for _i in count:
+			stolen_items.append(common_id)
+		stolen_targets[target.id] = true
+		lines.append("%sから　%sを %dこ ぬすんだ！" % [
+			target.name, Database.item(common_id).get("name", common_id), count
 		])
 		return lines
 
-	# 何も持っていない相手からは金を掠める。空振りだけにすると技が死ぬ。
-	if table.is_empty() and rng.chance(70):
-		var loot := rng.range_i(4, 10 + floor_number * 3)
-		stolen_gold += loot
-		lines.append("%sから　%d %sを ぬすんだ！" % [target.name, loot, Terms.GOLD])
-		return lines
-
-	lines.append("しかし　なにも とれなかった")
+	# レアしか持たない相手の抽選外れや空の表も、手番を無報酬にはしない。
+	var loot := rng.range_i(8 + floor_number * 3, 16 + floor_number * 6)
+	stolen_gold += loot
+	stolen_targets[target.id] = true
+	lines.append("%sから　%d %sを ぬすんだ！" % [target.name, loot, Terms.GOLD])
 	return lines
 
 

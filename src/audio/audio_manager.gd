@@ -27,7 +27,31 @@ var _current_bgm := ""
 var _warned := false
 
 
+## 自動で走らせているときは音を出さない。
+##
+## **撮影・自動プレイ・headless は「人が見ていない実行」なので鳴らす理由が無い。**
+## `check_ui.py` は 23 画面を並列に立てるため、鳴ると 23 個の BGM が
+## 同時に鳴って実際にうるさい。音そのものを確かめたいときだけ `--audio` を付ける。
+##
+##     godot --path . -- --shot=battle            # 無音
+##     godot --path . -- --shot=battle --audio    # 鳴らす（音の確認用）
+static func _should_mute() -> bool:
+	var args := OS.get_cmdline_user_args()
+	if "--audio" in args:
+		return false
+	if DisplayServer.get_name() == "headless":
+		return true
+	for arg in args:
+		if arg.begins_with("--shot=") or arg.begins_with("--play="):
+			return true
+	return false
+
+
+var _muted := false
+
+
 func _ready() -> void:
+	_muted = _should_mute()
 	for _i in 2:
 		var bgm_player := AudioStreamPlayer.new()
 		bgm_player.volume_db = BGM_VOLUME_DB
@@ -46,6 +70,8 @@ func _ready() -> void:
 
 
 func play_bgm(name: String) -> void:
+	if _muted:
+		return
 	var current := _bgm_players[_active_bgm]
 	if _current_bgm == name and current.playing:
 		return
@@ -91,6 +117,8 @@ func _finish_bgm_crossfade(previous: AudioStreamPlayer) -> void:
 
 ## 効果音。空いている再生枠を順に使い回す。
 func play(name: String) -> void:
+	if _muted:
+		return
 	var stream := _load(SFX_DIR + name + ".wav")
 	if stream == null:
 		return

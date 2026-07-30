@@ -26,6 +26,7 @@ enum {
 	T_DESERT = 10,
 	T_SWAMP = 11,
 	T_LAVA = 12,    ## 通れない。世界で赤いのはここだけなので遠目でも危険と読める
+	T_ROAD = 13,    ## 門と城を結ぶ街道。町と洞の枝道も同じタイルを使う
 }
 
 ## 危険度の上限。今の 10 階ぶんの難度曲線をそのまま使うための数字。
@@ -34,6 +35,12 @@ const MAX_DANGER := 10
 
 ## 終点の位置。
 var castle_pos: Vector2i = Vector2i(-1, -1)
+
+## 門から城までの本街道。枝道は含めない。
+##
+## 地図上の T_ROAD だけでは町が上書きした箇所を復元できないため、
+## 旅程そのものを順序付きで持つ。世界はシードから再生成するので保存対象ではない。
+var main_road: Array[Vector2i] = []
 
 ## 拠点地（位置 -> {"kind": "town"/"cave"/"castle", "danger": int, "index": int}）。
 var sites: Dictionary = {}
@@ -245,6 +252,8 @@ func encounter_weight(x: int, y: int) -> int:
 			return 3
 		T_SWAMP:
 			return 4  # いちばん歩きにくい。沼を通る道は近くても高くつく
+		T_ROAD:
+			return 1  # 道は安全地帯ではない。草原と同じ歩数で遭遇判定へ入る
 		_:
 			return 0  # 拠点地の上は安全
 
@@ -252,4 +261,4 @@ func encounter_weight(x: int, y: int) -> int:
 func glyphs() -> Dictionary:
 	return { T_SEA: "~", T_PLAIN: ".", T_FOREST: "f", T_HILL: "n", T_MOUNTAIN: "^",
 		T_GATE: "G", T_TOWN: "T", T_CAVE: "o", T_CASTLE: "C",
-		T_SNOW: "*", T_DESERT: ":", T_SWAMP: "%", T_LAVA: "!" }
+		T_SNOW: "*", T_DESERT: ":", T_SWAMP: "%", T_LAVA: "!", T_ROAD: "=" }

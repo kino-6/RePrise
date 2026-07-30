@@ -1,5 +1,7 @@
 extends Node2D
 
+const ChestReward := preload("res://src/dungeon/chest_reward.gd")
+
 ## 画面の切り替えとランの進行。
 ##
 ## 拠点 → 世界 → 戦闘 → 世界 …… → 城で主 → 戦記 → 拠点、という輪を回すだけ。
@@ -1525,35 +1527,27 @@ func _on_shop_entered() -> void:
 
 ## 宝箱の中身。
 ##
-## 金だけだと「開ける手間に対して薄い」ので、装備と道具も出す。
-## 出店にしか装備が無いと、道中の宝箱を開ける理由が弱かった。
+## ラン内で失う資源なので、必ずゴールドに加えて装備か物資束も出す。
 ## 抽選はこの階の乱数から引くので、同じシードなら同じ中身が出る。
 func _on_chest(amount: int) -> void:
 	Sound.play("chest")
-	var roll := _battle_rng.range_i(0, 99)
+	var reward: Dictionary = ChestReward.roll(_battle_rng, GameState.floor_number, amount)
+	var gold_amount := int(reward.get("gold", 0))
+	GameState.earn_gold(gold_amount)
 
-	# 深い階ほど装備が出やすい。1 階で 22%、10 階で 40% ほど。
-	#
-	# 最初は 12% から始めていたが、実際に遊ぶと「宝箱は金しか出ない」と感じる。
-	# 3 回開けて 3 回とも金なら、中身の種類は無いのと同じ。
-	if roll < 20 + GameState.floor_number * 2:
-		var pool := Database.gear_ids_for_floor(GameState.floor_number)
-		if not pool.is_empty():
-			var gear_id := String(_battle_rng.pick(pool))
-			GameState.add_gear(gear_id)
-			hud.toast("たからばこ！ %s" % Database.gear(gear_id).get("name", gear_id))
-			_refresh_hud()
-			return
+	var bonus_text := ""
+	var gear_id := String(reward.get("gear", ""))
+	var item_id := String(reward.get("item", ""))
+	if gear_id != "":
+		GameState.add_gear(gear_id)
+		bonus_text = String(Database.gear(gear_id).get("name", gear_id))
+	elif item_id != "":
+		var count := int(reward.get("item_count", 1))
+		GameState.add_item(item_id, count)
+		bonus_text = "%s %dこ" % [Database.item(item_id).get("name", item_id), count]
 
-	if roll < 68:
-		var items := Database.item_ids_for_floor(GameState.floor_number)
-		if not items.is_empty():
-			var item_id := String(_battle_rng.pick(items))
-			GameState.add_item(item_id)
-			hud.toast("たからばこ！ %s" % Database.item(item_id).get("name", item_id))
-			_refresh_hud()
-			return
-
-	GameState.earn_gold(amount)
-	hud.toast("たからばこ！ %d %s" % [amount, Terms.GOLD])
+	var found := "%d %s" % [gold_amount, Terms.GOLD]
+	if bonus_text != "":
+		found = "%s / %s" % [bonus_text, found]
+	hud.toast("たからばこ！ %s" % found)
 	_refresh_hud()
