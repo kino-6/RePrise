@@ -1112,6 +1112,19 @@ func _draw_root_menu(origin: Vector2) -> void:
 ##
 ## 「待70」が何のことか分からない、という指摘への答えがこの窓の見出し。
 ## MP と「つぎのてばんまで」を列見出しとして常に出し、数字の意味を画面内で閉じる。
+## 技一覧の列幅。**合計は窓の内側に収める。**
+## 固定のオフセット（150 / 192）で置いていた頃と同じ位置だが、
+## いまは幅として渡すので、長い技名はその列の中で詰まる。
+const LIST_NAME_W := 150.0
+const LIST_MP_W := 42.0
+const LIST_COST_W := 60.0
+
+
+## 1 マスぶんの割り付け。**幅を渡す**ためだけの小さな helper。
+func _cell(at: Vector2, width: float) -> UiPanel:
+	return UiPanel.inside(self, Rect2(at, Vector2(width, PixelUI.LINE)))
+
+
 func _draw_list() -> void:
 	# 開く途中は枠だけ伸ばして、中身は開き終わってから出す。
 	if _list_open < 1.0:
@@ -1121,10 +1134,12 @@ func _draw_list() -> void:
 	var inner := PixelUI.content(LIST_RECT)
 	var origin := inner.position + Vector2(16, 0)
 
-	PixelUI.draw_text(self, origin + Vector2(150, 2), "MP", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
-	PixelUI.draw_text(
-		self, origin + Vector2(184, 2), "つぎのてばん", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
+	_cell(origin + Vector2(LIST_NAME_W, 2), LIST_MP_W).line(
+		"MP", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	# 見出しは列より広く取る。「つぎのてばん」は値（2〜3 桁）より長い。
+	_cell(
+		origin + Vector2(LIST_NAME_W + LIST_MP_W - 24.0, 2), LIST_COST_W + 24.0
+	).line("つぎのてばん", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	var first := (_list_index / LIST_ROWS) * LIST_ROWS
 	for i in range(first, mini(first + LIST_ROWS, _list_ids.size())):
@@ -1134,31 +1149,27 @@ func _draw_list() -> void:
 			draw_texture(CURSOR_TEX, (at + Vector2(-14, 2)).floor())
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 
+		# **3 列それぞれに幅を持たせる。** 固定のオフセットで置いていたので、
+		# 技名が長い行だけ MP に食い込む作りだった（外部化で名前が伸びると必ず出る）。
+		_cell(at, LIST_NAME_W).line(_row_name(i), tint)
 		if _list_kind == "item":
 			var it := Database.item(_list_ids[i])
-			PixelUI.draw_text(self, at, String(it.get("name", _list_ids[i])), tint)
-			PixelUI.draw_text(
-				self, at + Vector2(150, 2), "%d こ" % GameState.item_count(_list_ids[i]),
-				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-			)
-			PixelUI.draw_text(
-				self, at + Vector2(192, 2),
+			_cell(at + Vector2(LIST_NAME_W, 2), LIST_MP_W).line(
+				"%d こ" % GameState.item_count(_list_ids[i]),
+				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+			_cell(at + Vector2(LIST_NAME_W + LIST_MP_W, 2), LIST_COST_W).line(
 				"%d" % _actor.scaled_cost(int(it.get("cost", 100))),
-				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-			)
+				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 			continue
 
 		var ab := Database.ability(_list_ids[i])
-		PixelUI.draw_text(self, at, String(ab.get("name", _list_ids[i])), tint)
 		var mp := int(ab.get("mp", 0))
-		PixelUI.draw_text(
-			self, at + Vector2(150, 2), "%d" % mp if mp > 0 else "-",
-			PixelUI.C_MP if mp > 0 else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
-		PixelUI.draw_text(
-			self, at + Vector2(192, 2), "%d" % _actor.scaled_cost(int(ab.get("cost", 100))),
-			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-		)
+		_cell(at + Vector2(LIST_NAME_W, 2), LIST_MP_W).line(
+			"%d" % mp if mp > 0 else "-",
+			PixelUI.C_MP if mp > 0 else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+		_cell(at + Vector2(LIST_NAME_W + LIST_MP_W, 2), LIST_COST_W).line(
+			"%d" % _actor.scaled_cost(int(ab.get("cost", 100))),
+			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	# 説明文。選んでいるものが何をするかは、常に見えていてよい。
 	var desc := ""
@@ -1168,10 +1179,17 @@ func _draw_list() -> void:
 			else Database.ability(_list_ids[_list_index])
 		)
 		desc = String(data.get("desc", ""))
-	PixelUI.draw_text(
-		self, Vector2(inner.position.x + 4, inner.end.y - 18), desc,
-		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB
-	)
+	_cell(
+		Vector2(inner.position.x + 4, inner.end.y - 18), inner.size.x - 8.0
+	).line(desc, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+
+
+## 一覧の行の名前（道具と技で引く先が違うだけ）。
+func _row_name(i: int) -> String:
+	var id := _list_ids[i]
+	if _list_kind == "item":
+		return String(Database.item(id).get("name", id))
+	return String(Database.ability(id).get("name", id))
 
 
 func _draw_party_status() -> void:

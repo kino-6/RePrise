@@ -44,7 +44,13 @@ def _check_one(name: str) -> tuple[str, list[str]]:
     """
     for attempt in range(2):
         proc = subprocess.run(
-            ["godot", "--path", str(ROOT), "--", f"--shot={name}", "--ui-check"],
+            # `--accessibility disabled` を付ける。**並列で立てると Windows の
+            # デスクトップヒープが枯れて accesskit が落ちる**（0x80070008）。
+            # 画面の検査に読み上げは要らない。
+            [
+                "godot", "--accessibility", "disabled", "--path", str(ROOT),
+                "--", f"--shot={name}", "--ui-check",
+            ],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=180,
         )
