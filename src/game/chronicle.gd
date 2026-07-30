@@ -38,6 +38,12 @@ static func write(summary: Dictionary) -> PackedStringArray:
 		]
 	)
 
+	# ランをまたぐ物語の段階。世界の中の物語より先に置く
+	# （こちらは「前のランからの続き」なので、順番として先）。
+	var across := String(summary.get("cross_world_line", ""))
+	if across != "":
+		lines.append(across)
+
 	# 物語の結末。**ここで回収しないと六拍が宙に浮く。**
 	var ending := String(summary.get("story_ending", ""))
 	if ending != "":

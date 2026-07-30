@@ -1186,6 +1186,21 @@ func _test_cross_world_progress() -> void:
 		out = CrossWorldArc.advance(silent, 99, "", catalog)
 	_check("選ばなくても結末は決まる", not out.is_empty() and String(out["ending_id"]) != "")
 
+	# 戦記に「またぐ物語」の 1 行が載ること（A-3b）
+	var chron := Chronicle.write({
+		"victory": false, "floor": 5, "gold": 10, "kills": 3,
+		"members": [], "cross_world_line": "前のランからの つづき。",
+	})
+	var joined := "
+".join(chron)
+	_check("戦記にまたぐ物語の行が載る", joined.contains("前のランからの つづき。"))
+	var plain := Chronicle.write({"victory": false, "floor": 5, "members": []})
+	_check(
+		"物語が無いランでは載らない",
+		not "
+".join(plain).contains("前のランからの")
+	)
+
 	# 失敗継続の文（loss_line）が使われること
 	var lossy := CrossWorldArc.empty_state()
 	CrossWorldArc.select(lossy, 5, 333, catalog)

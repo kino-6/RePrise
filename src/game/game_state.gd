@@ -470,6 +470,65 @@ func story_progress() -> String:
 	return "%d/%d" % [world.story_beat, world.story.get("beats", []).size()]
 
 
+# --------------------------------------------------------------------------
+# ランをまたぐ物語（A-3b）
+#
+# 選出と進行そのものは CrossWorldArc（静的）。ここは永続状態の持ち主として
+# 橋渡しをするだけ。**画面は main.gd が出す。**
+# --------------------------------------------------------------------------
+
+
+## 進行中でなければ 1 つ選ぶ。ラン開始と拠点への帰還で呼ぶ。
+func pick_cross_world_arc() -> bool:
+	if cross_world.is_empty():
+		cross_world = CrossWorldArc.empty_state()
+	return CrossWorldArc.select(cross_world, runs_attempted, _fresh_seed(), {})
+
+
+## その置き場で出す段階（無ければ空）。
+func cross_world_beat(placement: String) -> Dictionary:
+	if cross_world.is_empty():
+		return {}
+	return CrossWorldArc.beat_due_at(cross_world, placement, runs_attempted, {})
+
+
+## いまの段階の文（`skin` を差し込んだもの）。
+func cross_world_line(beat: Dictionary) -> String:
+	return CrossWorldArc.line_of(cross_world, beat)
+
+
+## いまの段階が最後か（最後だけ選ばせる）。
+func cross_world_is_last() -> bool:
+	var arc := CrossWorldArc.active(cross_world, {})
+	if arc.is_empty():
+		return false
+	return int(cross_world.get("phase_index", 0)) >= (arc.get("beats", []) as Array).size() - 1
+
+
+## いまの型の選択肢（最後の段階で出す）。
+func cross_world_choices() -> Array:
+	var arc := CrossWorldArc.active(cross_world, {})
+	return arc.get("choices", []) if not arc.is_empty() else []
+
+
+## いまの型の題（画面の見出しに使う）。
+func cross_world_title() -> String:
+	return String(cross_world.get("skin", {}).get("title", ""))
+
+
+## 段階を 1 つ進める。**表示が済んでから呼ぶ。**
+## 最後まで行けば結末が返る（`{}` なら続く）。恒久データなので保存する。
+func advance_cross_world(choice_id: String = "") -> Dictionary:
+	var ending := CrossWorldArc.advance(cross_world, runs_attempted, choice_id, {})
+	save_game()
+	return ending
+
+
+## 失敗を書き留める（全滅など）。**打ち切らない。**
+func note_cross_world_setback(failure_id: String) -> void:
+	CrossWorldArc.note_setback(cross_world, failure_id)
+
+
 ## 洞から任意で出られるか。
 ##
 ## **用が済んでいるときだけ。** 封がまだ在る洞で使えると、番人を避けて

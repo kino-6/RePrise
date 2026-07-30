@@ -95,6 +95,14 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
+## またぐ物語の 1 行を出す。開く前に呼んでも残る。
+func notify_story(text: String) -> void:
+	if text == "":
+		return
+	_notice.set_text(text)
+	queue_redraw()
+
+
 func _notify(text: String) -> void:
 	_notice.set_text(text)
 	queue_redraw()

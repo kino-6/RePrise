@@ -106,7 +106,9 @@ func _ready() -> void:
 	# 同じ窓を 3 通りに使い回すので、返り先はここで振り分ける
 	# （結果の窓 / 物語の拍 / イベントの選択）。
 	event_view.chosen.connect(func(c: Dictionary) -> void:
-		if _outcome_open:
+		if _cross_world_open:
+			_on_cross_world_choice(c)
+		elif _outcome_open:
 			_close_outcome()
 		elif _story_beat.is_empty():
 			_on_event_choice(c)
@@ -114,7 +116,10 @@ func _ready() -> void:
 			_on_story_choice(c))
 	event_view.dismissed.connect(func() -> void:
 		# **物語の拍と結果は見送れない**（飛ばせると話が飛ぶ／読めない）。
-		if _outcome_open:
+		if _cross_world_open:
+			# またぐ物語も見送れない。既定の手で閉じる。
+			_on_cross_world_choice({})
+		elif _outcome_open:
 			_close_outcome()
 		elif _story_beat.is_empty():
 			_on_event_dismissed()
@@ -335,6 +340,16 @@ func _capture(which: String) -> void:
 		"world":
 			# 世界の全景。歩ける地形と拠点地の見分けを確かめる。
 			_start_run()
+		"acrosschoice":
+			# またぐ物語の最後の段階（三択）。
+			_enter_stronghold()
+			GameState.cross_world = CrossWorldArc.empty_state()
+			CrossWorldArc.select(GameState.cross_world, 9, 4242, {})
+			var arc: Dictionary = CrossWorldArc.active(GameState.cross_world, {})
+			GameState.cross_world["phase_index"] = (arc["beats"] as Array).size() - 1
+			GameState.runs_attempted = 99
+			var last: Dictionary = (arc["beats"] as Array).back()
+			_open_cross_world_choice(last)
 		"story":
 			# 物語の 1 拍目。語りが窓に収まっているかを見る。
 			_start_run()
@@ -525,8 +540,67 @@ func _enter_title() -> void:
 ## 拠点へ戻る。ラン中に呼ばれることは無い（end_run のあとだけ）。
 func _enter_stronghold() -> void:
 	Sound.play_bgm("stronghold")
+	# 進行中でなければここで 1 つ選ぶ（次のランから始まる）。
+	GameState.pick_cross_world_arc()
+
+	# 拠点に置かれた段階を出す。**最後の段階だけ選ばせる。**
+	var beat := GameState.cross_world_beat("stronghold")
+	if not beat.is_empty():
+		if GameState.cross_world_is_last():
+			_open_cross_world_choice(beat)
+			return
+		stronghold.notify_story(GameState.cross_world_line(beat))
+		GameState.advance_cross_world()
+
 	stronghold.open()
 	_fade_to(Mode.STRONGHOLD)
+
+
+## またぐ物語の最後の段階。三択を出して結末を決める。
+##
+## `EventView` を使い回す（世界内の拍と同じ作り）。**窓を増やさない。**
+func _open_cross_world_choice(beat: Dictionary) -> void:
+	var choices: Array = []
+	for c in GameState.cross_world_choices():
+		choices.append({
+			"id": String(c.get("id", "")),
+			"label": String(c.get("label", "")),
+			"keeps": String(c.get("preserves", "")),
+			"loses": String(c.get("sacrifices", "")),
+			"pays": String(c.get("immediate_cost", "")),
+		})
+	if choices.is_empty():
+		GameState.advance_cross_world()
+		stronghold.open()
+		_fade_to(Mode.STRONGHOLD)
+		return
+	_cross_world_open = true
+	event_view.open({
+		"story": true,
+		"skin": {
+			"title": GameState.cross_world_title(),
+			"actor": String(GameState.cross_world.get("skin", {}).get("anchor_name", "")),
+			"cause": GameState.cross_world_line(beat),
+			"flavor": "",
+		},
+		"choices": choices,
+	}, GameState.floor_number)
+	event_view.set_blocked([])
+	Sound.play("confirm")
+	_set_mode(Mode.EVENT)
+
+
+var _cross_world_open := false
+
+
+## またぐ物語の手を選んだ。結末を拠点で見せる。
+func _on_cross_world_choice(choice: Dictionary) -> void:
+	_cross_world_open = false
+	var ending := GameState.advance_cross_world(String(choice.get("id", "")))
+	stronghold.open()
+	_fade_to(Mode.STRONGHOLD)
+	if not ending.is_empty():
+		stronghold.notify_story(String(ending.get("line", "")))
 
 
 ## クエスト文をローカル AI に頼むときの言い方。
@@ -682,7 +756,12 @@ func _on_site_entered(pos: Vector2i) -> void:
 			if left > 0:
 				Sound.play("cancel")
 				hud.toast("とびらは 固く 閉ざされている。封が あと %d つ。" % left)
+				# **1 マス外へ出す。** 城のマスに立ったままだと、一歩動くたびに
+				# また扉を叩いて足踏みになる（町で直したのと同じ穴で、
+				# 自動プレイが城の前から動けなくなっていた）。
+				GameState.world_pos = GameState.step_outside_site(pos)
 				GameState.site = {}
+				_enter_world()
 				return
 			hud.toast("城の門が ひらいた。ここから先は 戻れない。")
 			_on_boss_reached()
@@ -1314,7 +1393,20 @@ func _on_battle_finished(victory: bool) -> void:
 
 
 func _finish_run(victory: bool) -> void:
-	result.show_summary(GameState.end_run(victory))
+	# **全滅は物語を打ち切らない**（打ち切ると失敗したランが無かったことになる）。
+	if not victory:
+		GameState.note_cross_world_setback("run_lost")
+
+	# またぐ物語の「ラン結果」の段階は戦記に載せる。
+	# 拠点の通知だと、ラン終了直後の画面をまたいで消えてしまう。
+	var summary := GameState.end_run(victory)
+	var beat := GameState.cross_world_beat("run_result")
+	if not beat.is_empty():
+		summary["cross_world_line"] = GameState.cross_world_line(beat)
+		# 最後の段階でなければここで進める（最後は拠点で選ばせる）。
+		if not GameState.cross_world_is_last():
+			GameState.advance_cross_world()
+	result.show_summary(summary)
 	_fade_to(Mode.RESULT)
 
 
