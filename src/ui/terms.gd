@@ -7,47 +7,51 @@ extends RefCounted
 ## 各 View に文字列を直書きすると、変えるたびに全画面を grep することになる。
 ## ここだけを書き換えれば表示が揃う、という状態を保つこと。
 ##
+## **語そのものは `data/vocabulary.json` にある。** ここに在るのは名前の付いた
+## 入れ物で、中身は外から差し替えられる（造語は見直しの対象なので、コードを
+## 触らずに変えられる状態にしておく）。右側の既定値はファイルが無いときの受け皿。
+##
 ## ここに置くのは「UI の語彙」だけ。職業名・技名・道具名は data/*.json 側にある。
 
 # --- 通貨・資源 ---
-const ECHO := "資源"  ## 恒久通貨。ランをまたいで残り、拠点の強化に使う
-const GOLD := "ゴールド"  ## ラン内資源。全滅で失う
+static var ECHO := Vocabulary.word("terms", "echo", "資源")  ## 恒久通貨。ランをまたいで残り、拠点の強化に使う
+static var GOLD := Vocabulary.word("terms", "gold", "ゴールド")  ## ラン内資源。全滅で失う
 
 # --- 場所 ---
-const STRONGHOLD := "銀の砦"
-const SHOP := "みせ"
-const TOWN := "町"
-const CAVE := "洞"
-const CASTLE := "城"
-const GATE := "門"
+static var STRONGHOLD := Vocabulary.word("terms", "stronghold", "銀の砦")
+static var SHOP := Vocabulary.word("terms", "shop", "みせ")
+static var TOWN := Vocabulary.word("terms", "town", "町")
+static var CAVE := Vocabulary.word("terms", "cave", "洞")
+static var CASTLE := Vocabulary.word("terms", "castle", "城")
+static var GATE := Vocabulary.word("terms", "gate", "門")
 
 # --- 戦績 ---
 ## 難度の軸。もとは「地下 N 階」だったが、世界を歩く形になったので
 ## 「門からどれだけ離れたか」を表す数字になった。目盛りは 1..10 のまま
 ## （data/*.json の floor_min もこの目盛りで書かれている）。
-const DANGER := "危険度"
-const DANGER_AT := "危険度 %d"
-const DEEPEST := "最も危険"
-const FLOOR := "危険度 %d"
-const CAVE_FLOOR := "洞 %d階"
-const RUNS := "%d回目"
-const RUNS_TOTAL := "%d回の潜行"
+static var DANGER := Vocabulary.word("terms", "danger", "危険度")
+static var DANGER_AT := Vocabulary.word("terms", "danger_at", "危険度 %d")
+static var DEEPEST := Vocabulary.word("terms", "deepest", "最も危険")
+static var FLOOR := Vocabulary.word("terms", "floor", "危険度 %d")
+static var CAVE_FLOOR := Vocabulary.word("terms", "cave_floor", "洞 %d階")
+static var RUNS := Vocabulary.word("terms", "runs", "%d回目")
+static var RUNS_TOTAL := Vocabulary.word("terms", "runs_total", "%d回の潜行")
 
 # --- 能力・コスト ---
 ## 行動の速さ。内部は「待ちコスト」（小さいほど速い）だが、
 ## 画面では大きいほど速い数字に直して見せる（speed() を通すこと）。
-const SPEED := "速さ"
+static var SPEED := Vocabulary.word("terms", "speed", "速さ")
 ## 戦闘コマンドに添えるコスト。こちらは「この一手で何待つか」なので待ちのまま出す。
-const WAIT := "待"
-const MASTERY := "じゅくれんど"
-const RANK := "段"
-const PRICE := "ひつよう"
-const MAXED := "きわみ"
+static var WAIT := Vocabulary.word("terms", "wait", "待")
+static var MASTERY := Vocabulary.word("terms", "mastery", "じゅくれんど")
+static var RANK := Vocabulary.word("terms", "rank", "段")
+static var PRICE := Vocabulary.word("terms", "price", "ひつよう")
+static var MAXED := Vocabulary.word("terms", "maxed", "きわみ")
 
 # --- 拠点の見出し ---
-const PARTY := "へんせい"
-const UPGRADE := "アップグレード"
-const DEPART := "出撃する"
+static var PARTY := Vocabulary.word("terms", "party", "へんせい")
+static var UPGRADE := Vocabulary.word("terms", "upgrade", "アップグレード")
+static var DEPART := Vocabulary.word("terms", "depart", "出撃する")
 
 
 ## 待ちコストを「速さ」に読み替える。

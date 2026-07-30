@@ -134,33 +134,35 @@ var biomes: PackedByteArray = PackedByteArray()
 ## `danger` はその生物相が現れてよい危険度の帯。
 ## `element` はそこに出る敵の傾向で、`data/monsters.json` の `biomes` と噛み合う。
 ## `tileset` は洞の中の絵（`assets/tiles/<名前>.png`。無ければ既定に落ちる）。
-const BIOMES := [
+## 生物相の定義。**名前は `data/vocabulary.json` から読む**ので const にできない
+## （造語は差し替えの対象なので、名前だけ外に出す。id と数値は動かさない）。
+static var BIOMES: Array = [
 	{
-		"id": "grassland", "name": "草原", "danger": [1, 4],
+		"id": "grassland", "name": Vocabulary.word("biomes", "grassland", "草原"), "danger": [1, 4],
 		"tiles": [T_PLAIN, T_PLAIN, T_PLAIN, T_FOREST], "tileset": "grassland",
 	},
 	{
-		"id": "forest", "name": "森林", "danger": [2, 6],
+		"id": "forest", "name": Vocabulary.word("biomes", "forest", "森林"), "danger": [2, 6],
 		"tiles": [T_FOREST, T_FOREST, T_PLAIN, T_HILL], "tileset": "grassland",
 	},
 	{
-		"id": "wetland", "name": "湿地", "danger": [3, 7],
+		"id": "wetland", "name": Vocabulary.word("biomes", "wetland", "湿地"), "danger": [3, 7],
 		"tiles": [T_SWAMP, T_SWAMP, T_FOREST, T_PLAIN], "tileset": "wetland",
 	},
 	{
-		"id": "badland", "name": "荒地", "danger": [4, 8],
+		"id": "badland", "name": Vocabulary.word("biomes", "badland", "荒地"), "danger": [4, 8],
 		"tiles": [T_HILL, T_HILL, T_DESERT, T_MOUNTAIN], "tileset": "dungeon",
 	},
 	{
-		"id": "desert", "name": "砂漠", "danger": [5, 9],
+		"id": "desert", "name": Vocabulary.word("biomes", "desert", "砂漠"), "danger": [5, 9],
 		"tiles": [T_DESERT, T_DESERT, T_HILL, T_MOUNTAIN], "tileset": "dungeon",
 	},
 	{
-		"id": "snowfield", "name": "雪原", "danger": [6, 10],
+		"id": "snowfield", "name": Vocabulary.word("biomes", "snowfield", "雪原"), "danger": [6, 10],
 		"tiles": [T_SNOW, T_SNOW, T_HILL, T_MOUNTAIN], "tileset": "snowfield",
 	},
 	{
-		"id": "volcano", "name": "火山", "danger": [7, 10],
+		"id": "volcano", "name": Vocabulary.word("biomes", "volcano", "火山"), "danger": [7, 10],
 		"tiles": [T_LAVA, T_HILL, T_MOUNTAIN, T_DESERT], "tileset": "volcano",
 	},
 ]

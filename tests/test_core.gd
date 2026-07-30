@@ -34,6 +34,7 @@ func _initialize() -> void:
 	_test_world_generation()
 	_test_town_generation()
 	_test_quest_text()
+	_test_vocabulary()
 	_test_event_effects()
 	_test_text_wrap()
 	_test_database_loaded()
@@ -793,6 +794,28 @@ func _test_quest_text() -> void:
 	for s in w2.seals:
 		names[String(s["name"])] = true
 	_equal("同じ名前は 1 つしか採らない", names.size(), 3)
+
+
+## 語彙の差し替え。
+##
+## **コードを触らずに語を変えられること**が目的なので、
+## 「JSON にある語が実際に画面へ出る」ことと「無くても既定に落ちる」ことを見る。
+func _test_vocabulary() -> void:
+	Vocabulary.reload()
+	_check("語彙ファイルが読める", Vocabulary.word("terms", "echo", "×") != "×")
+	_equal("無い節は既定に落ちる", Vocabulary.word("nope", "nope", "既定"), "既定")
+	_equal("無い語は既定に落ちる", Vocabulary.word("terms", "nope", "既定"), "既定")
+	_check("語彙表が読める", Vocabulary.nested("seal_names", "", "tail", []).size() > 0)
+	_equal("無い語彙表は既定に落ちる", Vocabulary.nested("x", "", "y", ["既定"]), ["既定"])
+
+	# 画面に出る側が JSON を通っていること（定数直書きに戻ったら落ちる）
+	_equal("Terms が語彙ファイルを通る", Terms.ECHO, Vocabulary.word("terms", "echo", "×"))
+	_equal(
+		"生物相の名が語彙ファイルを通る",
+		String(WorldMap.BIOMES[0]["name"]), Vocabulary.word("biomes", "grassland", "×")
+	)
+	_check("Lore の前提が組み立てられる", Lore.WORLD.contains("世界の前提"))
+	_equal("Lore の 3 行がそろう", Lore.DEPART_LINES.size(), 3)
 
 
 ## イベントの効果トークン。

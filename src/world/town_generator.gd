@@ -12,11 +12,13 @@ extends RefCounted
 ## 町の名の作り方。地形の語 + 場所の語。
 ## AI に書かせる前の土台で、これだけでも毎回違う名前が出る
 ## （docs/quest_design.md の「テンプレート語彙表 × DetRng」がこれ）。
-const NAME_HEAD := [
-	"かぜ", "いずみ", "しらかば", "あかつき", "みなも", "とうげ", "こだま",
-	"すずかけ", "ゆきわ", "ほむら", "しおさい", "つきしろ",
-]
-const NAME_TAIL := ["の里", "の宿場", "の町", "のむら", "の辻"]
+static var NAME_HEAD: Array = Vocabulary.nested(
+	"town_names", "", "head",
+	["かぜ", "いずみ", "しらかば", "あかつき", "みなも", "とうげ"]
+)
+static var NAME_TAIL: Array = Vocabulary.nested(
+	"town_names", "", "tail", ["の里", "の宿場", "の町"]
+)
 
 ## 町人の一言。役どころごとに分ける。
 ##
