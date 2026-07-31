@@ -196,6 +196,18 @@ func _input_member(event: InputEvent) -> void:
 			queue_redraw()
 		else:
 			_open_job_menu()
+	elif _index == _depart_row() and (
+		event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right")
+	):
+		# **出撃行では左右で今回の選択を変える**（E-3）。
+		# 別の画面へ潜らせない ―― 出撃の直前に見えていることが要点なので、
+		# ここで完結させる。
+		_cycle_depart_choice(-1 if event.is_action_pressed("ui_left") else 1)
+		queue_redraw()
+	elif _index == _depart_row() and event.is_action_pressed("ui_accept"):
+		_depart_choice = (_depart_choice + 1) % DEPART_CHOICES
+		Sound.play("cursor")
+		queue_redraw()
 	elif event.is_action_pressed("cancel"):
 		# 一覧のどこにいても一手で出撃へ戻れるようにする
 		if _index != _depart_row():
@@ -808,7 +820,12 @@ func _draw_loadout_detail(member: PartyMember, origin: Vector2) -> void:
 ## 口上に使える高さと、名簿を始める位置。
 ## 3 文が折り返して 5〜6 行になるので、名簿は行間を詰めて下へ入れる。
 ## 口上に使える高さ（窓の内側 150px から見出しぶんを引いた残り）。
+## 口上に使える高さ。残りは「今回の選択」に使う（E-3）。
 const DEPART_NOTE_H := 120.0
+
+## 出撃時にどの選択へカーソルがあるか（支給品 / 店の重点 / 継承印）。
+var _depart_choice := 0
+const DEPART_CHOICES := 3
 
 const UPGRADE_NAME_W := 144.0
 const UPGRADE_LEVEL_W := 56.0
@@ -824,6 +841,42 @@ const ABILITY_COL_W := 118.0
 const MASTERY_NAME_W := 88.0
 const MASTERY_STAR_W := 46.0
 const MASTERY_TEXT_W := 62.0
+
+
+## 出撃の選択を 1 つ送る（E-3）。**選べる候補が無ければ何も起きない。**
+func _cycle_depart_choice(direction: int) -> void:
+	match _depart_choice:
+		0:
+			var sets := GameState.supply_sets()
+			var at := 0
+			for i in sets.size():
+				if String(sets[i]["id"]) == GameState.supply_set_id:
+					at = i
+			var next: Dictionary = sets[posmod(at + direction, sets.size())]
+			if GameState.set_supply_set(String(next["id"])):
+				Sound.play("cursor")
+				_notify(String(next.get("desc", "")))
+		1:
+			# 「指定しない」を先頭に入れて回す。棚を絞らない選択も残す。
+			var ids: Array[String] = [""]
+			for row in GameState.shop_focuses():
+				ids.append(String(row["id"]))
+			var at := maxi(ids.find(GameState.shop_focus_id), 0)
+			if GameState.set_shop_focus(ids[posmod(at + direction, ids.size())]):
+				Sound.play("cursor")
+		2:
+			var usable: Array[String] = [""]
+			usable.append_array(GameState.available_signs())
+			var now := ""
+			if not GameState.inherit_signs.is_empty():
+				now = String(GameState.inherit_signs[0])
+			var at := maxi(usable.find(now), 0)
+			var pick := usable[posmod(at + direction, usable.size())]
+			if GameState.set_inherit_sign(0, pick):
+				Sound.play("cursor")
+				if pick != "":
+					_notify(String(Database.job(pick).get(
+						"inherit_sign", {}).get("desc", "")))
 
 
 func _draw_departure_note() -> void:
@@ -1120,9 +1173,46 @@ func _draw_loadout() -> void:
 
 
 func _draw_hint() -> void:
+	# **出撃を選んでいるあいだは「今回の選択」を出す**（E-3）。
+	#
+	# 段を上げると選べるものが増えるようにしたのに（E-1 / E-2）、
+	# **選ぶ場所が無ければ増えていないのと同じ**だった。実際 `--play=150` でも
+	# 拠点から世界へ抜けるまでに選択画面は 1 度も出なかった。
+	# 別画面へ潜らせず、**出撃の直前に見える所**へ置く。
+	if _index == _depart_row():
+		_draw_depart_choices()
+		return
 	_menu_line(2).line(Terms.STRONGHOLD_CONTROLS, PixelUI.C_TEXT_DIM)
 	_menu_line(28).line(Terms.STRONGHOLD_DEPART_PREP, PixelUI.C_TEXT_DIM)
 	_menu_line(52).line(Terms.STRONGHOLD_WORLD_ONCE, PixelUI.C_TEXT_DIM)
+
+
+## 今回の出撃で決めること（支給品 / 店の棚 / 継承印）。
+##
+## 左右で中身を、Ｚで次の項目へ。**選べる候補が無い行は「なし」**と出して、
+## 「まだ開いていない」ことが分かるようにする。
+func _draw_depart_choices() -> void:
+	var focus_name := Terms.NONE
+	for row in GameState.shop_focuses():
+		if String(row["id"]) == GameState.shop_focus_id:
+			focus_name = String(row["name"])
+	var sign_name := Terms.NONE
+	if not GameState.inherit_signs.is_empty() and String(GameState.inherit_signs[0]) != "":
+		sign_name = String(Database.job(String(GameState.inherit_signs[0])).get(
+			"inherit_sign", {}).get("name", ""))
+	var rows := [
+		[Terms.DEPART_SUPPLY,
+			String(RunChoice.supply_set(GameState.supply_set_id).get("name", ""))],
+		[Terms.DEPART_FOCUS, focus_name],
+		[Terms.DEPART_SIGN, sign_name],
+	]
+	for i in rows.size():
+		var line := _menu_line(2 + i * 24)
+		line.row(
+			String(rows[i][0]), String(rows[i][1]),
+			PixelUI.C_ACTIVE if i == _depart_choice else PixelUI.C_TEXT_DIM,
+			PixelUI.C_TEXT
+		)
 
 
 func _draw_job_menu() -> void:

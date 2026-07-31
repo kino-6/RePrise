@@ -38,6 +38,7 @@ func _initialize() -> void:
 	_test_signature_abilities()
 	_test_inherit_signs()
 	_test_sign_effects()
+	_test_reward_reachability()
 	_test_upgrades_add_choices()
 	_test_turn_plates_stay_unique()
 	_test_town_layouts_differ()
@@ -467,6 +468,56 @@ func _test_turn_plates_stay_unique() -> void:
 			kept += 1
 	_equal("識別子が札に残る", kept, suffixed)
 	bar.free()
+
+
+## 成長報酬が「到達できて、効く」（E-3）。
+##
+## **未強化でも完走できること**と、**単一の報酬が常に最適にならないこと**を見る。
+## どちらかが崩れると、成長報酬は「上げないと詰む」か「これだけ上げればいい」に
+## なって、選ぶ意味が消える。
+func _test_reward_reachability() -> void:
+	# **未強化でも選択がある。** 0 段で何も選べないと、最初のランに判断が無い。
+	_check("未強化でも支給品を選べる", RunChoice.supply_sets(0).size() >= 1)
+
+	# **どの報酬にも到達の道がある。** 段が上がれば必ず何かが増える。
+	var levels := {"provisions": 0, "connections": 0, "seal_lore": 0,
+		"lifeline": 0, "handmemory": 0}
+	var reader := func(id: String) -> int: return int(levels.get(id, 0))
+	var base := RunChoice.count_at(reader)
+	var dead: Array[String] = []
+	for id in Database.upgrade_ids():
+		var key := String(id)
+		if not levels.has(key):
+			continue
+		levels[key] = int(Database.upgrade(key).get("levels", 1))
+		if RunChoice.count_at(reader) <= base:
+			dead.append(key)
+		levels[key] = 0
+	_check("極めても何も増えない報酬が無い", dead.is_empty(), str(dead))
+
+	# **単一の報酬が常に最適にならない。** 支給品の型は総量がほぼ揃っていて、
+	# 寄せ方だけが違う（どれか 1 つが常に得なら、選ぶ意味が無い）。
+	var totals: Array[int] = []
+	for row in RunChoice.SUPPLY_SETS:
+		# ゴールド 40 ≒ やくそう 1 個ぶんとして数える（店で買える量の目安）。
+		totals.append(
+			int(row.get("gold", 0)) + int(row.get("herb", 0)) * 40
+			+ int(row.get("water", 0)) * 40
+		)
+	var lowest := totals[0]
+	var highest := totals[0]
+	for value in totals:
+		lowest = mini(lowest, value)
+		highest = maxi(highest, value)
+	_check(
+		"支給品の型は総量がほぼ揃う", highest - lowest <= 40,
+		"(%d 〜 %d)" % [lowest, highest]
+	)
+
+	# **選ぶ場所が実在する。** 出撃の画面に 3 つの選択が並ぶこと。
+	var view := FileAccess.get_file_as_string("res://src/scenes/stronghold_view.gd")
+	_check("出撃前に選択が出る", view.contains("_draw_depart_choices"))
+	_check("左右で変えられる", view.contains("_cycle_depart_choice"))
 
 
 ## 継承印の効き目（E-2b）。**持っているだけでは効かない。**

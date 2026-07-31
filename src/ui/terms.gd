@@ -434,3 +434,8 @@ static var BOUGHT := Vocabulary.word("terms", "bought", "%s を 買った")
 static var TURN_ORDER := Vocabulary.word("terms", "turn_order", "順")
 static var RESULT_NEXT := Vocabulary.word(
 	"terms", "result_next", "Ｚキーで つぎの たびへ")
+
+## 出撃時の選択（E-3）。**選べるのに選ぶ場所が無い**状態を無くすための行。
+static var DEPART_SUPPLY := Vocabulary.word("terms", "depart_supply", "しきゅうひん")
+static var DEPART_FOCUS := Vocabulary.word("terms", "depart_focus", "みせの たな")
+static var DEPART_SIGN := Vocabulary.word("terms", "depart_sign", "けいしょういん")
