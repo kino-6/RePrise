@@ -38,7 +38,13 @@ recent = done[-5:][::-1]
 
 # 新しい監査系列を足すたび範囲を書き換えると、そのタスクだけ台帳から消える。
 # 英大文字1字＋番号を共通のID契約にする（P-1 などのプレイテスト項目も数える）。
-TASK_ID = re.compile(r"\b([A-Z]-\d+)\b")
+#
+# **枝番（`E-2b`）も 1 件として数える。** 大きなタスクを分けたときに枝番を振るが、
+# `[A-Z]-\d+` だけだと `E-2b` の `E-2` に当たって**親と同じ ID として数えて
+# しまう**。実際、未完了の `E-2b` が完了済みの `E-2` と同一視されて台帳から
+# 落ち、`完了 + 残り = ID総数` が合わなくなっていた。
+# 末尾の小文字まで含めて 1 つの ID とする。
+TASK_ID = re.compile(r"\b([A-Z]-\d+[a-z]?)\b")
 
 
 def _titles(text, mark):
@@ -64,9 +70,21 @@ def _ledger(text, mark):
     for title in _titles(text, mark):
         if "の一部" in title:
             continue
-        for found in TASK_ID.findall(title):
+        for found in _ids_in(title):
             seen[found] = seen.get(found, 0) + 1
     return seen
+
+
+def _ids_in(title):
+    """題が**持っている** ID。
+
+    **本文で例として挙げた ID は数えない。** 題の先頭に `[Codex追記 P-6]` の
+    ような括弧があれば、そこだけを見る。無ければ題全体から拾う。
+    これが無いと「`E-2b` のような枝番も数える」と書いた P-6 の題が、
+    E-2b を持っていることになってしまう（実際そうなった）。
+    """
+    head = re.match(r"\s*\[([^\]]+)\]", title)
+    return TASK_ID.findall(head.group(1) if head else title)
 
 
 def _has_gate(text):
@@ -107,6 +125,8 @@ def _selftest():
         ("未完了どうしの衝突を見つける", {}, {"A-1": 2}, [], True),
         ("正しい台帳は通る", {"A-1": 1}, {"B-2": 1}, [], False),
         ("後発系列の ID も数える", {"P-1": 1}, {"Q-2": 1}, [], False),
+        ("枝番の重複を落とす", {}, {"E-2b": 2}, [], True),
+        ("枝番と親を別 ID として扱う", {"E-2": 1}, {"E-2b": 1}, [], False),
     ]
     bad = 0
     for name, done_map, open_map, missing, want_fail in cases:
@@ -124,11 +144,21 @@ def _selftest():
     ok = "C-8" not in part
     bad += 0 if ok else 1
     print("  %s  「〜の一部」は親の ID を閉じない" % ("OK" if ok else "NG"))
+    # **枝番を 1 件として拾えること。**
+    branch = _ledger("- [ ] **[Codex追記 E-2b] 継承印の効き目。**", "- [ ]")
+    ok = branch.get("E-2b", 0) == 1 and "E-2" not in branch
+    bad += 0 if ok else 1
+    print("  %s  枝番を 1 件として拾う（親と混ぜない）" % ("OK" if ok else "NG"))
+    # **題の中で例として挙げた ID は拾わないこと。**
+    quoted = _ledger("- [ ] **[Codex追記 P-6] `E-2b` のような枝番も数える。**", "- [ ]")
+    ok = "E-2b" not in quoted and quoted.get("P-6", 0) == 1
+    bad += 0 if ok else 1
+    print("  %s  例として挙げた ID は数えない" % ("OK" if ok else "NG"))
     print("---")
     if bad:
         print("検査器が壊れている（%d 件）" % bad)
         return 1
-    print("検査器は期待どおり動く（%d 件）" % (len(cases) + 1))
+    print("検査器は期待どおり動く（%d 件）" % (len(cases) + 3))
     return 0
 
 
@@ -158,6 +188,12 @@ if twice:
 open_twice = sorted(k for k, v in open_ids.items() if v > 1)
 if open_twice:
     problems.append("未完了に 2 回出てくる ID: %s" % "、".join(open_twice))
+# **完了 + 残り = ID 総数。** 合わなければ、どこかの ID が台帳から漏れている。
+# 枝番が親に吸われる、といった形で**静かに**起きるので、数で突き合わせる。
+if len(done_ids) + len(open_ids) != len(set(open_ids) | set(done_ids)):
+    problems.append(
+        "完了 %d + 残り %d が ID 総数 %d と合わない"
+        % (len(done_ids), len(open_ids), len(set(open_ids) | set(done_ids))))
 no_gate = _has_gate(archive_text)
 if no_gate:
     problems.append("Gate の証跡が無い項目 %d 件: %s" % (
