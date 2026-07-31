@@ -944,6 +944,56 @@ func upgrade_value(effect: String) -> int:
 
 
 # --------------------------------------------------------------------------
+# 継承印（職業★6 の装着制報酬・E-2）
+# --------------------------------------------------------------------------
+
+## 持ち込む継承印（職業 id の並び）。**出撃時に選ぶ。**
+##
+## `docs/progression_reward_design.md` の方針:
+##
+##   * **恒久能力値の加算はしない。** それをやると「上げた人が強い」だけになり、
+##     ラン中の判断が増えない（この作品が避けている形）。
+##   * **全印の常時発動もしない。** 15 職ぶん解放しても、持ち込めるのは
+##     基本 1 枠・最大 2 枠。**どれを持つかが判断**になる。
+##   * ★6 は構成が開く節目、★8 は職業マスター。役割を分ける。
+var inherit_signs: Array[String] = []
+
+
+## 持ち込める枠の数。判断は `InheritSign`（headless から確かめられる場所）。
+func inherit_slots() -> int:
+	return InheritSign.slots(upgrade_value("mastery_gain"))
+
+
+## 出撃メンバーの誰かが ★6 に届いている職（＝選べる印）。
+func available_signs() -> Array[String]:
+	return InheritSign.available(active_party())
+
+
+## 印を選び直す。**未解放・重複・枠外は拒む。**
+func set_inherit_sign(slot: int, job_id: String) -> bool:
+	while inherit_signs.size() < inherit_slots():
+		inherit_signs.append("")
+	if not InheritSign.can_choose(
+		inherit_signs, slot, job_id, active_party(), upgrade_value("mastery_gain")
+	):
+		return false
+	inherit_signs[slot] = job_id
+	save_game()
+	return true
+
+
+## その印を持ち込んでいるか。戦闘や拠点から引く窓口。
+func has_sign(job_id: String) -> bool:
+	return job_id in inherit_signs
+
+
+## 枠や解放に合わなくなったぶんを空ける。**詰めない。**
+func prune_inherit_signs() -> int:
+	return InheritSign.prune(
+		inherit_signs, active_party(), upgrade_value("mastery_gain"))
+
+
+# --------------------------------------------------------------------------
 # 旅の規律（難しさ / 加速 / 誓約）
 # --------------------------------------------------------------------------
 
@@ -1332,6 +1382,7 @@ func to_dict() -> Dictionary:
 		"prologue_seen": prologue_seen,
 		"echo": echo,
 		"upgrades": upgrades,
+		"inherit_signs": inherit_signs,
 		"run_rules": run_rule_choices,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
 		"active": active_indices,
@@ -1356,6 +1407,8 @@ func load_from_dict(data: Dictionary) -> bool:
 	prologue_seen = bool(data.get("prologue_seen", runs_attempted > 0))
 	# version 1 のセーブには残響もアップグレードも無い。既定値で素直に読める。
 	echo = int(data.get("echo", 0))
+	# 古いセーブに印は無い。**空で始める**（解放そのものは熟練から引くので失われない）。
+	inherit_signs.assign(data.get("inherit_signs", []))
 	upgrades = data.get("upgrades", {})
 	var raw_rules: Variant = data.get("run_rules", RunRules.default_config())
 	run_rule_choices = (

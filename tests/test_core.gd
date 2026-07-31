@@ -36,6 +36,7 @@ func _initialize() -> void:
 	_test_twelve_arcs_rotate()
 	_test_eight_stage_mastery()
 	_test_signature_abilities()
+	_test_inherit_signs()
 	_test_arc_endings_in_chronicle()
 	_test_data_integrity()
 	_test_save_migration()
@@ -391,6 +392,60 @@ func _test_arc_endings_in_chronicle() -> void:
 	# 戦記が載せる口を持っているか。
 	var text := FileAccess.get_file_as_string("res://src/game/chronicle.gd")
 	_check("戦記が結末を受け取る", text.contains("cross_world_endings"))
+
+
+## 継承印（E-2）。**★6 で開き、装着制で、常時発動ではない。**
+##
+## 設計文書が禁じているのは 2 つ ―― **恒久能力値の加算**（「上げた人が強い」だけに
+## なってラン中の判断が増えない）と、**全印の常時発動**（解放するほど強くなるだけ）。
+## 持ち込めるのは基本 1 枠・最大 2 枠で、**どれを持つかが判断**になる。
+func _test_inherit_signs() -> void:
+	var rules := {}
+	var missing: Array[String] = []
+	var always_on: Array[String] = []
+	for job_id in Database.job_ids():
+		var sign: Dictionary = Database.job(String(job_id)).get("inherit_sign", {})
+		if sign.is_empty():
+			missing.append(String(job_id))
+			continue
+		rules[String(sign.get("rule", ""))] = true
+		# **能力値の加算を印にしない。** 数値だけの報酬は判断を増やさない。
+		for stat in ["hp", "mp", "atk", "def", "agi", "mag"]:
+			if sign.has(stat):
+				always_on.append("%s(%s)" % [job_id, stat])
+	_check("15 職すべてに継承印がある", missing.is_empty(), str(missing))
+	_check("印のルールが重ならない", rules.size() == 15, "(%d 種)" % rules.size())
+	_check("印に能力値の加算が無い", always_on.is_empty(), str(always_on))
+
+	# 枠と選び方。**★6 未到達では選べない。**
+	#
+	# `GameState` はオートロードで headless から触れないので、判断は
+	# `InheritSign`（静的クラス）に置いてある。ここはそちらを見る。
+	_equal("基本は 1 枠", InheritSign.slots(0), 1)
+	_equal("手の記憶を極めると 2 枠", InheritSign.slots(InheritSign.SLOT_NEED), 2)
+	_equal("それ以上は増えない", InheritSign.slots(999), InheritSign.MAX_SLOTS)
+
+	var rookie := PartyMember.create("しんまい", "soldier")
+	var party: Array = [rookie]
+	var chosen: Array = ["", ""]
+	_check(
+		"★6 未到達では選べない",
+		not InheritSign.can_choose(chosen, 0, "soldier", party, 0),
+		"(解放していない印を受け入れた)"
+	)
+	rookie.job_exp["soldier"] = 640
+	_check("★6 で選べる", "soldier" in InheritSign.available(party))
+	_check("選べる", InheritSign.can_choose(chosen, 0, "soldier", party, 0))
+	chosen[0] = "soldier"
+	_check(
+		"同じ印は 2 枠に入らない",
+		not InheritSign.can_choose(chosen, 1, "soldier", party, InheritSign.SLOT_NEED)
+	)
+	_check("枠を超えて選べない", not InheritSign.can_choose(chosen, 9, "soldier", party, 0))
+	# 解放が外れたら空ける（詰めない）。
+	rookie.job_exp["soldier"] = 0
+	_equal("解放が外れた枠は空く", InheritSign.prune(chosen, party, 0), 1)
+	_equal("空いた枠は空文字", String(chosen[0]), "")
 
 
 ## ★5 の象徴技が 15 職ぶんあって、実際に撃てる（F-6a）。

@@ -62,7 +62,12 @@
       "short_sword",
       "leather_vest"
     ],
-    "question": "重い一撃を今入れるか、次の手番を守って待つか。"
+    "question": "重い一撃を今入れるか、次の手番を守って待つか。",
+    "inherit_sign": {
+      "name": "むかえうちの印",
+      "rule": "counter_once",
+      "desc": "1 戦に 1 度、ぼうぎょ で受けた単体攻撃へ反撃する。"
+    }
   },
   "priest": {
     "name": "そうりょ",
@@ -125,7 +130,12 @@
       "oak_staff",
       "leather_vest"
     ],
-    "question": "誰から癒すか。癒す手番を、速める手番に回せないか。"
+    "question": "誰から癒すか。癒す手番を、速める手番に回せないか。",
+    "inherit_sign": {
+      "name": "いやしの印",
+      "rule": "cleanse_once",
+      "desc": "1 戦に 1 度、回復と同時に悪い状態を 1 つ解く。"
+    }
   },
   "mage": {
     "name": "まほうつかい",
@@ -186,7 +196,12 @@
     "starting_gear": [
       "oak_staff"
     ],
-    "question": "どの属性が今いちばん効くか。波及・足止め・中断のどれが要るか。"
+    "question": "どの属性が今いちばん効くか。波及・足止め・中断のどれが要るか。",
+    "inherit_sign": {
+      "name": "みとおしの印",
+      "rule": "reveal_resist",
+      "desc": "開戦時、敵のいちばん低い属性耐性が分かる。"
+    }
   },
   "thief": {
     "name": "とうぞく",
@@ -248,7 +263,12 @@
     "starting_gear": [
       "short_sword"
     ],
-    "question": "時間を稼ぐか、戦利品を取りに行くか。軽い手を何回重ねるか。"
+    "question": "時間を稼ぐか、戦利品を取りに行くか。軽い手を何回重ねるか。",
+    "inherit_sign": {
+      "name": "えらびの印",
+      "rule": "loot_choice",
+      "desc": "戦利品を増やさず、2 つの候補から 1 つ選べる。"
+    }
   },
   "paladin": {
     "name": "せいきし",
@@ -317,7 +337,12 @@
       "short_sword",
       "leather_vest"
     ],
-    "question": "誰を庇うか。庇って耐えるか、聖なる一撃で止めるか。"
+    "question": "誰を庇うか。庇って耐えるか、聖なる一撃で止めるか。",
+    "inherit_sign": {
+      "name": "みがわりの印",
+      "rule": "endure_once",
+      "desc": "1 戦に 1 度、味方ひとりの致死傷を肩代わりして 1 で耐える。"
+    }
   },
   "ninja": {
     "name": "にんじゃ",
@@ -385,7 +410,12 @@
     "starting_gear": [
       "short_sword"
     ],
-    "question": "この一手で決めきれるか。決めきれないなら煙に巻いて仕切り直すか。"
+    "question": "この一手で決めきれるか。決めきれないなら煙に巻いて仕切り直すか。",
+    "inherit_sign": {
+      "name": "みきりの印",
+      "rule": "dodge_once",
+      "desc": "1 戦に 1 度、予告された単体攻撃を見てから避けられる。"
+    }
   },
   "ranger": {
     "name": "かりびと",
@@ -453,7 +483,12 @@
       "short_sword",
       "leather_vest"
     ],
-    "question": "群れを散らすか、一体を毒で削り続けるか。"
+    "question": "群れを散らすか、一体を毒で削り続けるか。",
+    "inherit_sign": {
+      "name": "えものの印",
+      "rule": "mark_prey",
+      "desc": "開戦時に獲物を指定し、残り体力と次の行動を読む。"
+    }
   },
   "spellblade": {
     "name": "まけんし",
@@ -521,7 +556,12 @@
       "short_sword",
       "leather_vest"
     ],
-    "question": "刃に何の属性を乗せるか。属性を変える手番を払う価値があるか。"
+    "question": "刃に何の属性を乗せるか。属性を変える手番を払う価値があるか。",
+    "inherit_sign": {
+      "name": "やいばの印",
+      "rule": "start_element",
+      "desc": "出撃時、覚えた属性 1 つを通常攻撃へ付ける。"
+    }
   },
   "summoner": {
     "name": "しょうかんし",
@@ -587,7 +627,12 @@
     "starting_gear": [
       "oak_staff"
     ],
-    "question": "呼ぶものを何にするか。今の場に足りないのは火力か、範囲か。"
+    "question": "呼ぶものを何にするか。今の場に足りないのは火力か、範囲か。",
+    "inherit_sign": {
+      "name": "けいやくの印",
+      "rule": "record_beast",
+      "desc": "倒した敵を 1 ランに 1 体だけ記録し、次戦で一度呼べる。"
+    }
   },
   "gunner": {
     "name": "じゅうし",
@@ -653,7 +698,12 @@
     "starting_gear": [
       "hunter_bow"
     ],
-    "question": "守りを抜くか、弾をばらまくか。撃つ前に間合いを作るか。"
+    "question": "守りを抜くか、弾をばらまくか。撃つ前に間合いを作るか。",
+    "inherit_sign": {
+      "name": "しょだんの印",
+      "rule": "first_shot",
+      "desc": "開戦時、貫通・妨害・煙幕から初弾の性質を選ぶ。"
+    }
   },
   "alchemist": {
     "name": "れんきんし",
@@ -721,7 +771,12 @@
     "starting_gear": [
       "oak_staff"
     ],
-    "question": "薬を配るか、爆薬を投げるか。手持ちをどちらに使うか。"
+    "question": "薬を配るか、爆薬を投げるか。手持ちをどちらに使うか。",
+    "inherit_sign": {
+      "name": "ちょうごうの印",
+      "rule": "field_mix",
+      "desc": "移動中、決まった組み合わせで持ち物 2 つを別の品へ変える。"
+    }
   },
   "sage": {
     "name": "けんじゃ",
@@ -789,7 +844,12 @@
       "oak_staff",
       "leather_vest"
     ],
-    "question": "攻めと癒しを 1 手で兼ねるか、どちらかに寄せるか。"
+    "question": "攻めと癒しを 1 手で兼ねるか、どちらかに寄せるか。",
+    "inherit_sign": {
+      "name": "さいえんの印",
+      "rule": "echo_ability",
+      "desc": "1 戦に 1 度、直前に味方が使った技を重い代価で再演する。"
+    }
   },
   "chronomancer": {
     "name": "じじゅつし",
@@ -855,7 +915,12 @@
     "starting_gear": [
       "oak_staff"
     ],
-    "question": "誰の手番を動かすか。速めるか、遅らせるか、止めるか。"
+    "question": "誰の手番を動かすか。速めるか、遅らせるか、止めるか。",
+    "inherit_sign": {
+      "name": "いれかえの印",
+      "rule": "swap_turns",
+      "desc": "1 戦に 1 度、味方 2 人の次の手番を入れ替える。"
+    }
   },
   "beastmaster": {
     "name": "まじゅうつかい",
@@ -924,7 +989,12 @@
       "short_sword",
       "leather_vest"
     ],
-    "question": "獣に任せるか、自分で庇うか。撃破以外の決着が見えているか。"
+    "question": "獣に任せるか、自分で庇うか。撃破以外の決着が見えているか。",
+    "inherit_sign": {
+      "name": "なだめの印",
+      "rule": "soothe_beast",
+      "desc": "獣を瀕死でなだめ、撃破とは違う報酬で戦いを終える。"
+    }
   },
   "jester": {
     "name": "あそびにん",
@@ -988,6 +1058,11 @@
     "starting_gear": [
       "crescent_knife"
     ],
-    "question": "出たとこ勝負に賭けるか、ましな目を選びに行くか。"
+    "question": "出たとこ勝負に賭けるか、ましな目を選びに行くか。",
+    "inherit_sign": {
+      "name": "えらびのばくち印",
+      "rule": "pick_two",
+      "desc": "最初の運まかせは、2 つの候補を見てから選べる。"
+    }
   }
 }
