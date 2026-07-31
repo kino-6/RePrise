@@ -431,6 +431,7 @@ func spend_lifeline() -> bool:
 
 func _apply_upgrades_to_run() -> void:
 	_grant_starting_gear()
+	_apply_departure_signs()
 	lifeline_left = (
 		0 if run_contract_enabled("no_lifeline")
 		else upgrade_value("lifeline")
@@ -446,6 +447,43 @@ func _apply_upgrades_to_run() -> void:
 		var waters := int(set_row.get("water", 0))
 		if waters > 0:
 			add_item("water", waters)
+
+
+## 道中の調合（E-2b / れんきんし「ちょうごうの印」）。
+##
+## **決まった組み合わせだけ**で、乱数を引かない ―― 引くと「振り直したくなる」
+## ので、判断ではなく作業になる。作れたら true。
+func mix_items(a: String, b: String) -> bool:
+	if not InheritSign.can_mix(inherit_signs):
+		return false
+	var made := InheritSign.mix_result(a, b)
+	if made == "" or item_count(a) <= 0 or item_count(b) <= 0:
+		return false
+	if a == b and item_count(a) < 2:
+		return false
+	consume_item(a)
+	consume_item(b)
+	add_item(made, 1)
+	return true
+
+
+## 出撃時に効く継承印（E-2b）。**ラン中ずっと効くものはここ。**
+##
+## 戦闘ごとに効くものは `BattleSystem` 側（`signs`）。
+## ここで能力値を足さない ―― 設計文書が禁じている「上げた人が強い」形になる。
+func _apply_departure_signs() -> void:
+	if not has_sign("spellblade"):
+		return
+	# やいばの印。覚えた属性を 1 つ、先頭の仲間の通常攻撃へ乗せる。
+	# **どの属性が乗るかは覚えた技で決まる**ので、育て方が形に出る。
+	var party := active_party()
+	if party.is_empty():
+		return
+	for id in party[0].learned:
+		var element := String(Database.ability(String(id)).get("element", ""))
+		if element != "":
+			party[0].rune_element = element
+			return
 
 
 ## シードだけは実時間から取る。ここから先は一切の乱数がこの種から決まる。

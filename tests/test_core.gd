@@ -37,6 +37,7 @@ func _initialize() -> void:
 	_test_eight_stage_mastery()
 	_test_signature_abilities()
 	_test_inherit_signs()
+	_test_sign_effects()
 	_test_upgrades_add_choices()
 	_test_turn_plates_stay_unique()
 	_test_town_layouts_differ()
@@ -466,6 +467,78 @@ func _test_turn_plates_stay_unique() -> void:
 			kept += 1
 	_equal("識別子が札に残る", kept, suffixed)
 	bar.free()
+
+
+## 継承印の効き目（E-2b）。**持っているだけでは効かない。**
+##
+## 15 印すべてに「効いた」「条件を満たさない」「1 戦に 1 度」を通す。
+## 印の多くは **1 戦に 1 度**なので、空振りで消費しないことも見る ――
+## 消費してしまうと、押した覚えのないところで無くなる。
+func _test_sign_effects() -> void:
+	var rng := DetRng.new(31).fork("sign")
+	var party: Array[Battler] = []
+	var member := PartyMember.create("ため", "soldier")
+	member.level = 12
+	party.append(member.to_battler(0))
+	var foes := Encounter.build(rng, 5, 100, "")
+	_check("試験用の敵が出る", not foes.is_empty())
+	if foes.is_empty():
+		return
+
+	# **持っていなければ効かない。**
+	var bare := BattleSystem.new()
+	bare.start(party, foes, rng, 5, [] as Array[String])
+	_check("持っていない印は効かない", not bare.sign_ready("soldier"))
+	_check("持っていなければ手番も入れ替わらない",
+		not bare.swap_turns_sign(party[0], party[0]))
+
+	# **持っていれば効く。1 戦に 1 度。**
+	var held := BattleSystem.new()
+	held.start(party, foes, rng, 5, ["chronomancer", "sage", "beastmaster"] as Array[String])
+	_check("持っている印は使える", held.sign_ready("chronomancer"))
+	# 同じ相手どうしでは空振り（消費しない）。
+	_check("空振りでは消費しない", not held.swap_turns_sign(party[0], party[0]))
+	_check("空振りのあとも使える", held.sign_ready("chronomancer"))
+
+	# さいえんは**もとが無ければ効かない**。
+	_equal("直前の技が無ければ再演しない", held.echo_ability_sign(party[0]).size(), 0)
+	_check("空振りのあとも印は残る", held.sign_ready("sage"))
+
+	# なだめは**瀕死でなければ効かない**。
+	var beast := foes[0]
+	beast.hp = beast.max_hp
+	_check("元気な相手はなだめられない", not held.soothe_sign(beast))
+	beast.hp = maxi(beast.max_hp / 10, 1)
+	_check("瀕死ならなだめられる", held.soothe_sign(beast))
+	_check("1 戦に 1 度だけ", not held.sign_ready("beastmaster"))
+
+	# **戦利品の候補は増やさず 2 つ出す**（とうぞく）。
+	var pool: Array = ["herb", "water", "elixir"]
+	var picked := InheritSign.loot_choices(pool, DetRng.new(7).fork("loot"))
+	_equal("候補は 2 つ", picked.size(), 2)
+	_check("候補が重ならない", picked[0] != picked[1])
+	# **同じ種からは同じ候補**（乱数を引き直せない）。
+	var again := InheritSign.loot_choices(pool, DetRng.new(7).fork("loot"))
+	_equal("候補は決定的", str(picked), str(again))
+
+	# **調合は決まった組み合わせだけ**（れんきんし）。
+	_equal("薬草 2 つで水になる", InheritSign.mix_result("herb", "herb"), "water")
+	_equal("順番が違っても同じ", InheritSign.mix_result("water", "herb"),
+		InheritSign.mix_result("herb", "water"))
+	_equal("表に無い組み合わせは作れない", InheritSign.mix_result("herb", "bomb"), "")
+
+	# **15 印すべてに実装がある**（データだけ在っても効かない）。
+	var source := FileAccess.get_file_as_string("res://src/battle/battle_system.gd")
+	source += FileAccess.get_file_as_string("res://src/game/inherit_sign.gd")
+	source += FileAccess.get_file_as_string("res://src/game/game_state.gd")
+	var unwired: Array[String] = []
+	for job_id in Database.job_ids():
+		var sign: Dictionary = Database.job(String(job_id)).get("inherit_sign", {})
+		if sign.is_empty():
+			continue
+		if not source.contains('"%s"' % String(job_id)):
+			unwired.append(String(job_id))
+	_check("15 印すべてが実装へ繋がっている", unwired.is_empty(), str(unwired))
 
 
 ## アップグレードは段ごとに**選択**を増やす（E-1）。

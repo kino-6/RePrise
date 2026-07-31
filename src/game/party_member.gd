@@ -79,7 +79,13 @@ func gear_effects() -> Array[String]:
 
 
 ## 通常攻撃に乗る属性。武器が持っていれば、それがそのまま乗る。
+## やいばの印で乗せた属性（E-2b / まけんし）。武器の属性より優先する。
+var rune_element := ""
+
+
 func attack_element() -> String:
+	if rune_element != "":
+		return rune_element
 	return String(Database.gear(String(equipment.get("weapon", ""))).get("element", ""))
 
 

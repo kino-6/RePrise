@@ -34,6 +34,42 @@ static func definition(job_id: String) -> Dictionary:
 	return Database.job(job_id).get("inherit_sign", {})
 
 
+## 戦利品の候補を 2 つ出す（E-2b / とうぞく「えらびの印」）。
+##
+## **増やさない。** 量を増やすと「上げた人が得をする」形になる。
+## 決定的に引いた 2 つから 1 つ選べる ―― 増えるのは判断であって、量ではない。
+static func loot_choices(pool: Array, rng: DetRng) -> Array[String]:
+	if pool.size() <= 1:
+		return [String(pool[0])] if pool.size() == 1 else []
+	var first := int(rng.range_i(0, pool.size() - 1))
+	var second := int(rng.range_i(0, pool.size() - 1))
+	if second == first:
+		second = (first + 1) % pool.size()
+	return [String(pool[first]), String(pool[second])]
+
+
+## 道中の調合（E-2b / れんきんし「ちょうごうの印」）。**決まった組み合わせだけ。**
+##
+## 乱数を引かない ―― 引くと「振り直したくなる」ので、判断ではなく作業になる。
+const FIELD_MIX := {
+	"herb+herb": "water",
+	"herb+water": "elixir",
+}
+
+
+## 道中で調合できるか（印を持っているときだけ）。
+static func can_mix(held: Array) -> bool:
+	return "alchemist" in held
+
+
+## 2 つの持ち物から作れるもの（作れなければ空）。
+static func mix_result(a: String, b: String) -> String:
+	var pair: Array[String] = [a, b]
+	pair.sort()
+	var key := "%s+%s" % [pair[0], pair[1]]
+	return String(FIELD_MIX[key]) if FIELD_MIX.has(key) else ""
+
+
 ## 選べる印。**★6 に届いている職だけ。**
 ##
 ## 届いていない職の印を持ち込めると、★6 に意味が無くなる。

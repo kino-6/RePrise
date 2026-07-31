@@ -76,7 +76,40 @@ var last_hit_ids: Array[int] = []
 var last_hit_amount: Dictionary = {}
 
 
-func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_no: int = 1) -> void:
+## 持ち込んでいる継承印（E-2b）。**職の id で持つ。**
+##
+## `GameState` を直に見ない ―― Sim（`tests/balance.gd`）も同じ `BattleSystem` を
+## 回すので、ここがオートロードに依存すると測れなくなる。呼ぶ側が渡す。
+var signs: Array[String] = []
+
+## 印を 1 戦に 1 度だけ使うための控え。`start()` で作り直す。
+var _sign_used: Dictionary = {}
+
+
+## 開戦時に分かること（E-2b）。**画面がそのまま読む行。**
+##
+## 印の多くは「情報が増える」報酬なので、数値ではなく**文**で返す。
+## 数値の加算にすると、設計文書が禁じている「上げた人が強い」形になる。
+var sign_notes: Array[String] = []
+
+
+## その印を持っていて、この戦いでまだ使っていないか。
+func sign_ready(job_id: String) -> bool:
+	return job_id in signs and not _sign_used.has(job_id)
+
+
+## 使ったことにする。**使えたときだけ呼ぶ**（空振りで消費しない）。
+func spend_sign(job_id: String) -> void:
+	_sign_used[job_id] = true
+
+
+func start(
+	party: Array[Battler], foes: Array[Battler], run_rng: DetRng,
+	floor_no: int = 1, active_signs: Array[String] = []
+) -> void:
+	signs = active_signs
+	_sign_used.clear()
+	sign_notes.clear()
 	allies = party
 	enemies = foes
 	rng = run_rng
@@ -102,6 +135,7 @@ func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_n
 	_ultimate_uses.clear()
 	_last_magic.clear()
 	_in_ultimate = false
+	_open_battle_signs()
 	scheduler.add_all(allies)
 	scheduler.add_all(enemies)
 	# 敵の初手を先に決めておく。行動順バーに予告として出すため。
@@ -181,6 +215,113 @@ func begin_turn_effects(actor: Battler) -> Dictionary:
 			lines.append("%sは　装填を おえた" % actor.name)
 
 	return {"lines": lines, "skipped": skipped}
+
+
+## 開戦時に効く印（E-2b）。**情報を開くだけで、数値は動かさない。**
+func _open_battle_signs() -> void:
+	if "mage" in signs:
+		# みとおしの印。いちばん通る属性が分かる。
+		var weakest := ""
+		for foe in enemies:
+			for element in foe.weak:
+				weakest = String(element)
+				break
+			if weakest != "":
+				break
+		sign_notes.append(
+			"みとおしの印: %s が 通る" % weakest if weakest != ""
+			else "みとおしの印: 目立った弱点は 無い"
+		)
+	if "ranger" in signs and not enemies.is_empty():
+		# えものの印。狙う 1 体の残りと次の手が読める。
+		var prey := enemies[0]
+		for foe in enemies:
+			if foe.hp > prey.hp:
+				prey = foe
+		sign_notes.append("えものの印: %s は 残り %d／次は %s" % [
+			prey.name, prey.hp,
+			Database.ability(prey.planned_ability).get("name", "まだ 読めない"),
+		])
+	if "gunner" in signs:
+		# しょだんの印。初弾に性質が乗る（装填と同じ扱い）。
+		for ally in allies:
+			if ally.is_alive():
+				ally.charged = true
+				break
+		sign_notes.append("しょだんの印: 初弾に 弾を こめた")
+
+
+## 瀕死の獣をなだめる（E-2b / まじゅうつかい「なだめの印」）。
+##
+## **撃破とは違う決着。** 経験値は出ないが、戦いがそこで終わる。
+## `てなずけ`（★5）より条件が厳しい代わりに、手番を使わない ――
+## 印は「持ち込んだ判断」であって、押す技ではない。
+func soothe_sign(target: Battler) -> bool:
+	if not sign_ready("beastmaster") or _is_boss(target):
+		return false
+	if target.hp * 100 / maxi(target.max_hp, 1) > SOOTHE_HP:
+		return false
+	spend_sign("beastmaster")
+	target.tamed = true
+	_check_finished()
+	return true
+
+
+## なだめられる残り体力（百分率）。
+const SOOTHE_HP := 25
+
+## 記録した獣（E-2b / しょうかんし「けいやくの印」）。**1 ランに 1 体。**
+var recorded_beast := ""
+
+
+## 倒した相手を記録する。**すでに記録していれば上書きしない**
+## （1 ランに 1 体、という約束を戦闘側で守る）。
+func record_beast_sign(source_id: String) -> bool:
+	if not sign_ready("summoner") or recorded_beast != "":
+		return false
+	spend_sign("summoner")
+	recorded_beast = source_id
+	return true
+
+
+## 味方 2 人の次の手番を入れ替える（E-2b / じじゅつし「いれかえの印」）。
+##
+## **1 戦に 1 度。** 誰と誰を入れ替えるかは呼ぶ側（画面 / オート）が決める。
+## 効いたときだけ true を返し、空振りでは消費しない。
+func swap_turns_sign(a: Battler, b: Battler) -> bool:
+	if a == b or not sign_ready("chronomancer"):
+		return false
+	if not (a.is_alive() and b.is_alive() and a.is_ally and b.is_ally):
+		return false
+	spend_sign("chronomancer")
+	var keep := a.next_at
+	a.next_at = b.next_at
+	b.next_at = keep
+	return true
+
+
+## 直前に味方が使った技を、重い代価で再演する（E-2b / けんじゃ「さいえんの印」）。
+##
+## **奥義は再演できない**（`uses_per_battle` を持つ技）。許すと 1 戦制限が
+## 抜け道になり、共通契約の意味が消える。
+func echo_ability_sign(actor: Battler, target: Battler = null) -> Array[String]:
+	if not sign_ready("sage") or last_ally_ability == "":
+		return []
+	if int(Database.ability(last_ally_ability).get("uses_per_battle", 0)) > 0:
+		return ["%sは　奥義を 再演できない" % actor.name]
+	spend_sign("sage")
+	var cost := int(Database.ability(last_ally_ability).get("mp", 0)) * ECHO_MP_RATE / 100
+	actor.mp = maxi(actor.mp - cost, 0)
+	var lines: Array[String] = ["%sの さいえんの印！" % actor.name]
+	lines.append_array(perform(actor, last_ally_ability, target))
+	return lines
+
+
+## さいえんの代価（もとの MP の百分率）。**重くする** ―― 軽いと毎回押すだけになる。
+const ECHO_MP_RATE := 180
+
+## 直前に味方が使った技（再演のもと）。
+var last_ally_ability := ""
 
 
 func turn_order(count: int = 8) -> Array[Battler]:
@@ -344,6 +485,8 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 		_in_ultimate = true
 
 	last_ability_id = ability_id
+	if actor.is_ally and int(ab.get("uses_per_battle", 0)) == 0:
+		last_ally_ability = ability_id   # さいえんの印のもと（奥義は除く）
 	last_hit_ids.clear()
 	last_hit_amount.clear()
 	var lines: Array[String] = []
@@ -460,6 +603,20 @@ func _strike(
 				lines.append("%sへ 打ち直す" % receiver.name)
 			var dmg := _damage(
 				actor, receiver, shot_power * spread / 100, magical, element, shot_pierce)
+			# **みきりの印**（E-2b / にんじゃ）。予告された単体攻撃を 1 度だけ避ける。
+			# 予告が出ている相手にしか効かないので、**予告を見る目**が要る。
+			if (
+				receiver.is_ally and hits == 1 and not actor.is_ally
+				and actor.planned_ability != "" and sign_ready("ninja")
+			):
+				spend_sign("ninja")
+				lines.append("%sは　みきりの印で かわした！" % receiver.name)
+				continue
+			# **みがわりの印**（E-2b / せいきし）。致死傷を 1 度だけ 1 で耐える。
+			var endured := _endure_sign(receiver, dmg)
+			if endured != dmg:
+				dmg = endured
+				lines.append("%sは　みがわりの印で こらえた！" % receiver.name)
 			var decoys_before := receiver.decoy_hits
 			var dealt := receiver.apply_damage(dmg)
 			total += dealt
@@ -617,6 +774,19 @@ func _resolve_targets(actor: Battler, ab: Dictionary, chosen: Battler) -> Array[
 			return ([pool[0]] as Array[Battler]) if not pool.is_empty() else ([] as Array[Battler])
 
 
+## 致死傷を 1 度だけ肩代わりする（E-2b / せいきし「みがわりの印」）。
+##
+## **倒れる直前にだけ効く。** 常時発動にすると「硬くなる」だけになり、
+## 設計文書が禁じている形（解放するほど強い）になる。
+func _endure_sign(target: Battler, damage: int) -> int:
+	if not target.is_ally or damage < target.hp:
+		return damage
+	if not sign_ready("paladin"):
+		return damage
+	spend_sign("paladin")
+	return maxi(target.hp - 1, 0)
+
+
 @warning_ignore("integer_division")
 func _damage(
 	actor: Battler, target: Battler, power: int, magical: bool, element: String,
@@ -706,7 +876,19 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 			"steal":
 				lines.append_array(_steal_from(actor, t))
 			"random":
-				lines.append_array(_play_around(actor, t))
+				# **えらびのばくち印**（E-2b / あそびにん）。最初の運まかせだけ、
+				# 2 つ引いて ましなほうを採れる。**1 戦に 1 度**なので、
+				# ここぞで押すか、軽く流すかが判断になる。
+				if sign_ready("jester"):
+					spend_sign("jester")
+					var first := rng.range_i(0, 5)
+					var second := rng.range_i(0, 5)
+					var better := (
+						first if WHIM_SCORE[first] >= WHIM_SCORE[second] else second)
+					lines.append("%sは えらびのばくち印で 目を選んだ" % actor.name)
+					lines.append_array(_play_around(actor, t, better))
+				else:
+					lines.append_array(_play_around(actor, t))
 			"extra_turn":
 				# **行動回数を変える**（奥義の型 1）。この者がもう一度すぐ動く。
 				# 再演は禁じてあるので、奥義から奥義へは繋がらない。

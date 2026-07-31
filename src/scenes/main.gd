@@ -2037,7 +2037,10 @@ func _begin_battle(foes: Array[Battler], is_boss: bool) -> void:
 	GameState.apply_run_difficulty(foes)
 	EventEffects.prepare_battle(GameState, party, foes, is_boss)
 	var system := BattleSystem.new()
-	system.start(party, foes, _battle_rng, GameState.floor_number)
+	system.start(
+		party, foes, _battle_rng, GameState.floor_number,
+		GameState.inherit_signs
+	)
 	Sound.play("encounter")
 	Sound.play_bgm("boss" if is_boss else "battle")
 	battle.start(system, members)
