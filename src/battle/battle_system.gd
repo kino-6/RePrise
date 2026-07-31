@@ -92,6 +92,8 @@ func start(party: Array[Battler], foes: Array[Battler], run_rng: DetRng, floor_n
 		b.clear_status()
 		b.planned_ability = ""
 	scheduler = CtbScheduler.new()
+	_ultimate_uses.clear()
+	_in_ultimate = false
 	scheduler.add_all(allies)
 	scheduler.add_all(enemies)
 	# 敵の初手を先に決めておく。行動順バーに予告として出すため。
@@ -212,6 +214,22 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 		push_error("未定義のアビリティ: %s" % ability_id)
 		return []
 
+	# **奥義の共通契約**（F-6b）。30 個ぶん個別に書くと必ず食い違うので、
+	# 入口で 1 度だけ見る。
+	#
+	#   * 1 戦につき使える回数（`uses_per_battle`）
+	#   * **奥義から奥義を再演できない** ―― 再演を許すと、行動回数を増やす
+	#     奥義どうしで無限に回る（`_in_ultimate` が印）
+	var limit := int(ab.get("uses_per_battle", 0))
+	if limit > 0:
+		if _in_ultimate:
+			return ["%sは　続けて 奥義を 出せない" % actor.name]
+		var used := int(_ultimate_uses.get([actor.id, ability_id], 0))
+		if used >= limit:
+			return ["%sは　もう %s を 出せない" % [actor.name, ab.get("name", ability_id)]]
+		_ultimate_uses[[actor.id, ability_id]] = used + 1
+		_in_ultimate = true
+
 	last_ability_id = ability_id
 	last_hit_ids.clear()
 	last_hit_amount.clear()
@@ -250,6 +268,9 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 					lines.append("%sの　きずが %d かいふくした" % [t.name, healed])
 		"buff", "debuff", "special":
 			lines.append_array(_apply_effect(actor, ab, targets))
+
+	if limit > 0:
+		_in_ultimate = false
 
 	# 行動コスト x 職業のテンポ倍率のぶんだけ、この者の次の手番が先に進む。
 	scheduler.consume(actor, actor.scaled_cost(int(ab.get("cost", CtbScheduler.STANDARD_COST))))
@@ -292,9 +313,19 @@ func _strike(
 		if actor.charged:
 			shot_power = shot_power * CHARGED_POWER / 100
 			shot_pierce = true
+		var redistribute := String(ab.get("effect", "")) == "redistribute"
 		for _i in hits:
 			if not receiver.is_alive():
-				break
+				# **対象が消えたら、残りの打撃を回す**（型 2）。
+				# ここが無いと「1 発目で倒れたら残りが宙に消える」になり、
+				# 多段の奥義が相手の残り体力で強さが変わってしまう。
+				if not redistribute:
+					break
+				var alive := living_enemies() if actor.is_ally else living_allies()
+				if alive.is_empty():
+					break
+				receiver = alive[0]
+				lines.append("%sへ 打ち直す" % receiver.name)
 			var dmg := _damage(
 				actor, receiver, shot_power * spread / 100, magical, element, shot_pierce)
 			receiver.apply_damage(dmg)
@@ -533,6 +564,40 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				lines.append_array(_steal_from(actor, t))
 			"random":
 				lines.append_array(_play_around(actor, t))
+			"extra_turn":
+				# **行動回数を変える**（奥義の型 1）。この者がもう一度すぐ動く。
+				# 再演は禁じてあるので、奥義から奥義へは繋がらない。
+				actor.next_at = maxi(actor.next_at - ULTIMATE_TURN_GAIN, 0)
+				lines.append("%sは　もう一度 動ける！" % actor.name)
+			"reorder":
+				# **行動表を変える**（型 3）。敵の手番を後ろへ、味方を前へ。
+				for b in scheduler.living():
+					if b.is_ally == actor.is_ally:
+						b.next_at = maxi(b.next_at - REORDER_SHIFT, 0)
+					else:
+						b.next_at += REORDER_SHIFT
+				lines.append("%sが　流れを 書き換えた" % actor.name)
+			"convert":
+				# **資源を変える**（型 4）。体力を削って魔力へ、または逆へ。
+				if actor.mp * 100 / maxi(actor.max_mp, 1) < 50:
+					var paid := maxi(actor.hp * CONVERT_RATE / 100, 1)
+					actor.apply_damage(mini(paid, maxi(actor.hp - 1, 0)))
+					actor.mp = mini(actor.mp + paid, actor.max_mp)
+					lines.append("%sは　命を 力へ 変えた（MP+%d）" % [actor.name, paid])
+				else:
+					var spent := maxi(actor.mp * CONVERT_RATE / 100, 1)
+					actor.mp = maxi(actor.mp - spent, 0)
+					actor.heal(spent * 2)
+					lines.append("%sは　力を 命へ 変えた（HP+%d）" % [actor.name, spent * 2])
+			"banish":
+				# **撃破以外の決着**（型 5）。倒さずに場から外す。
+				# `てなずけ` より確実だが、1 戦に 1 度きり。
+				if _is_boss(t):
+					lines.append("%sには　通じない" % t.name)
+				else:
+					t.tamed = true
+					lines.append("%sは　この場から 消えた" % t.name)
+					_check_finished()
 			"counter":
 				# 構えて待つ。受けた傷をそのまま返す（せんし）。
 				actor.guarding = true
@@ -626,6 +691,19 @@ func _pick_best_whim(actor: Battler, target: Battler) -> Array[String]:
 			best_score = score
 			best = roll
 	return _play_around(actor, target, best)
+
+
+## 奥義の効き幅。**1 戦に 1 度きりなので、はっきり効く量にする。**
+const ULTIMATE_TURN_GAIN := 120
+const REORDER_SHIFT := 90
+const CONVERT_RATE := 35
+
+
+## 奥義の使用回数（`[battler.id, ability_id]` → 使った回数）と、再演の印。
+##
+## **1 戦のあいだだけ持つ。** `start()` で作り直すので、次の戦いへ持ち越さない。
+var _ultimate_uses: Dictionary = {}
+var _in_ultimate := false
 
 
 ## 装填の倍率と、反撃で返す割合と、残影で戻る量。
