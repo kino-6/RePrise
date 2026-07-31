@@ -1327,7 +1327,7 @@ NPC_ROLES = [
 # NPC の候補は同じ 24x32 でも、実際には幅14〜18px・高さ29〜30pxの
 # 細長い立ち絵だった。基準にする `hero_mage` は幅22px・高さ27pxで、
 # 町へ並べると NPC だけ別の縮尺に見える。候補原画の輪郭は残しつつ、
-# **ゲームへ出す直前にフィールドキャラの体格とパレットへ翻訳する。**
+# **ゲームへ出す直前に偶数寸法のフィールドキャラ規格へ翻訳する。**
 #
 # 暖かな茶革へ戻さず、黒い漆・象牙・一系統の差し色という作品の語彙へ揃える。
 NPC_ACCENTS = {
@@ -1350,8 +1350,8 @@ NPC_ACCENTS = {
     "imperial_officer": ("#E85050", "#882028"),
 }
 
-NPC_TARGET_H = 27
-NPC_MIN_W = 19
+NPC_TARGET_H = 28
+NPC_MIN_W = 20
 NPC_MAX_W = 22
 
 
@@ -1383,6 +1383,12 @@ def _opaque_bbox(sheet: Canvas) -> tuple[int, int, int, int]:
         max(x for x, _y in points),
         max(y for _x, y in points),
     )
+
+
+def _field_width(source_w: int, scale: float) -> int:
+    """24pxセル内の実体幅を、中央合わせしやすい20pxか22pxへ丸める。"""
+    wanted = max(NPC_MIN_W, min(NPC_MAX_W, round(source_w * scale)))
+    return wanted if wanted % 2 == 0 else min(wanted + 1, NPC_MAX_W)
 
 
 def _npc_palette_color(
@@ -1421,7 +1427,7 @@ def _prepare_npc(role: str, source: Canvas) -> Canvas:
     x0, y0, x1, y1 = _opaque_bbox(source)
     source_w = x1 - x0 + 1
     source_h = y1 - y0 + 1
-    target_w = max(NPC_MIN_W, min(NPC_MAX_W, round(source_w * 1.25)))
+    target_w = _field_width(source_w, 1.25)
     target_x = (CHAR_W - target_w) // 2
     target_y = CHAR_H - NPC_TARGET_H
 
@@ -1459,7 +1465,7 @@ def _verify_npc_runtime_style(role: str, sheet: Canvas) -> None:
     drawn = [px for px in sheet.px if px != TRANSPARENT]
     fill = len(drawn) / float(max(width * height, 1))
     bright = sum(max(px[:3]) >= 200 for px in drawn) / float(len(drawn))
-    if not NPC_MIN_W <= width <= NPC_MAX_W:
+    if width not in (NPC_MIN_W, NPC_MAX_W):
         raise ValueError(f"npc_{role}: 実画面幅が規格外（{width}px）")
     if height != NPC_TARGET_H or y1 != CHAR_H - 1:
         raise ValueError(
@@ -1469,6 +1475,61 @@ def _verify_npc_runtime_style(role: str, sheet: Canvas) -> None:
         raise ValueError(f"npc_{role}: 輪郭が細すぎる（充填率 {fill:.2f}）")
     if bright < 0.06:
         raise ValueError(f"npc_{role}: 象牙の明部が足りない（{bright:.2f}）")
+
+
+def _prepare_hero_sheet(job: str, source: Canvas) -> Canvas:
+    """魔法使いを基準に、12コマすべての頭身と接地だけを揃える。
+
+    職業候補は一枚ごとの絵としては成立しているため、NPCのような再配色はしない。
+    ただし中身は幅16〜21px・高さ29〜30pxが大半で、魔法使いだけ幅22px・
+    高さ27pxだった。全員を20pxか22px×28pxへ揃え、各コマを中央・下端へ写して
+    元候補に混ざっていた1pxの上下揺れも取り除く。
+    """
+    out = Canvas(*HERO_SHEET_SIZE)
+    for direction in range(4):
+        for frame in range(3):
+            ox, oy = frame * CHAR_W, direction * CHAR_H
+            points = [
+                (x, y)
+                for y in range(CHAR_H)
+                for x in range(CHAR_W)
+                if source.get(ox + x, oy + y) != TRANSPARENT
+            ]
+            if not points:
+                continue
+            x0 = min(x for x, _y in points)
+            y0 = min(y for _x, y in points)
+            x1 = max(x for x, _y in points)
+            y1 = max(y for _x, y in points)
+            source_w, source_h = x1 - x0 + 1, y1 - y0 + 1
+            target_w = _field_width(source_w, 1.20)
+            target_x = (CHAR_W - target_w) // 2
+            target_y = CHAR_H - NPC_TARGET_H
+            dx0, dy0 = frame * CHAR_W + target_x, direction * CHAR_H + target_y
+            for dy in range(NPC_TARGET_H):
+                sy = y0 + min(source_h - 1, (dy * source_h) // NPC_TARGET_H)
+                for dx in range(target_w):
+                    sx = x0 + min(source_w - 1, (dx * source_w) // target_w)
+                    color = source.get(ox + sx, oy + sy)
+                    if color != TRANSPARENT:
+                        out.set(dx0 + dx, dy0 + dy, color)
+    return out
+
+
+def _verify_hero_runtime_style(job: str, sheet: Canvas) -> None:
+    """先頭の正面コマが、フィールド上の共通規格に入っているかを見る。"""
+    frame = Canvas(CHAR_W, CHAR_H)
+    for y in range(CHAR_H):
+        for x in range(CHAR_W):
+            frame.set(x, y, sheet.get(x, y))
+    x0, y0, x1, y1 = _opaque_bbox(frame)
+    width, height = x1 - x0 + 1, y1 - y0 + 1
+    if width not in (NPC_MIN_W, NPC_MAX_W):
+        raise ValueError(f"hero_{job}: 実画面幅が規格外（{width}px）")
+    if height != NPC_TARGET_H or y1 != CHAR_H - 1:
+        raise ValueError(
+            f"hero_{job}: 高さ・接地が規格外（上{y0} 下{y1} 高さ{height}）"
+        )
 
 
 ## 職業どうしのシルエットが重なりすぎている、とみなす基準。
@@ -1629,7 +1690,7 @@ def build_npcs() -> None:
         print(f"  取り込み: npc_{role}.png")
     contact.scaled(4).to_png(PREVIEW / "npc_runtime_contact.png")
     print(
-        "  NPC実画面規格: %d種（幅%d〜%d / 高さ%d / 下端接地）"
+        "  NPC実画面規格: %d種（幅%dまたは%d / 高さ%d / 下端接地）"
         % (made, NPC_MIN_W, NPC_MAX_W, NPC_TARGET_H)
     )
 
@@ -1839,6 +1900,9 @@ def build_heroes() -> None:
         # （素材が無い環境でも生成が通り、差分もレビューできる状態を保つため）。
         imported = _load_sheet(f"candidate_hero_{job}", HERO_SHEET_SIZE)
         if imported is not None:
+            imported = _prepare_hero_sheet(job, imported)
+            _verify_sheet(f"hero_{job}", imported, HERO_SHEET_SIZE)
+            _verify_hero_runtime_style(job, imported)
             imported.to_png(ASSETS / "sprites" / f"hero_{job}.png")
             made[job] = imported
             imported.scaled(4).to_png(PREVIEW / f"hero_{job}.png")
@@ -1859,6 +1923,14 @@ def build_heroes() -> None:
         sheet.to_png(ASSETS / "sprites" / f"hero_{job}.png")
         made[job] = sheet
         sheet.scaled(4).to_png(PREVIEW / f"hero_{job}.png")
+    contact = Canvas(CHAR_W * 5, CHAR_H * 3)
+    for i, job in enumerate(HERO_ACCENTS):
+        frame = Canvas(CHAR_W, CHAR_H)
+        for y in range(CHAR_H):
+            for x in range(CHAR_W):
+                frame.set(x, y, made[job].get(x, y))
+        contact.blit(frame, (i % 5) * CHAR_W, (i // 5) * CHAR_H)
+    contact.scaled(4).to_png(PREVIEW / "hero_runtime_contact.png")
     _report_hero_similarity(made)
 
 def _step(base: Canvas, side: int) -> Canvas:

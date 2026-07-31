@@ -631,6 +631,10 @@ func _capture(which: String) -> void:
 			# 町の中の見え方（宿・店・人）を確かめる。
 			# 物語や重なった出来事は町より先に出るので、撮影では直に入る。
 			_start_run()
+			# キャラ美術の実画面基準は、ユーザー指定のまほうつかい。
+			# NPCとの頭身・明暗・接地を毎回同じ基準で比較できるよう撮影時だけ替える。
+			var leader := GameState.active_party()[0]
+			leader.change_job("mage")
 			var town_at := _first_site("town")
 			if town_at.x >= 0:
 				GameState.enter_site(town_at)
@@ -1282,7 +1286,8 @@ func _open_town() -> void:
 	explore.setup(_town, _encounter_rng, _leader_job())
 	Sound.play_bgm("town")
 	_show_cross_world_beat(_town_placement())
-	hud.toast(_town.town_name)
+	# 町名は左上へ常設している。入場位置へ同じ名を重ねると、
+	# 24x32の主人公を覆い、人物アートが見える前に隠してしまう。
 	_fade_to(Mode.EXPLORE)
 
 
@@ -2025,6 +2030,10 @@ func _finish_run(victory: bool, outcome: String = "") -> void:
 		# 最後の段階でなければここで進める（最後は拠点で選ばせる）。
 		if not GameState.cross_world_is_last():
 			GameState.advance_cross_world()
+	# 閉じた型の結末を戦記へ（A-6）。**毎回すべて載せる** ―― またぐ物語は
+	# 何ラン越しの話なので、閉じたランでしか読めないと積み重ねが見えない。
+	summary["cross_world_endings"] = CrossWorldArc.endings_for_chronicle(
+		GameState.cross_world)
 	result.show_summary(summary)
 	_transition_to_result(outcome == "defeat" or (outcome == "" and not victory))
 

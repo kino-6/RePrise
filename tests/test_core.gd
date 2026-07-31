@@ -31,6 +31,8 @@ func _initialize() -> void:
 	_test_no_white_flash()
 	_test_single_ai_connection()
 	_test_cross_world_placements_wired()
+	_test_twelve_arcs_rotate()
+	_test_arc_endings_in_chronicle()
 	_test_data_integrity()
 	_test_save_migration()
 	_test_save_to_disk()
@@ -332,6 +334,74 @@ func _test_encounter_gap() -> void:
 ## 消す事故を 2 度起こした。数えるのは行数ではなく**済んだ行が残っていないか**。
 ##
 ## 済んだ項目は `[x]` を付けて `docs/tasks_archive.md` へ移す（消さない）。
+## 閉じた型の結末が戦記に載り、**過去反響はいちばん最後**（A-6）。
+##
+## 「閉じなかった世界」は他の型の結末を受けたうえで読むもの。先に出ると、
+## まだ起きていないことの後日談を先に読むことになる。
+func _test_arc_endings_in_chronicle() -> void:
+	var state := CrossWorldArc.empty_state()
+	# 先に反響（最後に来るべき型）を閉じ、そのあと別の型を閉じる。
+	state["completed"] = {
+		"world_that_did_not_close": "witnessed_end",
+		"undelivered_reply": "delivered",
+	}
+	var lines := CrossWorldArc.endings_for_chronicle(state)
+	_check("閉じた型の結末が出る", lines.size() >= 1, "(%d 行)" % lines.size())
+	if lines.size() >= 2:
+		var finale := CrossWorldArcCatalog.arc_by_id("world_that_did_not_close")
+		var tail := String(
+			(finale.get("endings", {}) as Dictionary).get("witnessed_end", {}).get(
+				"chronicle_line", ""))
+		_check("過去反響がいちばん最後", lines[lines.size() - 1] == tail)
+
+	# **同じ状態からは同じ並び**（乱数を使わない）。
+	var again := CrossWorldArc.endings_for_chronicle(state)
+	_check("並びが決定的", str(lines) == str(again))
+
+	# 戦記が載せる口を持っているか。
+	var text := FileAccess.get_file_as_string("res://src/game/chronicle.gd")
+	_check("戦記が結末を受け取る", text.contains("cross_world_endings"))
+
+
+## 十二型が全部出て、同じ型が続かない（A-5）。
+##
+## 型を足しても、選出の条件（`min_runs_attempted` / `min_completed_arcs`）が
+## 厳しすぎると**一生出ない型**ができる。カタログに在ることと、遊んでいて
+## 出会うことは別。多数の種で回して、12 型すべてが実際に選ばれるかを見る。
+##
+## 「同じ型が続かない」は `recent_ids`（直近 3 つ）で担保しているが、
+## **担保が効いているかは回してみないと分からない**。
+func _test_twelve_arcs_rotate() -> void:
+	var seen := {}
+	var repeats := 0
+	var picks := 0
+	for seed_value in range(0, 80):
+		var state := CrossWorldArc.empty_state()
+		var last := ""
+		for run in range(0, 30):
+			if not CrossWorldArc.select(state, run, seed_value):
+				continue
+			var id := String(state["active_id"])
+			seen[id] = true
+			picks += 1
+			if id == last:
+				repeats += 1
+			last = id
+			# 段階を進めきって閉じる（次の型が選べる状態にする）。
+			for _i in 6:
+				if String(state.get("active_id", "")) == "":
+					break
+				CrossWorldArc.advance(state, run)
+	var total := CrossWorldArcCatalog.arcs().size()
+	_check("十二型がカタログに在る", total == 12, "(%d 型)" % total)
+	_check(
+		"すべての型が実際に選ばれる", seen.size() == total,
+		"(%d / %d 型)" % [seen.size(), total]
+	)
+	_check("同じ型が続かない", repeats == 0, "(%d 回続いた)" % repeats)
+	_check("十分な回数を回した", picks > 300, "(%d 回)" % picks)
+
+
 ## またぐ物語の置き場が全部繋がっている（A-4）。
 ##
 ## 置き場はカタログ側（`data/cross_world_arcs.json`）で増える。増やしたのに

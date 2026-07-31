@@ -186,6 +186,37 @@ static func note_setback(state: Dictionary, failure_id: String) -> void:
 	state["setbacks"] = setbacks
 
 
+## 閉じた型の結末を、戦記に載せる順で返す（A-6）。
+##
+## **`world_that_did_not_close` はいちばん最後。** あれは「閉じなかった世界」の
+## 話で、他の型の結末を受けたうえで読むもの。先に出ると、まだ起きていない
+## ことの後日談を先に読むことになる。
+static func endings_for_chronicle(state: Dictionary, catalog: Dictionary = {}) -> Array[String]:
+	var completed: Dictionary = state.get("completed", {})
+	var out: Array[String] = []
+	var last: Array[String] = []
+	var ids: Array = completed.keys()
+	ids.sort()   # 乱数を使わない（同じ状態からは同じ並び）
+	for raw_id in ids:
+		var arc_id := String(raw_id)
+		var arc := CrossWorldArcCatalog.arc_by_id(arc_id, catalog)
+		var endings: Dictionary = arc.get("endings", {})
+		var ending: Dictionary = endings.get(String(completed[arc_id]), {})
+		var line := String(ending.get("chronicle_line", ""))
+		if line == "":
+			continue
+		if arc_id == FINALE_ARC:
+			last.append(line)
+		else:
+			out.append(line)
+	out.append_array(last)
+	return out
+
+
+## いちばん最後に置く型。
+const FINALE_ARC := "world_that_did_not_close"
+
+
 ## 段階の文。`skin` を差し込んで返す。失敗を挟んでいれば `loss_line` を優先する。
 static func line_of(state: Dictionary, beat: Dictionary) -> String:
 	var setbacks: Array = state.get("setbacks", [])
@@ -221,4 +252,7 @@ static func _resolve(arc: Dictionary, choice_id: String) -> Dictionary:
 		"choice_id": String(picked.get("id", "")),
 		"ending_id": ending_id,
 		"line": String(ending.get("line", "")),
+		# **戦記へ載せる 1 行**（A-6）。`line` は画面で読ませる文で、
+		# `chronicle_line` は記録として残す短い文。用途が違うので両方返す。
+		"chronicle_line": String(ending.get("chronicle_line", "")),
 	}

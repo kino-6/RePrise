@@ -55,6 +55,11 @@ static func write(summary: Dictionary) -> PackedStringArray:
 	if ending != "":
 		lines.append(ending)
 
+	# **またぐ物語の結末**（A-6）。閉じた型の 1 行を、閉じた順ではなく
+	# 決まった並びで載せる（`world_that_did_not_close` はいちばん最後）。
+	for across_ending in summary.get("cross_world_endings", []):
+		lines.append(String(across_ending))
+
 	var learned_all: Array = []
 	for m in members:
 		for a in m.get("learned", []):
