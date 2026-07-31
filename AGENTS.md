@@ -30,18 +30,54 @@ CTB 戦闘（2 階層コマンド / 属性 / 状態異常 / 範囲 / 多段 / �
 | 技 | 40 |
 | 敵 | 通常 30 / 主 7 |
 | 世界 | 64x48 タイル / 町 4 / 洞 5 / 城まで 52〜74 歩 |
-| 決定性テスト | 173 項目 |
-| シミュレータの実測 | 直行 21%着 / 0%勝、寄り道 43%/6%、全周 30%/22% |
+| 決定性テスト | 496 項目 |
+| シミュレータの実測 | 直行 29%着 / 0%勝、封 58%/4%、全周 72%/21% |
 
-確かめ方は 3 つ。**どれも通してから終わりにする。**
+確かめ方は 6 つ。**どれも通してから終わりにする。**
 
 ```bash
-godot --headless --script res://tests/test_core.gd    # 決定性・データ整合・棚卸ゲート
-godot --headless --script res://tests/balance.gd      # 世界シミュレータ（到達率と勝率）
-godot --path . -- --play=150 --dev-level=6            # 自分で遊んで詰まりを見る
+godot --headless --script tests/test_core.gd          # 決定性・データ整合・棚卸ゲート
+godot --headless --script tests/test_window_system.gd # 窓の割り付け（画面を撮らない）
+godot --headless --script tests/balance.gd -- --runs=500  # 世界シミュレータ（帯の外で 1）
+python tools/check_ui.py                              # 33 画面のはみ出し・詰め・小さい漢字
+python tools/check_assets.py                          # 候補・生成物・実行時参照
+python tools/check_terms.py                           # 造語の直書き
+python tools/check_abilities.py                       # 押す理由の無い技
+python tools/tasks_status.py                          # タスク台帳（進み具合も更新する）
 ```
 
 次にやることは `tasks.md` にある。
+
+## セッションを分けて進める（F 系・E 系）
+
+残っているのは**一続きの再設計**なので、1 セッションで通そうとすると必ず途中で
+context が尽きる。**下の単位で 1 セッション 1 件**にする。各単位は独立して
+緑にできるように切ってある。
+
+順番には理由がある。**F-5（設計の言語）を先に決めないと、F-6 の 30 技が
+「高倍率技を 30 個」になる。** そこが F 系のいちばん外しやすいところ。
+
+| 順 | 単位 | 1 セッションでやること |
+|---|---|---|
+| 1 | **F-5** | 15 職 × 4 属性の「毎手番の問い」を `data/` へ書く。技は作らない。 |
+| 2 | **F-3** | `mastery` を 8 段階へ。★5〜8 の枠だけ用意し、技 id は仮で置く。 |
+| 3 | **F-6a** | ★5 象徴技 15 種。**1 職 = 1 技**、F-5 の問いに答える形で。 |
+| 4 | **F-6b** | ★7・8 の奥義 30 種。共通契約（`uses_per_battle` ほか）を先に作る。 |
+| 5 | **F-7** | 職業画面・出撃前・戦闘中の表示と、オートの評価軸。 |
+| 6 | **E-1〜3** | 成長報酬。★6 継承印は F-3 の 8 段階に乗るので、その後。 |
+
+**入る前に読むもの**: `docs/job_ability_progression_design.md`（Codex の設計）、
+`.claude/skills/battle-design/SKILL.md`（固有名詞の禁止など）、
+`.claude/skills/balance-tuning/SKILL.md`（技を触ると難度が動く。測り直す手順）。
+
+**既に決まっていること**（作り直さない）:
+
+- 技を押す理由は `tools/check_abilities.py` が見る。**同じ役割で見劣りする技を
+  作ると落ちる。** 「軽い代わりに弱い」は正当な違いとして通る。
+- 戦闘で押せるのは**現職の技 ＋ 継承 2 枠 ＋ 常設**（F-4 で入れた）。
+  `learned` は何も失わない。★5 の象徴技も、この枠の中で戦う。
+- 技を触ると難度が動く。**`balance.gd -- --runs=500` は帯の外で終了コード 1。**
+  主の強さは `Encounter` の 3 定数で詰める（手順は balance-tuning の skill）。
 
 ## やることの置き場
 
