@@ -989,6 +989,12 @@ const TOWN_LOW_MAX := 4
 ## 段階を読み終えたら主戦を始める、の控え。
 var _pending_boss_after_beat := false
 
+## 歩ける状態になってから聞く装備（C-9）。
+##
+## 店の中やラン開始直後に手へ入ることがある。捨てると「拾ったのに聞かれない」
+## 経路ができて、「入手の経路を 1 つに集約する」という C-9 の前提が崩れる。
+var _pending_gear: Array[String] = []
+
 
 ## またぐ物語の最後の段階。三択を出して結末を決める。
 ##
@@ -1519,6 +1525,8 @@ func _flash_into_battle() -> void:
 ## いま何をしていたか分からなくなる。手持ちには入っているので失われない。
 func _on_gear_gained(id: String) -> void:
 	if _mode != Mode.EXPLORE:
+		# **取りこぼさない。** 歩ける状態へ戻ったときに聞く。
+		_pending_gear.append(id)
 		return
 	if GameState.active_party().is_empty():
 		return
@@ -1593,6 +1601,10 @@ func _apply_mode(mode: Mode) -> void:
 		gear_offer.close()
 	# 遷移の中点で探索画面へ切り替わっても、覆いが完全に開くまでは動かさない。
 	explore.set_active(mode == Mode.EXPLORE and not _transition_input_locked)
+	# 保留していた装備をここで聞く（C-9）。歩ける状態になったので。
+	if mode == Mode.EXPLORE and not _pending_gear.is_empty():
+		var next_gear: String = _pending_gear.pop_front()
+		_on_gear_gained.call_deferred(next_gear)
 	if mode != Mode.TITLE:
 		title.close()
 	if mode != Mode.PROLOGUE:

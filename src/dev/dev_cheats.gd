@@ -8,6 +8,12 @@ extends RefCounted
 ##
 ##   godot --path . -- --play=120 --dev-level=8 --dev-floor=7 --dev-gear
 ##
+## 狙って通すときの組み合わせ（P-3）:
+##
+##   深層        --dev-level=8 --dev-floor=7
+##   主戦        --dev-level=12 --dev-seals --dev-castle
+##   拾ったら装備 --dev-drop=war_axe
+##
 ## | 引数 | すること |
 ## |---|---|
 ## | `--dev-level=N` | 全員をレベル N にする（能力値も上がる） |
@@ -32,6 +38,15 @@ static func value(flag: String, fallback: int = 0) -> int:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with(prefix):
 			return int(arg.trim_prefix(prefix))
+	return fallback
+
+
+## `--dev-drop=short_sword` のような引数から文字を取り出す。
+static func text(flag: String, fallback: String = "") -> String:
+	var prefix := flag + "="
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with(prefix):
+			return arg.trim_prefix(prefix)
 	return fallback
 
 
@@ -107,8 +122,83 @@ static func apply_to_run(state: Node) -> Array[String]:
 
 	var floor_number := value("--dev-floor", 0)
 	if floor_number > 1:
-		state.floor_number = mini(floor_number, state.FINAL_FLOOR)
-		state.deepest_floor = maxi(state.deepest_floor, state.floor_number)
-		applied.append("地下 %d 階" % state.floor_number)
+		# **数字を書くだけでは深層にならない**（P-3）。
+		#
+		# 以前は `floor_number` を代入するだけで、party は門（危険度 1）に
+		# 立ったままだった。世界の上では危険度は**立っている場所**で決まるので、
+		# 次の `stand_on_world()` がすぐ 1 へ書き戻す。
+		# 起動ログだけが「地下 7 階」と言う、という状態になっていた。
+		#
+		# 実際にその危険度の土地へ立たせる。**歩いて行ける場所**から選ぶので、
+		# 「そこから先へ進める」ことも同時に保証される。
+		var want := mini(floor_number, state.FINAL_FLOOR)
+		var at := _tile_with_danger(state.world, want)
+		if at.x >= 0:
+			state.stand_on_world(at)
+			applied.append("危険度 %d の地（%d, %d）" % [state.floor_number, at.x, at.y])
+		else:
+			state.floor_number = want
+			state.deepest_floor = maxi(state.deepest_floor, state.floor_number)
+			applied.append("危険度 %d（立てる土地が無く数値のみ）" % want)
+
+	if has_flag("--dev-seals"):
+		# **封を解いておく**（P-3）。城の扉は封が 3 つ解けるまで開かないので、
+		# ここを開けないと「主戦を実入力で確かめる」に永遠に届かない。
+		if state.world != null:
+			for s in state.world.seals:
+				(s as Dictionary)["broken"] = true
+			applied.append("封を解いた")
+
+	if has_flag("--dev-castle"):
+		# 城の前に立たせる。封と併せて使うと、歩いて主戦へ入れる。
+		if state.world != null:
+			var gate := _tile_beside(state.world, state.world.castle_pos)
+			if gate.x >= 0:
+				state.stand_on_world(gate)
+				applied.append("城の前")
+
+	var drop := text("--dev-drop", "")
+	if drop != "" and not Database.gear(drop).is_empty():
+		# 拾った装備の通知（C-9）を実入力で踏むため、1 つ落としておく。
+		state.add_gear(drop)
+		applied.append("拾い物 %s" % drop)
 
 	return applied
+
+
+## その場所の隣で、歩いて行ける空きマスを 1 つ返す（無ければ x < 0）。
+static func _tile_beside(world, at: Vector2i) -> Vector2i:
+	var reach: PackedInt32Array = world.distance_field(world.start_pos)
+	for step in FieldMap.NEIGHBORS:
+		var side: Vector2i = at + step
+		if not world.in_bounds(side.x, side.y):
+			continue
+		if reach[side.y * world.width + side.x] < 0:
+			continue
+		if world.sites.has(side):
+			continue
+		return side
+	return Vector2i(-1, -1)
+
+
+## その危険度の土地を 1 つ返す（無ければ x < 0）。
+##
+## **門から歩いて行ける場所だけ**を候補にする。孤島に置くと、
+## そこから先へ進めず「深層を入力で確かめる」にならない。
+## 走査は左上から順で、乱数を引かない（同じ世界からは同じ場所）。
+static func _tile_with_danger(world, want: int) -> Vector2i:
+	if world == null:
+		return Vector2i(-1, -1)
+	var reach: PackedInt32Array = world.distance_field(world.start_pos)
+	var best := Vector2i(-1, -1)
+	for y in world.height:
+		for x in world.width:
+			if reach[y * world.width + x] < 0:
+				continue
+			if world.sites.has(Vector2i(x, y)):
+				continue   # 拠点地の上に立たせると、入るか出るかの判断が混ざる
+			if world.danger_at(x, y) != want:
+				continue
+			best = Vector2i(x, y)
+			return best
+	return best
