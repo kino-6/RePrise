@@ -299,6 +299,10 @@ python tools/check_assets.py` を通す。**候補・生成物・実行時参照
 
 ## 文字とキャラの規約（実測で決めたもの）
 
+- **文章を追加・変更する前に `docs/writing_style.md` を読む。** 不穏さは状況と事実で
+  作り、意味を伏せるだけの比喩、汎用NPCの唐突な哲学、古風な語尾では作らない。
+  町人は `data/town_dialogue.json`、固定UIとプロローグは `data/vocabulary.json`、
+  物語は各カタログJSONを原本にする。変更後は `python tools/check_writing.py` を通す。
 - **漢字は 13px を下回ると読めない。** MS ゴシックで銀・響・深・階が団子になる。
   サイズ違いを並べて撮って確かめた結果、規約を `PixelUI` に置いてある。
   漢字を出してよいのは `SIZE_TEXT`(14) 以上、`SIZE_SUB`(12) は かな・数字専用。

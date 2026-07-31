@@ -49,7 +49,10 @@ func open_story(beat: Dictionary, story: Dictionary, danger_here: int) -> void:
 				"pays": String(c.get("immediate_cost", "")),
 			})
 	if choices.is_empty():
-		choices = [{"id": "", "label": "……", "keeps": "", "loses": "", "pays": ""}]
+		choices = [{
+			"id": "", "label": Terms.EVENT_CONTINUE_CHOICE,
+			"keeps": "", "loses": "", "pays": "",
+		}]
 	open({
 		"story": true,
 		"skin": {

@@ -294,6 +294,11 @@ func _strike(
 				receiver.poison_turns = POISON_TURNS
 				lines.append("%sは　どくに おかされた！" % receiver.name)
 
+		# **属性の効き目**（F-5）。弱点倍率だけで終わらせない ――
+		# 倍率しか無いと、弱点を持たない相手には炎も氷も雷も同じ技になる。
+		if receiver.is_alive() and total > 0:
+			lines.append_array(_element_effect(actor, receiver, element, total))
+
 		if not receiver.is_alive():
 			lines.append("%sを　たおした！" % receiver.name)
 
@@ -306,6 +311,58 @@ func _strike(
 			if healed > 0:
 				lines.append("%sの　きずが %d かいふくした" % [friend.name, healed])
 	return lines
+
+
+## 属性が残していくもの（F-5）。**弱点を持たない相手にも効く。**
+##
+## 倍率だけだと、弱点表を持たない相手に対して炎も氷も雷も同じ技になり、
+## 「属性を切り替える」判断が消える。1 手ごとに違うものが残るようにする。
+##
+##   炎 … **波及**。ほかの敵へも延焼する（群れに強い）
+##   氷 … **足止め**。次の手番が遅れる（CTB を直に触る）
+##   雷 … **中断**。溜めていた行動を打ち消す（予告技への答え）
+##   闇 … **交換**。与えた傷の一部を自分の MP へ移す（続ける力に変える）
+##
+## どれも**「いつ押すか」が変わる**ように選んである。数字の色違いにしない。
+func _element_effect(
+	actor: Battler, target: Battler, element: String, dealt: int
+) -> Array[String]:
+	var lines: Array[String] = []
+	match element:
+		"fire":
+			var others := living_enemies() if actor.is_ally else living_allies()
+			var splash := dealt * FIRE_SPLASH / 100
+			if splash <= 0:
+				return lines
+			for other in others:
+				if other == target:
+					continue
+				other.apply_damage(splash)
+				lines.append("%sにも 火が うつった（%d）" % [other.name, splash])
+				if not other.is_alive():
+					lines.append("%sを　たおした！" % other.name)
+		"ice":
+			# 次の手番を遅らせる。**倒しきれない相手に対する答え**になる。
+			target.next_at += CtbScheduler.wait_for(target.effective_agi(), ICE_DELAY)
+			lines.append("%sの　動きが にぶった" % target.name)
+		"bolt":
+			# 溜めている行動を打ち消す。予告技を見てから当てる技。
+			if target.planned_ability != "":
+				target.planned_ability = ""
+				lines.append("%sの　構えが くずれた！" % target.name)
+		"dark":
+			# 傷を自分の力へ移す。**削るだけでなく、続ける力に変える。**
+			var drained := dealt * DARK_DRAIN / 100
+			if drained > 0 and actor.mp < actor.max_mp:
+				actor.mp = mini(actor.mp + drained, actor.max_mp)
+				lines.append("%sは 力を すいとった（MP+%d）" % [actor.name, drained])
+	return lines
+
+
+## 属性の効き目の量。**実測で決める**（`balance.gd -- --runs=500` が帯を見る）。
+const FIRE_SPLASH := 25
+const ICE_DELAY := 45
+const DARK_DRAIN := 20
 
 
 func _element_tag(target: Battler, element: String) -> String:

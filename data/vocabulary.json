@@ -83,7 +83,7 @@
     "run_abandon_hint": "2回の確認が必要　Ｘで もどる",
     "run_abandon_in_run": "ラン中のみ",
     "run_abandon_result": "帰還",
-    "run_abandon_chronicle": "一行は 危険度 %d の 地から 帰還を選んだ。",
+    "run_abandon_chronicle": "一行は危険度%dで遠征を中止し、砦へ帰還した。",
     "event_close": "Ｚで とじる",
     "event_close_choice": "とじる",
     "event_other_count": "ほか%d",
@@ -94,6 +94,7 @@
     "event_risk": "危険",
     "event_gain": "得る",
     "event_missing": "不足",
+    "event_continue_choice": "話を続ける",
     "event_continue": "Ｚで つづける",
     "event_confirm_hint": "Ｚ 決定　Ｘ 見送る",
     "event_defer_summary": "保留 → 再訪できる",
@@ -239,6 +240,14 @@
       "城を支配する者を倒せば世界は保たれ、倒せなければ失われる。",
       "世界で得た体と装備は帰還時に失うが、覚えた技と遠征の記録は砦へ持ち帰れる。"
     ]
+  },
+  "chronicle": {
+    "victory": "一行は城の主を倒し、世界を守って帰還した。",
+    "defeat": "一行は危険度%dで力尽き、世界は失われた。",
+    "battle_result": "魔物%d体を倒し、ゴールド%dを獲得した。",
+    "run_reward": "遠征記録%d点（規律%d%%）。%sを%d獲得（合計%d）。",
+    "learned_none": "この遠征で新しく覚えた技はない。",
+    "learned": "新しく覚えた技: %s"
   },
   "biomes": {
     "grassland": "草原",

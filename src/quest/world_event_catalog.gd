@@ -1,6 +1,8 @@
 class_name WorldEventCatalog
 extends RefCounted
 
+const WritingQuality := preload("res://src/game/writing_quality.gd")
+
 ## 世界に置く任意イベントのカタログを読み、決定的に抽選する。
 ##
 ## choices 以下のコスト・危険・報酬は Script が所有する。AI に渡すのは
@@ -156,7 +158,7 @@ static func apply_ai_skin(instance: Dictionary, candidate: Dictionary) -> Dictio
 		if not proposed.has(key):
 			continue
 		var value := String(proposed.get(key, "")).strip_edges()
-		var reason := _invalid_reason(value, int(limits.get(key, 0)))
+		var reason := _invalid_reason(value, int(limits.get(key, 0)), key)
 		if reason == "":
 			current[key] = value
 		else:
@@ -371,7 +373,7 @@ static func _validate_skin(
 				errors.append("%s: skin.%s が不正(%s)" % [prefix, key, reason])
 
 
-static func _invalid_reason(value: String, limit: int) -> String:
+static func _invalid_reason(value: String, limit: int, field: String = "") -> String:
 	if value == "":
 		return "empty"
 	if limit < 1 or value.length() > limit:
@@ -381,6 +383,12 @@ static func _invalid_reason(value: String, limit: int) -> String:
 	for banned in BANNED:
 		if banned in value:
 			return "banned"
+	# 手書きfallbackはカタログ検算だけを通す。意味のGateは、実行時AIが
+	# fallbackを上書きしようとした時だけ使う。
+	if field != "":
+		var writing_reason := WritingQuality.ai_reason(value, field)
+		if writing_reason != "":
+			return writing_reason
 	for i in value.length():
 		var code := value.unicode_at(i)
 		if code >= 0x30 and code <= 0x39:

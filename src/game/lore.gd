@@ -86,3 +86,25 @@ static var WORLD := "世界の前提:
 		"世界で得た体と装備は帰還時に失うが、覚えた技と遠征の記録は砦へ持ち帰れる。",
 	])
 )
+
+## 戦記の決定的な既定文。AIが使えない場合も、この文だけで結果が分かる。
+static var CHRONICLE_VICTORY := Vocabulary.word(
+	"chronicle", "victory", "一行は城の主を倒し、世界を守って帰還した。"
+)
+static var CHRONICLE_DEFEAT := Vocabulary.word(
+	"chronicle", "defeat", "一行は危険度%dで力尽き、世界は失われた。"
+)
+static var CHRONICLE_BATTLE_RESULT := Vocabulary.word(
+	"chronicle", "battle_result", "魔物%d体を倒し、ゴールド%dを獲得した。"
+)
+static var CHRONICLE_RUN_REWARD := Vocabulary.word(
+	"chronicle",
+	"run_reward",
+	"遠征記録%d点（規律%d%%）。%sを%d獲得（合計%d）。"
+)
+static var CHRONICLE_LEARNED_NONE := Vocabulary.word(
+	"chronicle", "learned_none", "この遠征で新しく覚えた技はない。"
+)
+static var CHRONICLE_LEARNED := Vocabulary.word(
+	"chronicle", "learned", "新しく覚えた技: %s"
+)

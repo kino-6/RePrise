@@ -38,7 +38,7 @@
         },
         {
           "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
-          "line": "砦の全戦記へ同じ一文が浮かぶ。宛先を一人へ絞るか、すべての世界へ流すか、希望の歌へ書き換えるかを決めなければならない。",
+          "line": "砦の全戦記に同じ文が現れる。一人へ届けるか、各世界へ伝えるか、歌に変えるか。",
           "loss_line": "決着を選ぶ前に世界を失っても、返書は消えず、次の帰還まで同じ一文を待ち続ける。"
         }
       ],
@@ -121,7 +121,7 @@
         },
         {
           "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
-          "line": "{motif}が砦の機械へも反応する。停止符号を使うか、破壊するか、目覚めた機械自身へ選択を返すかを決める。",
+          "line": "{motif}が砦の機械にも反応する。停止符号を使うか、壊すか、機械自身に任せるか。",
           "loss_line": "決断を保留すると、機械たちは命令と名前の間で動きを止めたまま次の帰還を待つ。"
         }
       ],
@@ -204,30 +204,30 @@
         },
         {
           "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
-          "line": "砦の門にも{motif}が通用すると分かる。完成させるか、救助の型へ変えるか、誰にも継がず封じるかを選ぶ。",
+          "line": "記録を検証すると、{motif}で砦の銀の門も壊せる。技を完成させるか、救助用に変えるか、封じるか。",
           "loss_line": "決着を避けても身体は型を忘れず、眠るたび最後の一歩だけを繰り返す。"
         }
       ],
       "choices": [
         {
           "id": "complete_form", "label": "技を完成させる",
-          "immediate_cost": "砦の門を傷つける危険",
-          "preserves": "世界を閉じる最後の手段",
-          "sacrifices": "二度と使わないという安心",
+          "immediate_cost": "銀の門が壊れる危険",
+          "preserves": "世界の崩壊を止める手段",
+          "sacrifices": "技を封じておく安全",
           "ending_id": "keeper_of_last_step", "result_flags": ["technique_completed"]
         },
         {
           "id": "change_form", "label": "救助の型へ変える",
-          "immediate_cost": "元の技が持つ確実な力",
-          "preserves": "継承を加害だけで終わらせない未来",
-          "sacrifices": "師から受け取った完全な形",
+          "immediate_cost": "元の技が持つ威力",
+          "preserves": "人を救う新しい使い道",
+          "sacrifices": "師から受け継いだ原型",
           "ending_id": "open_hand_form", "result_flags": ["technique_transformed"]
         },
         {
           "id": "seal_form", "label": "技を封じる",
           "immediate_cost": "受け継いだ力",
-          "preserves": "門を再び壊さない誓い",
-          "sacrifices": "必要な時に使える可能性",
+          "preserves": "銀の門の安全",
+          "sacrifices": "危機に使える手段",
           "ending_id": "unspoken_form", "result_flags": ["technique_sealed"]
         }
       ],
@@ -287,7 +287,7 @@
         },
         {
           "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
-          "line": "{anchor_name}が砦の門前へ現れる。絆ごと追跡を断つか、帝国を偽の門へ導くか、魔獣自身へ行き先を選ばせるかを決める。",
+          "line": "{anchor_name}が砦の門前へ現れる。追跡を断つか、帝国を欺くか、魔獣自身に任せるか。",
           "loss_line": "魔獣は門前で眠り、選択を急かさない。次の帰還でも同じ場所で待っている。"
         }
       ],
@@ -370,7 +370,7 @@
         },
         {
           "id": "reckoning", "phase": "reckoning", "placement": "stronghold",
-          "line": "{motif}の席へ人影が戻る。記憶を集めて{anchor_name}を復元するか、仲間の中へ残すか、存在した証だけを新しい戦記へ刻むかを選ぶ。",
+          "line": "{motif}の席へ人影が戻る。{anchor_name}を復元するか、仲間の中へ残すか、記録だけ残すか。",
           "loss_line": "復元に失敗しても人影は責めず、次の帰還まで空席として残る。"
         }
       ],
@@ -951,7 +951,7 @@
         },
         {
           "id": "reckoning", "phase": "reckoning", "placement": "castle_pre_boss",
-          "line": "住民を砦へ回収するか、世界を再始動するか、苦しみを終えるため完全に閉じるかを選ぶ。{anchor_name}はどの結末も見届けてほしいと頼む。",
+          "line": "止まった世界の住民を砦へ移すか、世界を再始動するか、完全に閉じるか。",
           "loss_line": "決着の世界で敗れても物語は終了せず、傷を増やした{origin_name}へ次のランで再挑戦できる。"
         }
       ],

@@ -200,7 +200,7 @@ static var RUN_ABANDON_IN_RUN := Vocabulary.word(
 )
 static var RUN_ABANDON_RESULT := Vocabulary.word("terms", "run_abandon_result", "帰還")
 static var RUN_ABANDON_CHRONICLE := Vocabulary.word(
-	"terms", "run_abandon_chronicle", "一行は 危険度 %d の 地から 帰還を選んだ。"
+	"terms", "run_abandon_chronicle", "一行は危険度%dで遠征を中止し、砦へ帰還した。"
 )
 
 # --- 任意イベント ---
@@ -226,6 +226,9 @@ static var EVENT_GAIN := Vocabulary.word("terms", "event_gain", "得る")
 static var EVENT_MISSING := Vocabulary.word("terms", "event_missing", "不足")
 static var EVENT_CONTINUE := Vocabulary.word(
 	"terms", "event_continue", "Ｚで つづける"
+)
+static var EVENT_CONTINUE_CHOICE := Vocabulary.word(
+	"terms", "event_continue_choice", "話を続ける"
 )
 static var EVENT_CONFIRM_HINT := Vocabulary.word(
 	"terms", "event_confirm_hint", "Ｚ 決定　Ｘ 見送る"

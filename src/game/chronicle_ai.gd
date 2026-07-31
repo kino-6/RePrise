@@ -1,6 +1,8 @@
 class_name ChronicleAI
 extends Node
 
+const WritingQuality := preload("res://src/game/writing_quality.gd")
+
 ## 戦記をローカル AI に書かせる。**接続そのものは `LocalAI` が 1 つだけ持つ。**
 ##
 ## 守っている前提（AGENTS.md の不変条件）:
@@ -88,7 +90,10 @@ func _clean(text: String) -> PackedStringArray:
 			continue
 		if line.length() > 44:
 			line = line.substr(0, 44)
+		if WritingQuality.ai_reason(line, "chronicle") != "":
+			continue
 		lines.append(line)
 		if lines.size() >= 3:
 			break
-	return lines
+	# 途中の一行だけを採用すると、記録としての意味が欠ける。
+	return lines if lines.size() == 3 else PackedStringArray()

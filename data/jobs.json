@@ -5,8 +5,14 @@
     "desc": "重い一撃。次の手番は遅れる。",
     "cost_scale": 130,
     "equip": {
-      "weapon": ["blade", "heavy"],
-      "armor": ["heavy", "light"]
+      "weapon": [
+        "blade",
+        "heavy"
+      ],
+      "armor": [
+        "heavy",
+        "light"
+      ]
     },
     "growth": {
       "hp": 9,
@@ -40,15 +46,21 @@
     "starting_gear": [
       "short_sword",
       "leather_vest"
-    ]
+    ],
+    "question": "重い一撃を今入れるか、次の手番を守って待つか。"
   },
   "priest": {
     "name": "そうりょ",
     "desc": "軽い補助を高回転で回す。",
     "cost_scale": 90,
     "equip": {
-      "weapon": ["focus"],
-      "armor": ["robe", "light"]
+      "weapon": [
+        "focus"
+      ],
+      "armor": [
+        "robe",
+        "light"
+      ]
     },
     "growth": {
       "hp": 5,
@@ -82,15 +94,20 @@
     "starting_gear": [
       "oak_staff",
       "leather_vest"
-    ]
+    ],
+    "question": "誰から癒すか。癒す手番を、速める手番に回せないか。"
   },
   "mage": {
     "name": "まほうつかい",
     "desc": "強力な魔法。詠唱ぶん手番が重い。",
     "cost_scale": 145,
     "equip": {
-      "weapon": ["focus"],
-      "armor": ["robe"]
+      "weapon": [
+        "focus"
+      ],
+      "armor": [
+        "robe"
+      ]
     },
     "growth": {
       "hp": 4,
@@ -123,15 +140,21 @@
     ],
     "starting_gear": [
       "oak_staff"
-    ]
+    ],
+    "question": "どの属性が今いちばん効くか。波及・足止め・中断のどれが要るか。"
   },
   "thief": {
     "name": "とうぞく",
     "desc": "手数で押す。行動コストが安い。",
     "cost_scale": 70,
     "equip": {
-      "weapon": ["knife", "blade"],
-      "armor": ["light"]
+      "weapon": [
+        "knife",
+        "blade"
+      ],
+      "armor": [
+        "light"
+      ]
     },
     "growth": {
       "hp": 6,
@@ -164,15 +187,23 @@
     ],
     "starting_gear": [
       "short_sword"
-    ]
+    ],
+    "question": "時間を稼ぐか、戦利品を取りに行くか。軽い手を何回重ねるか。"
   },
   "paladin": {
     "name": "せいきし",
     "desc": "護りと癒しを兼ねる。重いが崩れない。",
     "cost_scale": 120,
     "equip": {
-      "weapon": ["blade", "heavy", "focus"],
-      "armor": ["heavy", "light"]
+      "weapon": [
+        "blade",
+        "heavy",
+        "focus"
+      ],
+      "armor": [
+        "heavy",
+        "light"
+      ]
     },
     "unlock": {
       "soldier": 2,
@@ -210,15 +241,23 @@
     "starting_gear": [
       "short_sword",
       "leather_vest"
-    ]
+    ],
+    "question": "誰を庇うか。庇って耐えるか、聖なる一撃で止めるか。"
   },
   "ninja": {
     "name": "にんじゃ",
     "desc": "速さのまま魔を使う。守りは薄い。",
     "cost_scale": 80,
     "equip": {
-      "weapon": ["knife", "blade", "ranged"],
-      "armor": ["light", "robe"]
+      "weapon": [
+        "knife",
+        "blade",
+        "ranged"
+      ],
+      "armor": [
+        "light",
+        "robe"
+      ]
     },
     "unlock": {
       "thief": 2,
@@ -255,15 +294,22 @@
     ],
     "starting_gear": [
       "short_sword"
-    ]
+    ],
+    "question": "この一手で決めきれるか。決めきれないなら煙に巻いて仕切り直すか。"
   },
   "ranger": {
     "name": "かりびと",
     "desc": "遠くから射る。手数が軽い。",
     "cost_scale": 85,
     "equip": {
-      "weapon": ["ranged", "blade", "beast"],
-      "armor": ["light"]
+      "weapon": [
+        "ranged",
+        "blade",
+        "beast"
+      ],
+      "armor": [
+        "light"
+      ]
     },
     "unlock": {
       "thief": 2,
@@ -301,15 +347,22 @@
     "starting_gear": [
       "short_sword",
       "leather_vest"
-    ]
+    ],
+    "question": "群れを散らすか、一体を毒で削り続けるか。"
   },
   "spellblade": {
     "name": "まけんし",
     "desc": "刃に魔を乗せる。攻めに寄る。",
     "cost_scale": 115,
     "equip": {
-      "weapon": ["blade", "focus"],
-      "armor": ["light", "robe"]
+      "weapon": [
+        "blade",
+        "focus"
+      ],
+      "armor": [
+        "light",
+        "robe"
+      ]
     },
     "unlock": {
       "soldier": 2,
@@ -347,15 +400,21 @@
     "starting_gear": [
       "short_sword",
       "leather_vest"
-    ]
+    ],
+    "question": "刃に何の属性を乗せるか。属性を変える手番を払う価値があるか。"
   },
   "summoner": {
     "name": "しょうかんし",
     "desc": "広く巻き込む。とても重い。",
     "cost_scale": 150,
     "equip": {
-      "weapon": ["focus", "beast"],
-      "armor": ["robe"]
+      "weapon": [
+        "focus",
+        "beast"
+      ],
+      "armor": [
+        "robe"
+      ]
     },
     "unlock": {
       "mage": 2,
@@ -392,15 +451,21 @@
     ],
     "starting_gear": [
       "oak_staff"
-    ]
+    ],
+    "question": "呼ぶものを何にするか。今の場に足りないのは火力か、範囲か。"
   },
   "gunner": {
     "name": "じゅうし",
     "desc": "連射で削る。守りは薄い。",
     "cost_scale": 95,
     "equip": {
-      "weapon": ["ranged", "knife"],
-      "armor": ["light"]
+      "weapon": [
+        "ranged",
+        "knife"
+      ],
+      "armor": [
+        "light"
+      ]
     },
     "unlock": {
       "ranger": 2,
@@ -437,15 +502,23 @@
     ],
     "starting_gear": [
       "hunter_bow"
-    ]
+    ],
+    "question": "守りを抜くか、弾をばらまくか。撃つ前に間合いを作るか。"
   },
   "alchemist": {
     "name": "れんきんし",
     "desc": "薬と煙で場を支える。",
     "cost_scale": 105,
     "equip": {
-      "weapon": ["focus", "ranged", "knife"],
-      "armor": ["robe", "light"]
+      "weapon": [
+        "focus",
+        "ranged",
+        "knife"
+      ],
+      "armor": [
+        "robe",
+        "light"
+      ]
     },
     "unlock": {
       "mage": 2,
@@ -482,15 +555,22 @@
     ],
     "starting_gear": [
       "oak_staff"
-    ]
+    ],
+    "question": "薬を配るか、爆薬を投げるか。手持ちをどちらに使うか。"
   },
   "sage": {
     "name": "けんじゃ",
     "desc": "癒しと魔を兼ねる。極めるのに時間がかかる。",
     "cost_scale": 135,
     "equip": {
-      "weapon": ["focus", "blade"],
-      "armor": ["robe", "light"]
+      "weapon": [
+        "focus",
+        "blade"
+      ],
+      "armor": [
+        "robe",
+        "light"
+      ]
     },
     "unlock": {
       "priest": 3,
@@ -528,15 +608,21 @@
     "starting_gear": [
       "oak_staff",
       "leather_vest"
-    ]
+    ],
+    "question": "攻めと癒しを 1 手で兼ねるか、どちらかに寄せるか。"
   },
   "chronomancer": {
     "name": "じじゅつし",
     "desc": "行動順そのものを歪める。",
     "cost_scale": 125,
     "equip": {
-      "weapon": ["focus", "knife"],
-      "armor": ["robe"]
+      "weapon": [
+        "focus",
+        "knife"
+      ],
+      "armor": [
+        "robe"
+      ]
     },
     "unlock": {
       "mage": 3,
@@ -573,15 +659,23 @@
     ],
     "starting_gear": [
       "oak_staff"
-    ]
+    ],
+    "question": "誰の手番を動かすか。速めるか、遅らせるか、止めるか。"
   },
   "beastmaster": {
     "name": "まじゅうつかい",
     "desc": "獣を放つ。ひと振りが重い。",
     "cost_scale": 110,
     "equip": {
-      "weapon": ["beast", "heavy", "blade"],
-      "armor": ["heavy", "light"]
+      "weapon": [
+        "beast",
+        "heavy",
+        "blade"
+      ],
+      "armor": [
+        "heavy",
+        "light"
+      ]
     },
     "unlock": {
       "ranger": 2,
@@ -619,15 +713,23 @@
     "starting_gear": [
       "short_sword",
       "leather_vest"
-    ]
+    ],
+    "question": "獣に任せるか、自分で庇うか。撃破以外の決着が見えているか。"
   },
   "jester": {
     "name": "あそびにん",
     "desc": "何をするか読めない。とても軽い。",
     "cost_scale": 75,
     "equip": {
-      "weapon": ["knife", "ranged", "focus"],
-      "armor": ["light", "robe"]
+      "weapon": [
+        "knife",
+        "ranged",
+        "focus"
+      ],
+      "armor": [
+        "light",
+        "robe"
+      ]
     },
     "growth": {
       "hp": 6,
@@ -660,6 +762,7 @@
     ],
     "starting_gear": [
       "crescent_knife"
-    ]
+    ],
+    "question": "出たとこ勝負に賭けるか、ましな目を選びに行くか。"
   }
 }

@@ -24,25 +24,24 @@ static func write(summary: Dictionary) -> PackedStringArray:
 	if outcome == "abandoned":
 		lines.append(Terms.RUN_ABANDON_CHRONICLE % floor_no)
 	elif bool(summary.get("victory", false)):
-		lines.append("一行は 世界の 終点から 生還した。")
+		lines.append(Lore.CHRONICLE_VICTORY)
 	else:
-		lines.append("一行は 危険度 %d の 地で ついえた。" % floor_no)
+		lines.append(Lore.CHRONICLE_DEFEAT % floor_no)
 
-	lines.append(
-		"%d 体を倒し、金貨 %d 枚を得た。" % [int(summary.get("kills", 0)), int(summary.get("gold_earned", gold))]
-	)
+	lines.append(Lore.CHRONICLE_BATTLE_RESULT % [
+		int(summary.get("kills", 0)),
+		int(summary.get("gold_earned", gold)),
+	])
 
 	# 恒久通貨は必ず支払われる。全滅したランも次の足しになる、という手応えを
 	# 数字で見せる場所がここしかない。呼び名は Terms 側にある。
-	lines.append(
-		"道中の記録 %d 点（規律 %d%%）。%sを %d 得た（計 %d）。" % [
-			int(summary.get("score", 0)),
-			int(summary.get("reward_percent", 100)),
-			Terms.ECHO,
-			int(summary.get("echo", 0)),
-			int(summary.get("echo_total", 0)),
-		]
-	)
+	lines.append(Lore.CHRONICLE_RUN_REWARD % [
+		int(summary.get("score", 0)),
+		int(summary.get("reward_percent", 100)),
+		Terms.ECHO,
+		int(summary.get("echo", 0)),
+		int(summary.get("echo_total", 0)),
+	])
 
 	# ランをまたぐ物語の段階。世界の中の物語より先に置く
 	# （こちらは「前のランからの続き」なので、順番として先）。
@@ -68,9 +67,9 @@ static func write(summary: Dictionary) -> PackedStringArray:
 				learned_all.append(ability_name)
 
 	if learned_all.is_empty():
-		lines.append("この旅で 得た技は なかった。")
+		lines.append(Lore.CHRONICLE_LEARNED_NONE)
 	else:
-		lines.append("だが %s の技は 残った。" % ", ".join(learned_all))
+		lines.append(Lore.CHRONICLE_LEARNED % "、".join(learned_all))
 
 	for m in members:
 		lines.append(

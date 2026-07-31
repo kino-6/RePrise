@@ -1,6 +1,8 @@
 class_name StoryArcGenerator
 extends RefCounted
 
+const WritingQuality := preload("res://src/game/writing_quality.gd")
+
 ## 一世界で完結する、感情的な連続シナリオを決定的に生成する。
 ##
 ## 「誰を守るか」「何を約束したか」「どの代償を選ぶか」は Script が固定する。
@@ -171,7 +173,7 @@ static func apply_ai_skin(story: Dictionary, candidate: Dictionary) -> Dictionar
 		if not proposed.has(key):
 			continue
 		var value := String(proposed.get(key, "")).strip_edges()
-		var reason := _invalid_reason(value, int(limits.get(key, 0)))
+		var reason := _invalid_reason(value, int(limits.get(key, 0)), key)
 		if reason == "":
 			current[key] = value
 		else:
@@ -470,7 +472,7 @@ static func _validate_fail_forward(
 			errors.append("%s/%s: 変化説明が空" % [prefix, failure_id])
 
 
-static func _invalid_reason(value: String, limit: int) -> String:
+static func _invalid_reason(value: String, limit: int, field: String = "") -> String:
 	if value == "":
 		return "empty"
 	if limit < 1 or value.length() > limit:
@@ -480,6 +482,10 @@ static func _invalid_reason(value: String, limit: int) -> String:
 	for banned in BANNED:
 		if banned in value:
 			return "banned"
+	if field != "":
+		var writing_reason := WritingQuality.ai_reason(value, field)
+		if writing_reason != "":
+			return writing_reason
 	for i in value.length():
 		var code := value.unicode_at(i)
 		if code >= 0x30 and code <= 0x39:

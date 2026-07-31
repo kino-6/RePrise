@@ -1,6 +1,8 @@
 class_name QuestNarrativeText
 extends RefCounted
 
+const WritingQuality := preload("res://src/game/writing_quality.gd")
+
 ## クエストの表示文だけを作り、AI の候補を項目ごとに検算する。
 ##
 ## 構造は QuestGenerator が既に確定している。ここが返すものには site id、
@@ -188,6 +190,8 @@ static func _replace_scalar(
 	var value := String(candidate.get(field, "")).strip_edges()
 	var reason := _invalid_reason(value, limit)
 	if reason == "":
+		reason = WritingQuality.ai_reason(value, field)
+	if reason == "":
 		result[field] = value
 	else:
 		rejected.append({"field": field, "reason": reason})
@@ -206,6 +210,8 @@ static func _replace_array(
 	for i in count:
 		var value := String(proposed[i]).strip_edges()
 		var reason := _invalid_reason(value, limit)
+		if reason == "":
+			reason = WritingQuality.ai_reason(value, field)
 		if reason == "":
 			current[i] = value
 		else:

@@ -379,7 +379,7 @@ func _draw_root(origin: Vector2) -> void:
 			Terms.RUN_ABANDON,
 			"" if _allow_run_abandon else Terms.RUN_ABANDON_IN_RUN,
 		],
-		["とじる", ""],
+		[Terms.MENU_CLOSE, ""],
 	]
 	for i in rows.size():
 		var at := origin + Vector2(0, 34 + i * ROW)

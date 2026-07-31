@@ -1344,7 +1344,7 @@ func _test_quest_text() -> void:
 	_equal("前後の飾りは落ちる", QuestText.accept_name("「うつろな楔」"), "うつろな楔")
 	_equal(
 		"ふつうの一文は通る", QuestText.accept_line("これが ある かぎり 主は 傷つかない。"),
-		"これが ある かぎり 主は 傷つかない。"
+		"これがあるかぎり主は傷つかない。"
 	)
 
 	# 落ちてほしいもの
@@ -1380,7 +1380,7 @@ func _test_quest_text() -> void:
 	_equal("通った名が入る", String(w.seals[0]["name"]), "とこしえの枷")
 	_check("落ちた名はテンプレートのまま", String(w.seals[1]["name"]) != "ホイミの錠")
 	_check("落ちた由来はテンプレートのまま", "HP300" not in String(w.seals[2]["why"]))
-	_equal("通った由来が入る", String(w.seals[0]["why"]), "この地の ちからが とびらを 閉ざす。")
+	_equal("通った由来が入る", String(w.seals[0]["why"]), "この地のちからがとびらを閉ざす。")
 
 	var pos_kept := true
 	var band_kept := true
@@ -1444,7 +1444,7 @@ func _test_vocabulary() -> void:
 			prologue_fits = false
 	_check("プロローグ全拍に絵・場所・話者・本文・入力がある", prologue_complete)
 	_check("プロローグ全拍が本文窓の 3 行へ収まる", prologue_fits)
-	_check("世界分断が前提に明記される", Lore.WORLD.contains("綴じ目") and Lore.WORLD.contains("分かれた"))
+	_check("世界分断が前提に明記される", Lore.WORLD.contains("世界を分断") and Lore.WORLD.contains("分かれた"))
 
 
 ## 版の刻印。

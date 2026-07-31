@@ -171,7 +171,7 @@ func _draw_final_chamber(scene: String) -> void:
 	_draw_party(Vector2(72, 126), 2, scene == "attack")
 
 	if scene == "confront":
-		# 主が掲げる「世界の綴じ目」。完全な円にせず、既に傷がある。
+		# 主が掲げる世界分断の力。完全な円にせず、既に傷がある。
 		var center := Vector2(410, 39)
 		draw_arc(center, 18, 0.25, TAU - 0.35, 24, CRACK, 3.0)
 		draw_line(center + Vector2(-3, -17), center + Vector2(5, -4), CRACK, 2.0)

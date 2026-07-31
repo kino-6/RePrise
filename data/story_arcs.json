@@ -41,7 +41,7 @@
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": false, "motif_state": "answered",
-          "line": "主は弟の姿で手紙を捨てろと迫る。すると城の奥から、本物の弟の返事が届く。"
+          "line": "主は弟の姿で{motif}を捨てろと迫る。だが{anchor_name}へ宛てた、本物の弟の返事が届く。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
@@ -110,7 +110,7 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "named",
-          "line": "{home_name}の{anchor_name}は、帝国が残した戦獣を家族として助けてほしいと頼む。"
+          "line": "{home_name}の{anchor_name}は、{motif}を付けた帝国の戦獣を家族として助けてほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_mid",
@@ -120,7 +120,7 @@
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "silenced",
-          "line": "戦獣の心臓は城の炉につながっていた。止めれば主は弱るが、戦獣は助からない。"
+          "line": "{anchor_name}は、{motif}と戦獣の心臓が城の炉へつながると知る。炉を止めれば戦獣は死ぬ。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
@@ -199,7 +199,7 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "recorded",
-          "line": "{home_name}の家と住民が消え始めている。記録係の{anchor_name}は、名簿作りを手伝ってほしいと頼む。"
+          "line": "{home_name}の家と住民が消え始めた。記録係{anchor_name}は{motif}を差し出し、名簿作りを頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "town_mid",
@@ -209,7 +209,7 @@
         {
           "id": "reversal", "phase": "reversal", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "doubted",
-          "line": "地下の装置から、町が主によって作られたと分かる。主を倒せば町も消えてしまう。"
+          "line": "{anchor_name}は地下の装置で、町が主に作られたと知る。主を倒せば{motif}と町は消える。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "town_high",
@@ -288,7 +288,7 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "surrendered",
-          "line": "{home_name}へ投降した士官{anchor_name}は、徴兵された若者を救うまで裁きを待ってほしいと頼む。"
+          "line": "{motif}を掲げて{home_name}へ投降した{anchor_name}は、若者の救出まで裁きを待ってほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_low",
@@ -298,7 +298,7 @@
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "stained",
-          "line": "避難民は、{anchor_name}が以前{home_name}を焼く命令に署名したと告発する。本人も認める。"
+          "line": "避難民は{motif}を示し、{anchor_name}が{home_name}への焼き討ち命令に署名したと告発する。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
@@ -308,7 +308,7 @@
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "raised",
-          "line": "主は古い命令に従えば全員を帰すと誘う。{anchor_name}は決定を一行へ任せる。"
+          "line": "主は古い命令に従えば全員を帰すと誘う。{anchor_name}は{motif}を置き、決定を一行へ任せる。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
@@ -387,7 +387,7 @@
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "decoded",
-          "line": "{anchor_name}の炉は城門の認証鍵だった。使えば門は開くが、記憶と人格は初期化される。"
+          "line": "調べた{motif}から、{anchor_name}の炉が城門の鍵だと分かる。使えば門は開くが、記憶と人格は消える。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
@@ -466,7 +466,7 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "reflected",
-          "line": "{home_name}の案内人{anchor_name}は過去を思い出せない。城まで案内する代わりに、正体を確かめてほしいと頼む。"
+          "line": "{home_name}の案内人{anchor_name}は過去を思い出せない。{motif}に映る正体を確かめてほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_low",
@@ -476,7 +476,7 @@
         {
           "id": "reversal", "phase": "reversal", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "recognized",
-          "line": "{anchor_name}は、主から切り離された感情だった。元に戻れば、旅をした人格は消えてしまう。"
+          "line": "調べた{motif}から、{anchor_name}は主から切り離された感情だと分かる。元に戻れば今の人格は消える。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "town_high",

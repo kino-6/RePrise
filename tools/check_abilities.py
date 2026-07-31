@@ -162,6 +162,48 @@ def _selftest() -> int:
     return 0
 
 
+## 属性が「弱点倍率だけ」で終わっていないか（F-5）。
+##
+## 倍率しか無いと、弱点表を持たない相手に対して炎も氷も雷も同じ技になり、
+## 「属性を切り替える」判断が消える。`_element_effect` に各属性の枝が要る。
+ELEMENT_RULES = {
+    "fire": "波及",
+    "ice": "足止め",
+    "bolt": "中断",
+    "dark": "交換",
+}
+
+
+def check_vocabulary() -> list[str]:
+    """職の「毎手番の問い」と、技の戦術語と、属性の効き目（F-5）。"""
+    problems: list[str] = []
+    jobs = {
+        k: v for k, v in
+        json.loads((ROOT / "data" / "jobs.json").read_text(encoding="utf-8")).items()
+        if isinstance(v, dict)
+    }
+    for name, job in sorted(jobs.items()):
+        if not str(job.get("question", "")).strip():
+            problems.append("職 %s に「毎手番の問い」が無い" % name)
+
+    abilities = {
+        k: v for k, v in
+        json.loads((ROOT / "data" / "abilities.json").read_text(encoding="utf-8")).items()
+        if isinstance(v, dict)
+    }
+    for name, ability in sorted(abilities.items()):
+        if not str(ability.get("role", "")).strip():
+            problems.append("技 %s に戦術語が無い" % name)
+
+    # 属性の効き目が**実装されている**こと。データだけ在っても意味が無い。
+    source = (ROOT / "src" / "battle" / "battle_system.gd").read_text(encoding="utf-8")
+    for element in sorted(ELEMENT_RULES):
+        if '"%s":' % element not in source:
+            problems.append(
+                "属性 %s の効き目（%s）が実装されていない" % (element, ELEMENT_RULES[element]))
+    return problems
+
+
 def main(argv: list[str]) -> int:
     if "--selftest" in argv:
         return _selftest()
@@ -173,6 +215,7 @@ def main(argv: list[str]) -> int:
     dominated = find_dominated(abilities)
     print("技 %d 個を、役割（種別・対象・属性・効果）ごとに突き合わせた" % len(abilities))
     problems = judge(dominated, ALLOWED)
+    problems += check_vocabulary()
     if problems:
         for note in problems:
             print("  - %s" % note)

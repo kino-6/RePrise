@@ -7,7 +7,8 @@
     "target": "one_enemy",
     "cost": 100,
     "mp": 0,
-    "power": 100
+    "power": 100,
+    "role": "基礎"
   },
   "guard": {
     "name": "ぼうぎょ",
@@ -16,7 +17,8 @@
     "target": "self",
     "cost": 55,
     "mp": 0,
-    "power": 0
+    "power": 0,
+    "role": "基礎"
   },
   "power_slash": {
     "name": "おおぶり",
@@ -26,7 +28,8 @@
     "menu": "skill",
     "cost": 175,
     "mp": 0,
-    "power": 185
+    "power": 185,
+    "role": "大技"
   },
   "guard_stance": {
     "name": "かばう",
@@ -37,7 +40,8 @@
     "cost": 80,
     "mp": 2,
     "power": 0,
-    "effect": "defend_up"
+    "effect": "defend_up",
+    "role": "庇護"
   },
   "whirlwind": {
     "name": "つむじぎり",
@@ -47,7 +51,8 @@
     "menu": "skill",
     "cost": 165,
     "mp": 3,
-    "power": 115
+    "power": 115,
+    "role": "範囲"
   },
   "double_slash": {
     "name": "れんげき",
@@ -58,7 +63,8 @@
     "cost": 150,
     "mp": 3,
     "power": 72,
-    "hits": 3
+    "hits": 3,
+    "role": "連撃"
   },
   "heal": {
     "name": "リアン",
@@ -68,7 +74,8 @@
     "menu": "spell",
     "cost": 85,
     "mp": 3,
-    "power": 34
+    "power": 34,
+    "role": "治療"
   },
   "haste": {
     "name": "ハステ",
@@ -79,7 +86,8 @@
     "cost": 75,
     "mp": 4,
     "power": 0,
-    "effect": "haste"
+    "effect": "haste",
+    "role": "行動順"
   },
   "revive": {
     "name": "リザン",
@@ -89,7 +97,8 @@
     "menu": "spell",
     "cost": 190,
     "mp": 8,
-    "power": 20
+    "power": 20,
+    "role": "治療"
   },
   "cure_all": {
     "name": "セイネ",
@@ -100,7 +109,8 @@
     "cost": 70,
     "mp": 3,
     "power": 0,
-    "effect": "cleanse"
+    "effect": "cleanse",
+    "role": "治療"
   },
   "fire": {
     "name": "ヴァル",
@@ -111,7 +121,8 @@
     "menu": "spell",
     "cost": 130,
     "mp": 3,
-    "power": 145
+    "power": 145,
+    "role": "属性"
   },
   "slow": {
     "name": "スロウ",
@@ -122,7 +133,8 @@
     "cost": 110,
     "mp": 4,
     "power": 0,
-    "effect": "slow"
+    "effect": "slow",
+    "role": "行動順"
   },
   "blast": {
     "name": "ヴァルギオ",
@@ -133,7 +145,8 @@
     "menu": "spell",
     "cost": 200,
     "mp": 8,
-    "power": 130
+    "power": 130,
+    "role": "属性"
   },
   "frost": {
     "name": "シラガ",
@@ -144,7 +157,8 @@
     "menu": "spell",
     "cost": 155,
     "mp": 5,
-    "power": 120
+    "power": 120,
+    "role": "属性"
   },
   "quick_stab": {
     "name": "はやわざ",
@@ -154,7 +168,8 @@
     "menu": "skill",
     "cost": 55,
     "mp": 0,
-    "power": 62
+    "power": 62,
+    "role": "速攻"
   },
   "steal": {
     "name": "ぬすむ",
@@ -165,7 +180,8 @@
     "cost": 90,
     "mp": 0,
     "power": 0,
-    "effect": "steal"
+    "effect": "steal",
+    "role": "副次目的"
   },
   "shadow_step": {
     "name": "しゅくち",
@@ -176,7 +192,8 @@
     "cost": 30,
     "mp": 5,
     "power": 0,
-    "effect": "haste"
+    "effect": "haste",
+    "role": "行動順"
   },
   "poison_blade": {
     "name": "どくば",
@@ -187,7 +204,8 @@
     "cost": 110,
     "mp": 3,
     "power": 88,
-    "effect": "poison"
+    "effect": "poison",
+    "role": "状態追撃"
   },
   "bulwark": {
     "name": "まもりのかまえ",
@@ -198,7 +216,8 @@
     "cost": 120,
     "mp": 6,
     "power": 0,
-    "effect": "defend_up"
+    "effect": "defend_up",
+    "role": "庇護"
   },
   "smite": {
     "name": "せいだん",
@@ -209,7 +228,8 @@
     "menu": "skill",
     "cost": 150,
     "mp": 3,
-    "power": 165
+    "power": 165,
+    "role": "属性"
   },
   "mass_heal": {
     "name": "リアンガ",
@@ -219,7 +239,8 @@
     "menu": "spell",
     "cost": 140,
     "mp": 10,
-    "power": 40
+    "power": 40,
+    "role": "治療"
   },
   "shuriken": {
     "name": "しゅりけん",
@@ -229,7 +250,8 @@
     "menu": "skill",
     "cost": 110,
     "mp": 2,
-    "power": 88
+    "power": 88,
+    "role": "範囲"
   },
   "smoke": {
     "name": "けむりだま",
@@ -240,7 +262,8 @@
     "cost": 90,
     "mp": 5,
     "power": 0,
-    "effect": "slow_and_flee"
+    "effect": "slow_and_flee",
+    "role": "副次目的"
   },
   "assassinate": {
     "name": "ひっさつ",
@@ -251,7 +274,8 @@
     "cost": 165,
     "mp": 8,
     "power": 150,
-    "effect": "execute"
+    "effect": "execute",
+    "role": "状態追撃"
   },
   "lull": {
     "name": "ネブラ",
@@ -262,7 +286,8 @@
     "cost": 120,
     "mp": 5,
     "power": 0,
-    "effect": "sleep"
+    "effect": "sleep",
+    "role": "中断"
   },
   "arrow": {
     "name": "とおや",
@@ -272,7 +297,8 @@
     "menu": "skill",
     "cost": 65,
     "mp": 0,
-    "power": 95
+    "power": 95,
+    "role": "速攻"
   },
   "arrow_storm": {
     "name": "みだれや",
@@ -283,7 +309,8 @@
     "cost": 130,
     "mp": 2,
     "power": 70,
-    "hits": 2
+    "hits": 2,
+    "role": "範囲"
   },
   "magic_blade": {
     "name": "まけん",
@@ -294,7 +321,8 @@
     "menu": "skill",
     "cost": 140,
     "mp": 4,
-    "power": 150
+    "power": 150,
+    "role": "属性"
   },
   "bolt_all": {
     "name": "ゼルギオ",
@@ -305,7 +333,8 @@
     "menu": "spell",
     "cost": 205,
     "mp": 9,
-    "power": 135
+    "power": 135,
+    "role": "属性"
   },
   "rapid_shot": {
     "name": "そくしゃ",
@@ -316,7 +345,8 @@
     "cost": 145,
     "mp": 3,
     "power": 48,
-    "hits": 4
+    "hits": 4,
+    "role": "連撃"
   },
   "herb_smoke": {
     "name": "やくえん",
@@ -326,7 +356,8 @@
     "menu": "skill",
     "cost": 110,
     "mp": 5,
-    "power": 26
+    "power": 26,
+    "role": "治療"
   },
   "haste_all": {
     "name": "ハステガ",
@@ -337,7 +368,8 @@
     "cost": 130,
     "mp": 9,
     "power": 0,
-    "effect": "haste"
+    "effect": "haste",
+    "role": "行動順"
   },
   "beast_fang": {
     "name": "けもののきば",
@@ -348,7 +380,8 @@
     "cost": 145,
     "mp": 2,
     "power": 105,
-    "effect": "poison"
+    "effect": "poison",
+    "role": "状態追撃"
   },
   "play": {
     "name": "あそぶ",
@@ -359,7 +392,8 @@
     "cost": 60,
     "mp": 0,
     "power": 0,
-    "effect": "random"
+    "effect": "random",
+    "role": "賭け"
   },
   "pierce_shot": {
     "name": "つらぬき",
@@ -370,7 +404,8 @@
     "cost": 130,
     "mp": 4,
     "power": 120,
-    "pierce": true
+    "pierce": true,
+    "role": "貫通"
   },
   "bomb": {
     "name": "ばくやく",
@@ -381,7 +416,8 @@
     "menu": "skill",
     "cost": 150,
     "mp": 4,
-    "power": 118
+    "power": 118,
+    "role": "属性"
   },
   "time_stop": {
     "name": "ときとまれ",
@@ -392,7 +428,8 @@
     "cost": 170,
     "mp": 12,
     "power": 0,
-    "effect": "slow_and_haste_self"
+    "effect": "slow_and_haste_self",
+    "role": "行動順"
   },
   "beast_roar": {
     "name": "じゅうのほうこう",
@@ -403,7 +440,8 @@
     "cost": 155,
     "mp": 8,
     "power": 0,
-    "effect": "sleep"
+    "effect": "sleep",
+    "role": "中断"
   },
   "sage_strike": {
     "name": "けんじゃのいちげき",
@@ -415,7 +453,8 @@
     "cost": 215,
     "mp": 14,
     "power": 140,
-    "effect": "mend"
+    "effect": "mend",
+    "role": "副次目的"
   },
   "wild_card": {
     "name": "きまぐれ",
@@ -426,6 +465,7 @@
     "cost": 75,
     "mp": 2,
     "power": 0,
-    "effect": "random_pick"
+    "effect": "random_pick",
+    "role": "賭け"
   }
 }

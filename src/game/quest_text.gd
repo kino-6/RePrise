@@ -1,6 +1,8 @@
 class_name QuestText
 extends RefCounted
 
+const WritingQuality := preload("res://src/game/writing_quality.gd")
+
 ## AI が書いた文字列を、画面に出してよい形へ落とす検算層。
 ##
 ## **AI を繋ぐ前にこれを作る。** 繋いでから作ると、変な出力を見るたびに
@@ -47,6 +49,8 @@ static func accept_name(raw: String) -> String:
 		return ""
 	if not _clean_enough(text):
 		return ""
+	if WritingQuality.ai_reason(text, "title") != "":
+		return ""
 	return text
 
 
@@ -57,6 +61,8 @@ static func accept_line(raw: String) -> String:
 		return ""
 	if not _clean_enough(text):
 		return ""
+	if WritingQuality.ai_reason(text, "reason") != "":
+		return ""
 	return text
 
 
@@ -66,7 +72,9 @@ static func _tidy(raw: String) -> String:
 	# 引用符は単引用符で書く（GDScript の二重引用符の中に " は置きづらい）。
 	for mark in ["- ", "・", "* ", "「", "」", '"', "'"]:
 		text = text.trim_prefix(mark).trim_suffix(mark)
-	return text.strip_edges()
+	# 旧来のかな分かち書きが混じっても、現代向けの表示文へ正規化してから検査する。
+	# これにより内容が明確な候補まで捨てず、画面へ不自然な空白も残さない。
+	return text.replace(" ", "").replace("　", "").strip_edges()
 
 
 static func _clean_enough(text: String) -> bool:
