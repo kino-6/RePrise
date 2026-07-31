@@ -215,17 +215,17 @@ func _summary(choice: Dictionary) -> String:
 	for token in gains:
 		if String(token) != "none":
 			count += 1
-	var got := "なし" if count == 0 else _first_token(gains, "reward")
+	var got := Terms.NONE if count == 0 else _first_token(gains, "reward")
 	if count > 1:
 		got += " ほか%d" % (count - 1)
-	return PixelUI.clip("%s → %s" % [pay if pay != "" else "なし", got], 286.0, PixelUI.SIZE_SUB)
+	return PixelUI.clip("%s → %s" % [pay if pay != "" else Terms.NONE, got], 286.0, PixelUI.SIZE_SUB)
 
 
 func _first_token(list: Array, kind: String) -> String:
 	for token in list:
 		if String(token) != "none":
 			return EventEffects.label(String(token), kind)
-	return "なし"
+	return Terms.NONE
 
 
 func _tokens(list: Array, kind: String) -> String:
@@ -290,9 +290,9 @@ func _draw_detail() -> void:
 	_detail(origin, 0).row(
 		"はらう: %s" % [
 			_tokens(c.get("costs", []), "cost")
-			if not c.get("costs", []).is_empty() else "なし"
+			if not c.get("costs", []).is_empty() else Terms.NONE
 		],
-		"あぶない: %s" % [risks if risks != "" else "なし"],
+		"あぶない: %s" % [risks if risks != "" else Terms.NONE],
 		PixelUI.C_TEXT_DIM,
 		PixelUI.C_HP_LOW if risks != "" else PixelUI.C_TEXT_DIM
 	)

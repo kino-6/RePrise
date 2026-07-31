@@ -36,7 +36,7 @@ done = [
 ]
 recent = done[-5:][::-1]
 
-TASK_ID = re.compile(r"\b([A-G]-\d+)\b")
+TASK_ID = re.compile(r"\b([A-H]-\d+)\b")
 
 
 def _titles(text, mark):
@@ -102,6 +102,7 @@ def _selftest():
         ("重複を見つける", {"A-1": 2}, {}, [], True),
         ("両方に居るのを見つける", {"A-1": 1}, {"A-1": 1}, [], True),
         ("証跡なしを見つける", {"A-1": 1}, {}, ["A-1"], True),
+        ("未完了どうしの衝突を見つける", {}, {"A-1": 2}, [], True),
         ("正しい台帳は通る", {"A-1": 1}, {"B-2": 1}, [], False),
     ]
     bad = 0
@@ -109,6 +110,7 @@ def _selftest():
         found = bool(
             set(open_map) & set(done_map)
             or [k for k, v in done_map.items() if v > 1]
+            or [k for k, v in open_map.items() if v > 1]
             or missing
         )
         ok = found == want_fail
@@ -148,6 +150,11 @@ if both:
 twice = sorted(k for k, v in done_ids.items() if v > 1)
 if twice:
     problems.append("控えに 2 回出てくる ID: %s" % "、".join(twice))
+# **未完了どうしの衝突も見る。** 別々の人が同じ番号を振ると、片方を閉じた
+# つもりでもう片方が残る（実際に E-1 と E-2 が 2 つずつ在った）。
+open_twice = sorted(k for k, v in open_ids.items() if v > 1)
+if open_twice:
+    problems.append("未完了に 2 回出てくる ID: %s" % "、".join(open_twice))
 no_gate = _has_gate(archive_text)
 if no_gate:
     problems.append("Gate の証跡が無い項目 %d 件: %s" % (

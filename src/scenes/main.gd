@@ -627,7 +627,8 @@ func _capture(which: String) -> void:
 			_event_pos = GameState.world.start_pos
 			GameState.world.events[_event_pos] = instance
 			_on_event_choice(instance.get("choices", [])[1])
-		"town":
+		"town", "town_dungeon", "town_grassland", "town_wetland", \
+		"town_snowfield", "town_volcano":
 			# 町の中の見え方（宿・店・人）を確かめる。
 			# 物語や重なった出来事は町より先に出るので、撮影では直に入る。
 			_start_run()
@@ -638,6 +639,9 @@ func _capture(which: String) -> void:
 			var town_at := _first_site("town")
 			if town_at.x >= 0:
 				GameState.enter_site(town_at)
+				if which.begins_with("town_"):
+					# 5生物相の町床Gate。構造とNPCを同じに保ち、床だけ比較する。
+					GameState.site["tileset"] = which.trim_prefix("town_")
 				_open_town()
 		"cave":
 			_start_run()

@@ -1187,6 +1187,9 @@ func _test_town_generation() -> void:
 	var profile_connected := true
 	var generation_problems: Array[String] = []
 	var fingerprints := {}
+	var road_art_variants := {}
+	var plaza_art_variants := {}
+	var town_art_ranges_valid := true
 	for seed_value in range(1, 101):
 		var town_index := (seed_value - 1) % 4
 		var world_variant := seed_value % TownProfile.cycle_size()
@@ -1246,6 +1249,25 @@ func _test_town_generation() -> void:
 			if not profile_line_found:
 				profile_connected = false
 		fingerprints[TownGenerator.internal_fingerprint(town)] = true
+		for pos in town.main_street:
+			var at: Vector2i = pos
+			if (
+				at not in town.plaza_tiles
+				and town.get_tile(at.x, at.y) == TownMap.T_GROUND_ALT
+			):
+				var art := town.render_tile(at.x, at.y)
+				road_art_variants[art] = true
+				if art < TownMap.ART_ROAD_FIRST \
+						or art >= TownMap.ART_ROAD_FIRST + TownMap.ART_VARIANTS:
+					town_art_ranges_valid = false
+		for pos in town.plaza_tiles:
+			var at: Vector2i = pos
+			if town.get_tile(at.x, at.y) == TownMap.T_GROUND_ALT:
+				var art := town.render_tile(at.x, at.y)
+				plaza_art_variants[art] = true
+				if art < TownMap.ART_PLAZA_FIRST \
+						or art >= TownMap.ART_PLAZA_FIRST + TownMap.ART_VARIANTS:
+					town_art_ranges_valid = false
 
 	_check("町の宿・店・出口に必ず辿り着ける", reachable)
 	_check("町に人が居る", has_folk)
@@ -1254,6 +1276,9 @@ func _test_town_generation() -> void:
 	_check("100町すべて南辺中央が入口", entrance_fixed)
 	_check("入口内側5x3は主街路以外の人・建物・装飾がない", arrival_clear)
 	_check("Profileが住人の役と台詞へ接続される", profile_connected)
+	_check("町の街路・広場が専用描画番号へ分かれる", town_art_ranges_valid)
+	_check("町の街路4変種を座標だけで使い分ける", road_art_variants.size() == 4)
+	_check("町の広場4変種を座標だけで使い分ける", plaza_art_variants.size() == 4)
 	_check(
 		"100町すべて生成契約を通る",
 		generation_problems.is_empty(),

@@ -87,13 +87,15 @@ enum State { TURN_START, COMMAND, LIST, TARGET, MESSAGE, DONE }
 ## 第 1 階層の項目。順番は固定する（毎回同じ位置にあることが速さになる）。
 enum Root { FIGHT, SPELL, SKILL, ITEM, GUARD, ESCAPE, AUTO }
 
-const ROOT_LABELS := {
-	Root.FIGHT: "たたかう",
-	Root.SPELL: "じゅもん",
-	Root.SKILL: "とくぎ",
-	Root.ITEM: "どうぐ",
-	Root.GUARD: "ぼうぎょ",
-	Root.ESCAPE: "にげる",
+## 第 1 階層の呼び名。**`static var` にする** ―― `Terms` は語彙ファイルから
+## 読むので定数式にならない（`const` だと「定数式ではない」で落ちる）。
+static var ROOT_LABELS := {
+	Root.FIGHT: Terms.CMD_FIGHT,
+	Root.SPELL: Terms.CMD_SPELL,
+	Root.SKILL: Terms.CMD_SKILL,
+	Root.ITEM: Terms.MENU_ITEMS,
+	Root.GUARD: Terms.CMD_GUARD,
+	Root.ESCAPE: Terms.CMD_ESCAPE,
 	Root.AUTO: "オート",
 }
 

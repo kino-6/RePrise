@@ -223,7 +223,7 @@ func _buy(item_id: String) -> void:
 	var price := price_of(item_id)
 	if _stock_of(item_id) <= 0:
 		Sound.play("cancel")
-		_notify("それは 売り切れだ")
+		_notify(Terms.SOLD_OUT)
 		return
 	if not GameState.spend_gold(price):
 		Sound.play("cancel")
@@ -235,7 +235,7 @@ func _buy(item_id: String) -> void:
 	else:
 		GameState.add_item(item_id)
 	Sound.play("chest")
-	_notify("%s を 買った" % _entry(item_id).get("name", item_id))
+	_notify(Terms.BOUGHT % _entry(item_id).get("name", item_id))
 
 
 # --------------------------------------------------------------------------

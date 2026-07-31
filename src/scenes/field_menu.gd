@@ -35,13 +35,19 @@ const ROOT_VISIBLE := 7
 
 ## そうびの 3 スロット。順番は固定する。
 const SLOTS: Array[String] = ["weapon", "armor", "accessory"]
-const SLOT_LABELS := {"weapon": "ぶき", "armor": "よろい", "accessory": "かざり"}
+## 部位の呼び名。**`static var` にする** ―― `Terms` は語彙ファイルから
+## 読むので定数式にならない（`const` だと「定数式ではない」で落ちる）。
+static var SLOT_LABELS := {
+	"weapon": Terms.SLOT_WEAPON,
+	"armor": Terms.SLOT_ARMOR,
+	"accessory": Terms.SLOT_ACCESSORY,
+}
 
 enum State { ROOT, MEMBER, ITEM, ITEM_TARGET, STATUS, SLOT, GEAR, JOB }
 
 static var ROOT_ITEMS: Array[String] = [
-	"どうぐ", "つよさ", "そうび", "てんしょく", Terms.MAP_MENU,
-	"せってい", "ちゅうだん", "ぬけだす", "とじる",
+	Terms.MENU_ITEMS, Terms.MENU_STATUS, Terms.MENU_EQUIP, Terms.MENU_JOB, Terms.MAP_MENU,
+	Terms.MENU_SETTINGS, Terms.MENU_SUSPEND, Terms.MENU_ESCAPE, Terms.MENU_CLOSE,
 ]
 
 ## てんしょくの一覧は 2 列。15 職あるので 1 列だと枠から出る。
@@ -177,7 +183,7 @@ func _input_root(event: InputEvent) -> void:
 		match _root_index:
 			0:
 				if _items().is_empty():
-					_notify("どうぐを もっていない")
+					_notify(Terms.NO_ITEMS)
 				else:
 					_item_index = 0
 					_state = State.ITEM
@@ -363,7 +369,7 @@ func _use_item() -> void:
 		"heal_hp":
 			if who.hp <= 0:
 				Sound.play("cancel")
-				_notify("たおれている ものには つかえない")
+				_notify(Terms.CANNOT_USE_ON_FALLEN)
 				return
 			if who.hp >= who.max_hp():
 				Sound.play("cancel")
@@ -389,7 +395,7 @@ func _use_item() -> void:
 		"heal_cleanse":
 			if who.hp <= 0:
 				Sound.play("cancel")
-				_notify("たおれている ものには つかえない")
+				_notify(Terms.CANNOT_USE_ON_FALLEN)
 				return
 			var hp_before := who.hp
 			var cured := who.cure_poison()
@@ -414,7 +420,7 @@ func _use_item() -> void:
 			_notify("%sは いきを ふきかえした！" % who.name)
 		_:
 			Sound.play("cancel")
-			_notify("ここでは つかえない")
+			_notify(Terms.CANNOT_USE_HERE)
 			return
 
 	GameState.consume_item(item_id)
@@ -457,7 +463,7 @@ func _apply_best_gear() -> void:
 		_notify("%s装備を %d 個 つけかえた" % [Terms.BEST_GEAR, changed])
 	else:
 		Sound.play("cancel")
-		_notify("これ以上 よくならない")
+		_notify(Terms.NO_BETTER_GEAR)
 
 
 func _input_gear(event: InputEvent) -> void:
@@ -484,7 +490,7 @@ func _apply_gear() -> void:
 			_notify("%sを はずした" % SLOT_LABELS[slot])
 		else:
 			Sound.play("cancel")
-			_notify("なにも つけていない")
+			_notify(Terms.NOTHING_EQUIPPED)
 		queue_redraw()
 		return
 
@@ -609,7 +615,7 @@ func _note_line(origin: Vector2, i: int) -> UiPanel:
 ## てんしょくを選ぶ前の案内。押す前に読める位置に置く。
 func _draw_job_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
-	_note_head(origin).line("てんしょく", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_note_head(origin).line(Terms.MENU_JOB, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines := [
 		"いつでも どこでも 職を かえられる。",
 		"レベルも じゅくれんも そのまま のこる。",
@@ -670,7 +676,7 @@ func _draw_jobs() -> void:
 ## 中断の案内。**何が起きるかを押す前に書く。**
 func _draw_suspend_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
-	_note_head(origin).line("ちゅうだん", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_note_head(origin).line(Terms.MENU_SUSPEND, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines := [
 		"いまの ところで 保存して とじる。",
 		"つぎに ひらくと ここから つづく。",
@@ -683,7 +689,7 @@ func _draw_suspend_notice() -> void:
 ## 洞から出る案内。使えないときは理由を出す。
 func _draw_escape_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
-	_note_head(origin).line("ぬけだす", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_note_head(origin).line(Terms.MENU_ESCAPE, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines: Array[String] = []
 	if GameState.can_escape_site():
 		lines = ["ここでの 用は 済んでいる。", "入口へ もどって 世界へ 出る。"]
@@ -700,11 +706,11 @@ func _draw_items() -> void:
 		Vector2(body.size.x - 26.0, body.size.y - 8.0)
 	)
 	var panel := UiPanel.inside(self, area)
-	panel.line("もちもの", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	panel.line(Terms.BAG, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	var items := _items()
 	if items.is_empty():
 		panel.skip(6.0)
-		panel.line("なにも もっていない。", PixelUI.C_TEXT_DIM)
+		panel.line(Terms.BAG_EMPTY, PixelUI.C_TEXT_DIM)
 		return
 	panel.skip(6.0)
 	var item_range := MenuList.range_of(_item_index, items.size(), ITEM_ROWS)
@@ -744,7 +750,7 @@ func _draw_status() -> void:
 	if m.poison_steps > 0:
 		UiPanel.inside(self, Rect2(
 			area.position + Vector2(232, 30), Vector2(48.0, PixelUI.LINE)
-		)).line("どく", PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
+		)).line(Terms.POISON, PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
 
 	var mastery := "★".repeat(m.mastery_rank()) + "☆".repeat(
 		maxi(Database.job(m.job_id).get("mastery", []).size() - m.mastery_rank(), 0)
@@ -757,9 +763,9 @@ func _draw_status() -> void:
 	# 人のレベル（ランで失う）と職業の熟練（持ち帰る）は別物なので、
 	# 短く縮めて並べるより、行を分けて書き切るほうがよい。
 	panel.skip(6.0)
-	panel.row("じぶんの レベル", "%d" % m.level, PixelUI.C_TEXT_DIM,
+	panel.row(Terms.OWN_LEVEL, "%d" % m.level, PixelUI.C_TEXT_DIM,
 		PixelUI.C_TEXT, PixelUI.SIZE_SUB)
-	panel.row("しょくぎょうの 熟練", mastery, PixelUI.C_TEXT_DIM, PixelUI.C_TEXT)
+	panel.row(Terms.JOB_MASTERY, mastery, PixelUI.C_TEXT_DIM, PixelUI.C_TEXT)
 
 	# 能力は 2 列 x 3 行。列ごとに幅を持つので、値が隣の列へ食い込まない。
 	panel.skip(6.0)
@@ -767,10 +773,10 @@ func _draw_status() -> void:
 	var rows := [
 		["HP", "%d/%d" % [m.hp, m.max_hp()]],
 		["MP", "%d/%d" % [m.mp, m.max_mp()]],
-		["こうげき", "%d" % m.attack_power()],
-		["まりょく", "%d" % m.magic_power()],
-		["しゅび", "%d" % m.defense_power()],
-		["すばやさ", "%d" % m.agility()],
+		[Terms.STAT_ATK_LABEL, "%d" % m.attack_power()],
+		[Terms.STAT_MAG_LABEL, "%d" % m.magic_power()],
+		[Terms.STAT_DEF_LABEL, "%d" % m.defense_power()],
+		[Terms.STAT_AGI_LABEL, "%d" % m.agility()],
 	]
 	for i in rows.size():
 		@warning_ignore("integer_division")
@@ -780,7 +786,7 @@ func _draw_status() -> void:
 		)
 
 	panel.move_to(cols[0].cursor_y() + 8.0)
-	panel.line("そうび", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	panel.line(Terms.MENU_EQUIP, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	for i in SLOTS.size():
 		var gear_id := String(m.equipment.get(SLOTS[i], ""))
 		var label := String(Database.gear(gear_id).get("name", "—")) if gear_id != "" else "—"
@@ -837,9 +843,9 @@ func _draw_equip() -> void:
 			list_body.end.y - origin.y - 112.0
 		)
 	))
-	panel.line("つけかえる", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	panel.line(Terms.SWAP, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 	panel.skip(4.0)
-	var entries: Array[String] = ["はずす"]
+	var entries: Array[String] = [Terms.TAKE_OFF]
 	for id in list:
 		entries.append(String(Database.gear(id).get("name", id)))
 	var gear_range := MenuList.range_of(_gear_index, entries.size(), GEAR_ROWS)
@@ -883,4 +889,4 @@ func _draw_hint() -> void:
 		panel.line(desc, PixelUI.C_TEXT_DIM)
 	# 操作の案内は必ず 2 行目に置く（説明の長さで動かさない）。
 	panel.move_to(origin.y + 24.0)
-	panel.line("↑↓ えらぶ　Ｚ けってい　Ｘ もどる", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	panel.line(Terms.HINT_LIST, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)

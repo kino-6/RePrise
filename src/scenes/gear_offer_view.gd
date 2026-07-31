@@ -114,7 +114,7 @@ func delta_text(member: PartyMember) -> String:
 		parts.append("%s %d→%d" % [
 			Terms.SPEED, Terms.speed(cost_now), Terms.speed(cost_next)])
 	if parts.is_empty():
-		return "かわらない"
+		return Terms.NO_CHANGE
 	return "　".join(parts)
 
 

@@ -36,7 +36,7 @@ func _draw() -> void:
 	if order.is_empty():
 		return
 
-	PixelUI.draw_text(self, Vector2(4, 3), "順", PixelUI.C_TEXT_DIM)
+	PixelUI.draw_text(self, Vector2(4, 3), Terms.TURN_ORDER, PixelUI.C_TEXT_DIM)
 
 	var x := 24.0
 	for i in mini(order.size(), MAX_SHOWN):

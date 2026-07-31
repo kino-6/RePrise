@@ -27,8 +27,8 @@ func show_summary(summary: Dictionary) -> void:
 	))
 	title = (
 		Terms.RUN_ABANDON_RESULT if outcome == "abandoned"
-		else "生還" if bool(summary.get("victory", false))
-		else "全滅"
+		else Terms.RESULT_SURVIVED if bool(summary.get("victory", false))
+		else Terms.RESULT_WIPED
 	)
 	# まずテンプレート版を出す。生成はそのあとで差し替えるだけ。
 	lines = Chronicle.write(summary)
@@ -85,4 +85,4 @@ func _draw() -> void:
 
 	if _ready_to_dismiss:
 		PixelUI.draw_text_center(
-			self, 288, "Ｚキーで つぎの たびへ", PixelUI.C_TEXT_DIM)
+			self, 288, Terms.RESULT_NEXT, PixelUI.C_TEXT_DIM)

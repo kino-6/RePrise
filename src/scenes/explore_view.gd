@@ -45,7 +45,14 @@ static func tileset_for(biome: String) -> Texture2D:
 	if _tilesets.has(biome):
 		return _tilesets[biome]
 	var path := "res://assets/tiles/%s.png" % biome
-	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else TILES_TEX
+	var tex: Texture2D
+	if ResourceLoader.exists(path):
+		tex = load(path)
+	elif biome.begins_with("town_"):
+		# 生成物が欠けた開発環境でも町そのものは成立させる。
+		tex = tileset_for(biome.trim_prefix("town_"))
+	else:
+		tex = TILES_TEX
 	_tilesets[biome] = tex
 	return tex
 
@@ -385,6 +392,8 @@ func _draw() -> void:
 	# 画面に映る範囲だけ描く
 	var origin := (-position / TILE).floor()
 	var span := Vector2(PixelUI.SCREEN) / TILE + Vector2(2, 2)
+	var art_biome := "town_%s" % map.biome if map is TownMap else map.biome
+	var map_tiles := tileset_for(art_biome)
 
 	for y in range(int(origin.y), int(origin.y + span.y)):
 		for x in range(int(origin.x), int(origin.x + span.x)):
@@ -394,7 +403,7 @@ func _draw() -> void:
 				continue
 			var t := map.render_tile(x, y)
 			draw_texture_rect_region(
-				tileset_for(map.biome),
+				map_tiles,
 				Rect2(x * TILE, y * TILE, TILE, TILE),
 				Rect2(t * TILE, 0, TILE, TILE)
 			)

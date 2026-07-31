@@ -23,6 +23,12 @@ enum {
 	T_SHOP = 8,
 }
 
+# 町専用シートの末尾。地図データの種類は増やさず、計画街路と広場の
+# 位置情報から描画番号だけを選ぶ。4変種は座標だけで決まり、決定性を崩さない。
+const ART_ROAD_FIRST := 9
+const ART_PLAZA_FIRST := 13
+const ART_VARIANTS := 4
+
 ## 町の人（位置 -> {"kind": ..., "line": String}）。
 ## 話しかける = 隣から押し当てる（洞の宝箱と同じ作法）。
 var folk: Dictionary = {}
@@ -66,6 +72,12 @@ func is_void(x: int, y: int) -> bool:
 ## 洞と同じ描き分け。壁の下が地面なら手前の面、そうでなければ天面。
 func render_tile(x: int, y: int) -> int:
 	var t := get_tile(x, y)
+	if t == T_GROUND_ALT:
+		var at := Vector2i(x, y)
+		if at in plaza_tiles:
+			return ART_PLAZA_FIRST + posmod(x * 3 + y * 5, ART_VARIANTS)
+		if at in main_street or at in facility_paths:
+			return ART_ROAD_FIRST + posmod(x * 5 + y * 3, ART_VARIANTS)
 	if t != T_WALL:
 		return t
 	var below := get_tile(x, y + 1)

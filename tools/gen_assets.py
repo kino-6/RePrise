@@ -472,6 +472,161 @@ def _scale_tiles(sheet: Canvas, indices: tuple, factor: float) -> Canvas:
 ## ゲーム側は「あれば使う」で拾えばよい。
 BIOMES = ["dungeon", "grassland", "snowfield", "volcano", "wetland"]
 
+# 町は探索用タイルの建物を引き継ぐが、地面だけは別の密度にする。
+#
+# 元の T_GROUND_ALT は枝、泥、溶岩の亀裂など「危険な場所を歩く」ための絵で、
+# 5x5 の広場へ並べると人物より先に目へ入った。町用シートでは最初の9枚を
+# 保ったまま床2枚を低密度版へ替え、末尾に街路4変種・広場4変種を足す。
+# 変種は座標で選ぶので乱数を使わず、16pxごとの露骨な反復だけを崩せる。
+TOWN_ROAD_FIRST = 9
+TOWN_PLAZA_FIRST = 13
+TOWN_VARIANTS = 4
+TOWN_TILESET_TILES = TOWN_PLAZA_FIRST + TOWN_VARIANTS
+TOWN_TILESET_SIZE = (TILE * TOWN_TILESET_TILES, TILE)
+
+# すべて BGR555 上の色。通常地面と街路・広場は色相を共有し、
+# 明暗差だけで「計画された場所」と読ませる。雪だけは明るい地色を守る。
+TOWN_SURFACE_COLORS = {
+    "dungeon": {
+        "ground": ("#31315A", "#181831", "#393973"),
+        "road": ("#181831", "#080810", "#31315A"),
+        "plaza": ("#393973", "#31315A", "#5A5A94"),
+    },
+    "grassland": {
+        "ground": ("#314A29", "#182918", "#525A31"),
+        "road": ("#312918", "#182918", "#5A3929"),
+        "plaza": ("#525A31", "#314A29", "#73736A"),
+    },
+    "wetland": {
+        "ground": ("#293929", "#203941", "#526A39"),
+        # 青緑にすると水路＝通行不能に見えたため、苔の暗い土色へ寄せる。
+        "road": ("#293121", "#182918", "#526A39"),
+        "plaza": ("#526A39", "#293929", "#52837B"),
+    },
+    "snowfield": {
+        "ground": ("#B4C5C5", "#94A4AC", "#DEDED5"),
+        "road": ("#94A4AC", "#6A7B8B", "#B4C5C5"),
+        "plaza": ("#DEDED5", "#B4C5C5", "#94A4AC"),
+    },
+    "volcano": {
+        "ground": ("#202039", "#181829", "#39395A"),
+        "road": ("#39395A", "#202039", "#5A5A7B"),
+        "plaza": ("#292941", "#202039", "#5A5A7B"),
+    },
+}
+
+
+def _town_rgba(hex_color: str) -> tuple[int, int, int, int]:
+    r, g, b = snes(hex_color)
+    return (r, g, b, 255)
+
+
+def _town_surface(
+    colors: tuple[str, str, str], kind: str, variant: int = 0
+) -> Canvas:
+    """人物の輪郭と競合しない、低密度な16x16地面を作る。"""
+    base, dark, light = (_town_rgba(color) for color in colors)
+    tile = Canvas(TILE, TILE)
+    for y in range(TILE):
+        for x in range(TILE):
+            tile.set(x, y, base)
+
+    # 位置をずらすだけに留め、1タイル内の非ベース画素は12px以下にする。
+    # 大きな石目や亀裂を描かないことが、キャラの足を読ませるうえで重要。
+    ox = (variant * 3) % 7
+    oy = (variant * 5) % 7
+    if kind == "ground":
+        marks = [
+            (2 + ox, 3 + oy, dark), (11 - ox // 2, 5, light),
+            (5, 12 - oy // 2, dark), (13 - ox // 3, 13, light),
+        ]
+    elif kind == "road":
+        marks = [
+            (1 + ox, 4, dark), (2 + ox, 4, dark), (3 + ox, 4, light),
+            (10 - ox // 2, 11, dark), (11 - ox // 2, 11, dark),
+            (12 - ox // 2, 11, light), (5, 14 - oy // 2, dark),
+            (6, 14 - oy // 2, light),
+        ]
+    else:  # plaza
+        marks = [
+            (2 + ox, 2, dark), (3 + ox, 2, dark), (2 + ox, 3, light),
+            (12 - ox // 2, 7 + oy // 2, dark),
+            (13 - ox // 2, 7 + oy // 2, light),
+            (6, 13 - oy // 2, dark), (7, 13 - oy // 2, dark),
+            (8, 13 - oy // 2, light),
+        ]
+    for x, y, color in marks:
+        tile.set(x, y, color)
+    return tile
+
+
+def _verify_town_tileset(name: str, sheet: Canvas) -> None:
+    """町床が再び探索用の高密度テクスチャへ戻るのを止める。"""
+    if (sheet.w, sheet.h) != TOWN_TILESET_SIZE:
+        raise ValueError(
+            f"town_{name}: {TOWN_TILESET_SIZE[0]}x{TOWN_TILESET_SIZE[1]} 必須"
+        )
+    surface_indices = [0, 1] + list(
+        range(TOWN_ROAD_FIRST, TOWN_PLAZA_FIRST + TOWN_VARIANTS)
+    )
+    for index in surface_indices:
+        counts: dict = {}
+        for y in range(TILE):
+            for x in range(TILE):
+                color = sheet.get(index * TILE + x, y)
+                counts[color] = counts.get(color, 0) + 1
+        detail = TILE * TILE - max(counts.values())
+        if detail > 12:
+            raise ValueError(
+                f"town_{name}: 地面{index}の模様が密すぎる（非ベース{detail}px）"
+            )
+
+    means = {
+        "ground": _tile_mean(sheet, 0),
+        "road": _tile_mean(sheet, TOWN_ROAD_FIRST),
+        "plaza": _tile_mean(sheet, TOWN_PLAZA_FIRST),
+    }
+    for a, b in (("ground", "road"), ("ground", "plaza"), ("road", "plaza")):
+        gap = math.dist(means[a], means[b])
+        if not 8.0 <= gap <= 110.0:
+            raise ValueError(
+                f"town_{name}: {a}/{b}の色差{gap:.1f}が範囲外（8〜110）"
+            )
+
+
+def build_town_tilesets() -> None:
+    """5生物相の建物を保ち、町専用の静かな床を加えたシートを作る。"""
+    for name in BIOMES:
+        source_path = ASSETS / "tiles" / f"{name}.png"
+        if not source_path.exists():
+            source_path = ASSETS / "tiles" / "dungeon.png"
+        source = load_png(source_path)
+        out = Canvas(*TOWN_TILESET_SIZE)
+        out.blit(source, 0, 0)
+
+        colors = TOWN_SURFACE_COLORS[name]
+        out.blit(_town_surface(colors["ground"], "ground"), 0, 0)
+        # 無計画な装飾床も同じ地色の疎な変種へ抑える。
+        out.blit(_town_surface(colors["ground"], "ground", 2), TILE, 0)
+        for variant in range(TOWN_VARIANTS):
+            out.blit(
+                _town_surface(colors["road"], "road", variant),
+                (TOWN_ROAD_FIRST + variant) * TILE,
+                0,
+            )
+            out.blit(
+                _town_surface(colors["plaza"], "plaza", variant),
+                (TOWN_PLAZA_FIRST + variant) * TILE,
+                0,
+            )
+        _verify_town_tileset(name, out)
+        out.to_png(ASSETS / "tiles" / f"town_{name}.png")
+        out.scaled(4).to_png(PREVIEW / f"town_tiles_{name}.png")
+        print(
+            f"  町床: town_{name}.png"
+            "（通常 / 街路4変種 / 広場4変種、各タイル模様12px以下）"
+        )
+
 
 def build_biomes() -> None:
     """既定以外の場所のタイルを書き出す。条件に落ちたものは見送る。"""
@@ -1401,6 +1556,15 @@ def _field_width(source_w: int, scale: float) -> int:
     return wanted if wanted % 2 == 0 else min(wanted + 1, NPC_MAX_W)
 
 
+def _resample_index(index: int, source_size: int, target_size: int) -> int:
+    """最近傍変換で両端を必ず拾う。最終行を落として接地を崩さない。"""
+    if source_size <= 1 or target_size <= 1:
+        return 0
+    return (
+        index * (source_size - 1) + (target_size - 1) // 2
+    ) // (target_size - 1)
+
+
 def _npc_palette_color(
     color: tuple[int, int, int, int],
     low: float,
@@ -1454,9 +1618,9 @@ def _prepare_npc(role: str, source: Canvas) -> Canvas:
 
     out = Canvas(CHAR_W, CHAR_H)
     for dy in range(NPC_TARGET_H):
-        sy = y0 + min(source_h - 1, (dy * source_h) // NPC_TARGET_H)
+        sy = y0 + _resample_index(dy, source_h, NPC_TARGET_H)
         for dx in range(target_w):
-            sx = x0 + min(source_w - 1, (dx * source_w) // target_w)
+            sx = x0 + _resample_index(dx, source_w, target_w)
             color = source.get(sx, sy)
             if color == TRANSPARENT:
                 continue
@@ -1517,29 +1681,302 @@ def _prepare_hero_sheet(job: str, source: Canvas) -> Canvas:
             target_y = CHAR_H - NPC_TARGET_H
             dx0, dy0 = frame * CHAR_W + target_x, direction * CHAR_H + target_y
             for dy in range(NPC_TARGET_H):
-                sy = y0 + min(source_h - 1, (dy * source_h) // NPC_TARGET_H)
+                sy = y0 + _resample_index(dy, source_h, NPC_TARGET_H)
                 for dx in range(target_w):
-                    sx = x0 + min(source_w - 1, (dx * source_w) // target_w)
+                    sx = x0 + _resample_index(dx, source_w, target_w)
                     color = source.get(ox + sx, oy + sy)
                     if color != TRANSPARENT:
                         out.set(dx0 + dx, dy0 + dy, color)
+    return _evenize_hero_sheet(out)
+
+
+def _hero_frame_colors(
+    sheet: Canvas, ox: int, oy: int
+) -> tuple[tuple[int, int, int, int], ...]:
+    """候補自身のパレットから、輪郭・差し色・明部を選ぶ。"""
+    colors = {
+        sheet.get(ox + x, oy + y)
+        for y in range(CHAR_H)
+        for x in range(CHAR_W)
+        if sheet.get(ox + x, oy + y) != TRANSPARENT
+    }
+    if not colors:
+        return (NPC_K, NPC_MID, NPC_IVORY)
+
+    def luminance(color) -> float:
+        return color[0] * 0.2126 + color[1] * 0.7152 + color[2] * 0.0722
+
+    ink = min(colors, key=luminance)
+    ordered = sorted(colors, key=luminance)
+    # 最明色は顔や髪の照りであることが多い。得物へ長く引くと白い棒に見えるため、
+    # 中明度を金属の地色として使い、最明色は候補原画の中にだけ残す。
+    mid = ordered[int((len(ordered) - 1) * 0.58)]
+
+    # 彩度だけで選ぶと暗い輪郭色になるため、明度も少し加味する。
+    def accent_score(color) -> float:
+        hi, lo = max(color[:3]), min(color[:3])
+        return (hi - lo) * 2.0 + luminance(color) * 0.25
+
+    accent = max(colors, key=accent_score)
+    return ink, accent, mid
+
+
+def _hero_feature_points(job: str, direction: int) -> list[tuple[int, int, int]]:
+    """実画面で職を読むための、外形に効く得物だけを返す。
+
+    0=輪郭、1=差し色、2=明部。名前から記号を足すのではなく、
+    戦闘時の役割を「盾で面を作る／長い得物で軸を作る」へ翻訳する。
+    候補原画の描き込みは変えず、透明部へ足す輪郭を主に使う。
+    """
+    if job == "gunner":
+        # 正面は左肩に立てた長銃、横は進行方向へ伸びる銃身。
+        if direction in (0, 3):
+            side = 1 if direction == 0 else 22
+            inner = side + 1 if direction == 0 else side - 1
+            points = [(side, y, 0) for y in range(8, 20)]
+            points += [(inner, y, 2) for y in range(10, 18)]
+            points += [
+                (side, 7, 1), (inner, 19, 1),
+                (inner + (1 if direction == 0 else -1), 20, 1),
+                (inner + (2 if direction == 0 else -2), 21, 0),
+            ]
+            if direction == 0:
+                # 胴の前を斜めに横切る機関部。輪郭だけでなく実画面でも銃と読ませる。
+                for i in range(13):
+                    points.append((6 + i, 21 - i // 2, 0))
+                    if i % 2 == 0:
+                        points.append((6 + i, 20 - i // 2, 2))
+            return points
+        points = [(x, 14, 0) for x in range(1, 11)]
+        points += [(x, 15, 2) for x in range(2, 9, 2)]
+        points += [(9, 16, 1), (10, 17, 1), (11, 18, 0)]
+        return points
+
+    if job == "paladin":
+        # 大盾を片側へ寄せ、spellblade の細い得物と面積で分ける。
+        left = direction == 0
+        rows = {
+            17: range(2, 5), 18: range(1, 6), 19: range(1, 6),
+            20: range(1, 6), 21: range(1, 6), 22: range(1, 6),
+            23: range(2, 5), 24: range(3, 4),
+        }
+        points = []
+        for y, xs in rows.items():
+            for x in xs:
+                px = x if left else CHAR_W - 1 - x
+                edge = x in (min(xs), max(xs)) or y in (17, 24)
+                points.append((px, y, 0 if edge else (2 if (x + y) % 4 == 0 else 1)))
+        return points
+
+    if job == "spellblade":
+        # 細身の刃を盾と反対側へ。正面・背面は縦、横は前方へ通す。
+        if direction in (0, 3):
+            side = 22 if direction == 0 else 1
+            inner = side - 1 if direction == 0 else side + 1
+            return (
+                [(side, y, 0) for y in range(7, 19)]
+                + [(inner, y, 2) for y in range(8, 17)]
+                + [(inner, 19, 1), (inner - (1 if direction == 0 else -1), 20, 0)]
+            )
+        return (
+            [(x, 11, 0) for x in range(1, 12)]
+            + [(x, 12, 2) for x in range(2, 10)]
+            + [(10, 13, 1), (11, 14, 0)]
+        )
+
+    if job == "ranger":
+        # 左右へ張らず、縦長の弓弧と弦の負の空間で読む。
+        left = direction != 0
+        arc = [
+            (3, 7), (2, 8), (2, 9), (1, 10), (1, 11), (1, 12),
+            (1, 13), (1, 14), (1, 15), (1, 16), (1, 17), (1, 18),
+            (1, 19), (1, 20), (2, 21), (2, 22), (3, 23), (3, 24),
+            (4, 25),
+        ]
+        string = [(4, y) for y in range(9, 24)]
+        points = []
+        for x, y in arc:
+            points.append((x if left else CHAR_W - 1 - x, y, 2))
+        for x, y in string:
+            points.append((x if left else CHAR_W - 1 - x, y, 0))
+        return points
+
+    if job == "sage":
+        # 細い杖を右端へ通し、beastmaster の広い外套から離す。
+        right = direction in (1, 2)
+        x = 22 if right else 1
+        inner = x - 1 if right else x + 1
+        points = [(x, y, 2) for y in range(7, 28)]
+        points += [(inner, y, 0) for y in range(10, 25, 3)]
+        points += [
+            (inner, 6, 0),
+            (inner - (1 if right else -1), 5, 0),
+            (x, 4, 2),
+        ]
+        return points
+
+    if job == "chronomancer":
+        # 骨の円環。歯車にはせず、欠けた弧を肩の外へ一つだけ置く。
+        left = direction != 3
+        arc = [
+            (3, 7, 0), (2, 8, 0), (1, 9, 0), (1, 10, 0),
+            (1, 12, 2), (1, 13, 0), (1, 14, 0), (2, 15, 0),
+            (3, 16, 1), (4, 16, 0),
+            (5, 15, 0), (5, 13, 2),
+        ]
+        return [
+            (x if left else CHAR_W - 1 - x, y, tone)
+            for x, y, tone in arc
+        ]
+
+    if job == "jester":
+        # 道化帽ではなく、割れた仮面から片側だけ伸びる有機的な髪・角。
+        right = direction != 3
+        spikes = [
+            (20, 6, 0), (21, 7, 2), (22, 8, 0),
+            (21, 10, 0), (22, 11, 1), (21, 12, 0),
+            (20, 14, 0), (22, 15, 0),
+        ]
+        return [
+            (x if right else CHAR_W - 1 - x, y, tone)
+            for x, y, tone in spikes
+        ]
+    return []
+
+
+def _hero_feature_erase(job: str, direction: int) -> list[tuple[int, int]]:
+    """得物と同じくらい重要な負の空間。密な候補の裾を役割別に切る。"""
+    if job == "gunner":
+        # 長銃に対して裾は直線的に絞る。獣使い・賢者の広い外套と分ける。
+        if direction in (0, 3):
+            points = [
+                (x, y)
+                for y in range(23, 29)
+                for x in ([2, 3, 4, 19, 20, 21] if direction == 0 else [2, 3, 20, 21])
+            ]
+            # 正面の右輪郭も削り、左の長銃へ重心を寄せる。
+            if direction == 0:
+                points += [(x, y) for y in range(8, 22) for x in (19, 20, 21)]
+            return points
+        return [(x, y) for y in range(23, 28) for x in range(2, 6)]
+    if job == "paladin":
+        # 盾と反対側の裾を切り、左右非対称の一枚絵として読む。
+        cut = range(18, 22) if direction == 0 else range(2, 6)
+        points = [(x, y) for y in range(22, 28) for x in cut]
+        if direction == 0:
+            points += [(x, y) for y in range(9, 22) for x in (20, 21)]
+        return points
+    if job == "ranger":
+        # 弓側に空間を残し、忍者の一体化した黒い外套から離す。
+        cut = range(18, 22) if direction == 0 else range(2, 6)
+        points = [(x, y) for y in range(19, 26) for x in cut]
+        if direction == 0:
+            # 身体と弓のあいだに1pxの空間を通し、輪郭を一体化させない。
+            points += [(x, y) for y in range(10, 20) for x in (19, 20)]
+        return points
+    if job == "sage" and direction == 0:
+        # 杖の反対側を落として縦軸を強め、獣使いの左右へ広い外套と分ける。
+        return [(x, y) for y in range(8, 22) for x in (19, 20, 21)]
+    if job == "chronomancer":
+        # 円環の内側を空ける。塗りつぶした円盤では役割が読めない。
+        left = direction != 3
+        xs = (2, 3, 4) if left else (19, 20, 21)
+        return [(x, y) for y in range(10, 15) for x in xs]
+    if job == "jester":
+        # 反対側を短く切り、忍者の左右均等な頭巾と分ける。
+        left = direction != 3
+        xs = (2, 3, 4) if left else (19, 20, 21)
+        return [(x, y) for y in range(8, 16) for x in xs]
+    return []
+
+
+def _evenize_hero_sheet(sheet: Canvas) -> Canvas:
+    """得物追加後の各コマを、拡大縮小せず偶数幅へ戻す。"""
+    out = Canvas(sheet.w, sheet.h)
+    out.blit(sheet, 0, 0)
+    for direction in range(4):
+        for frame in range(3):
+            ox, oy = frame * CHAR_W, direction * CHAR_H
+            points = [
+                (x, y)
+                for y in range(CHAR_H)
+                for x in range(CHAR_W)
+                if out.get(ox + x, oy + y) != TRANSPARENT
+            ]
+            if not points:
+                continue
+            x0, x1 = min(x for x, _y in points), max(x for x, _y in points)
+            width = x1 - x0 + 1
+            target_width = max(NPC_MIN_W, width + width % 2)
+            target_width = min(target_width, NPC_MAX_W)
+            if width == target_width:
+                continue
+            # 端の既存画素に必要なぶんだけ接続する。再拡大しないので密度を保てる。
+            while width < target_width:
+                grow_left = x0 > 1 and (x1 >= 22 or width % 2 == 1)
+                edge_x = x0 if grow_left else x1
+                target_x = edge_x - 1 if grow_left else edge_x + 1
+                edge_rows = [
+                    y
+                    for y in range(CHAR_H)
+                    if out.get(ox + edge_x, oy + y) != TRANSPARENT
+                ]
+                target_y = edge_rows[len(edge_rows) // 2]
+                color = out.get(ox + edge_x, oy + target_y)
+                out.set(ox + target_x, oy + target_y, color)
+                x0 = min(x0, target_x)
+                x1 = max(x1, target_x)
+                width = x1 - x0 + 1
     return out
 
 
+def _differentiate_hero(job: str, sheet: Canvas) -> Canvas:
+    """候補原画へ、職の役割を示す最小限の得物シルエットを統合する。"""
+    if job not in {
+        "gunner", "paladin", "ranger", "sage", "chronomancer", "jester"
+    }:
+        return sheet
+    out = Canvas(sheet.w, sheet.h)
+    out.blit(sheet, 0, 0)
+    for direction in range(4):
+        base_points = _hero_feature_points(job, direction)
+        for frame in range(3):
+            ox, oy = frame * CHAR_W, direction * CHAR_H
+            colors = _hero_frame_colors(sheet, ox, oy)
+            mirror_side = direction == 2
+            for x, y in _hero_feature_erase(job, direction):
+                px = CHAR_W - 1 - x if mirror_side else x
+                out.set(ox + px, oy + y, TRANSPARENT)
+            for x, y, tone in base_points:
+                px = CHAR_W - 1 - x if mirror_side else x
+                # 偶数20/22px規格の内側だけを使う。セル端まで広げない。
+                if 1 <= px <= 22 and 4 <= y <= 31:
+                    out.set(ox + px, oy + y, colors[tone])
+    # 得物を足した結果が21px幅になっても、拡大で原画を崩さず1pxだけ補う。
+    return _evenize_hero_sheet(out)
+
+
 def _verify_hero_runtime_style(job: str, sheet: Canvas) -> None:
-    """先頭の正面コマが、フィールド上の共通規格に入っているかを見る。"""
-    frame = Canvas(CHAR_W, CHAR_H)
-    for y in range(CHAR_H):
-        for x in range(CHAR_W):
-            frame.set(x, y, sheet.get(x, y))
-    x0, y0, x1, y1 = _opaque_bbox(frame)
-    width, height = x1 - x0 + 1, y1 - y0 + 1
-    if width not in (NPC_MIN_W, NPC_MAX_W):
-        raise ValueError(f"hero_{job}: 実画面幅が規格外（{width}px）")
-    if height != NPC_TARGET_H or y1 != CHAR_H - 1:
-        raise ValueError(
-            f"hero_{job}: 高さ・接地が規格外（上{y0} 下{y1} 高さ{height}）"
-        )
+    """全12コマがフィールド上の共通規格に入っているかを見る。"""
+    for direction in range(4):
+        for motion in range(3):
+            frame = Canvas(CHAR_W, CHAR_H)
+            ox, oy = motion * CHAR_W, direction * CHAR_H
+            for y in range(CHAR_H):
+                for x in range(CHAR_W):
+                    frame.set(x, y, sheet.get(ox + x, oy + y))
+            x0, y0, x1, y1 = _opaque_bbox(frame)
+            width, height = x1 - x0 + 1, y1 - y0 + 1
+            label = f"向き{direction}/コマ{motion}"
+            if width not in (NPC_MIN_W, NPC_MAX_W):
+                raise ValueError(
+                    f"hero_{job}: {label}の実画面幅が規格外（{width}px）"
+                )
+            if height != NPC_TARGET_H or y1 != CHAR_H - 1:
+                raise ValueError(
+                    f"hero_{job}: {label}の高さ・接地が規格外"
+                    f"（上{y0} 下{y1} 高さ{height}）"
+                )
 
 
 ## 職業どうしのシルエットが重なりすぎている、とみなす基準。
@@ -1577,7 +2014,7 @@ def _silhouette(c: Canvas) -> list[bool]:
     ]
 
 
-def _report_hero_similarity(sheets: dict) -> None:
+def _report_hero_similarity(sheets: dict, baselines: dict | None = None) -> None:
     """職業の絵が似すぎている組を出す。
 
     **描き換えるのはこちらの仕事ではない**（docs/chara_image/ は外の領分）。
@@ -1589,12 +2026,17 @@ def _report_hero_similarity(sheets: dict) -> None:
     if len(names) < 2:
         return
     marks = {name: _silhouette(sheets[name]) for name in names}
+    # 共通胴体の判定元は、得物を足す前の正規化済み候補に固定する。
+    # 成果物から毎回求めると、5職を直しただけで無関係な別の組の core が動き、
+    # Gate の標的が生成のたびに入れ替わっていた。
+    core_source = baselines if baselines is not None else sheets
+    core_marks = {name: _silhouette(core_source[name]) for name in names}
     size = CHAR_W * CHAR_H
 
     # 共通の胴体。ほとんどの職で塗られている画素は、描き分けに寄与しない。
     need = COMMON_BODY_SHARE * len(names)
     core = [
-        sum(marks[name][i] for name in names) >= need
+        sum(core_marks[name][i] for name in names) >= need
         for i in range(size)
     ]
     feature = {
@@ -1891,6 +2333,7 @@ def build_transitions() -> None:
 
 def build_heroes() -> None:
     made: dict = {}
+    baselines: dict = {}
     """職業ごとに 1 枚。歩行 3 フレーム x 4 方向を 72x128 のシートにまとめる。
 
     脚だけを 1px 持ち上げて歩きを作る。描き足さずに動きが出る、
@@ -1911,6 +2354,8 @@ def build_heroes() -> None:
         imported = _load_sheet(f"candidate_hero_{job}", HERO_SHEET_SIZE)
         if imported is not None:
             imported = _prepare_hero_sheet(job, imported)
+            baselines[job] = imported
+            imported = _differentiate_hero(job, imported)
             _verify_sheet(f"hero_{job}", imported, HERO_SHEET_SIZE)
             _verify_hero_runtime_style(job, imported)
             imported.to_png(ASSETS / "sprites" / f"hero_{job}.png")
@@ -1930,6 +2375,7 @@ def build_heroes() -> None:
         for row, base in enumerate([down, left, right, up]):
             for col, frame in enumerate([base, _step(base, +1), _step(base, -1)]):
                 sheet.blit(frame, col * CHAR_W, row * CHAR_H)
+        baselines[job] = sheet
         sheet.to_png(ASSETS / "sprites" / f"hero_{job}.png")
         made[job] = sheet
         sheet.scaled(4).to_png(PREVIEW / f"hero_{job}.png")
@@ -1941,7 +2387,7 @@ def build_heroes() -> None:
                 frame.set(x, y, made[job].get(x, y))
         contact.blit(frame, (i % 5) * CHAR_W, (i // 5) * CHAR_H)
     contact.scaled(4).to_png(PREVIEW / "hero_runtime_contact.png")
-    _report_hero_similarity(made)
+    _report_hero_similarity(made, baselines)
 
 def _step(base: Canvas, side: int) -> Canvas:
     """片脚だけを 1px 持ち上げる。side<0 で左脚、side>0 で右脚。
@@ -2481,6 +2927,7 @@ def main() -> None:
     build_tileset()
     build_world_tileset()
     build_biomes()
+    build_town_tilesets()
     build_battle_fx()
     build_battle_backgrounds()
     build_npcs()

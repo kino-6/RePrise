@@ -80,7 +80,7 @@ func _draw() -> void:
 		if poisoned:
 			UiPanel.inside(self, Rect2(
 				base + Vector2(62, 2), Vector2(30.0, PixelUI.LINE)
-			)).line("どく", PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
+			)).line(Terms.POISON, PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
 		var hp_at := Vector2(62, 2) if not poisoned else Vector2(96, 2)
 		UiPanel.inside(self, Rect2(
 			base + hp_at, Vector2(112.0 - hp_at.x, PixelUI.LINE)
