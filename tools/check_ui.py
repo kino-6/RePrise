@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # `_capture()` が知っている画面を全部。増えたらここに足す。
 SCREENS = [
     "title", "prologue", "prologue_shatter", "prologue_worlds", "prologue_oath",
-    "stronghold", "job", "depart", "upgrade", "rules", "party",
+    "stronghold", "job", "inherit", "depart", "upgrade", "rules", "party",
     "world", "map", "town", "cave", "shop", "event", "event_outcome",
     "battle", "commands", "items", "deep", "boss",
     "menu", "status", "equip", "jobmenu", "settings", "save_erase", "run_abandon",

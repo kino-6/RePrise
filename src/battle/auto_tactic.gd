@@ -75,6 +75,9 @@ static func next_mode(mode: Mode) -> Mode:
 
 ## この手番に取る行動。{"ability": String, "target": Battler} を返す。
 static func decide(system: BattleSystem, actor: Battler, mode: Mode) -> Dictionary:
+	var ultimate := _ultimate_plan(system, actor, mode)
+	if not ultimate.is_empty():
+		return ultimate
 	if mode == Mode.SAFE:
 		var safe := _safe_plan(system, actor)
 		if not safe.is_empty():
@@ -89,12 +92,161 @@ static func decide(system: BattleSystem, actor: Battler, mode: Mode) -> Dictiona
 	if scope in ["self", "all_enemies", "all_allies"]:
 		return {"ability": attack_id, "target": null}
 
-	# 手負いの敵から片付ける。数を減らすほうが受ける被害が減る。
-	var target: Battler = null
-	for b in system.living_enemies():
-		if target == null or b.hp < target.hp:
-			target = b
+	var target := _best_target(system, actor, attack_id)
 	return {"ability": attack_id, "target": target}
+
+
+## 1戦1回の奥義は、単純な「威力÷CTB」へ混ぜない。
+##
+## 守備重視は倒れた人数・傷・状態・敵予告を、攻撃重視は中断・弱点看破・
+## 敵数・総打撃量を見る。これで治療や手番操作の奥義も実際に選択肢へ入る（F-7）。
+static func _ultimate_plan(
+	system: BattleSystem, actor: Battler, mode: Mode
+) -> Dictionary:
+	var ultimates: Array[String] = []
+	for id in system.usable_abilities(actor):
+		if String(Database.ability(id).get("ultimate_rule", "")) != "":
+			ultimates.append(id)
+	if ultimates.is_empty():
+		return {}
+
+	var fallen := 0
+	var hurt := 0
+	var troubled := 0
+	for friend in system.allies:
+		if not friend.is_alive():
+			fallen += 1
+		elif friend.hp * 100 / maxi(friend.max_hp, 1) <= HURT_RATIO:
+			hurt += 1
+		if friend.has_status():
+			troubled += 1
+
+	if mode == Mode.SAFE:
+		if fallen > 0:
+			var revival := _ultimate_with_rule(ultimates, ["returning_bell", "curtain_return"])
+			if revival != "":
+				return {"ability": revival, "target": null}
+		if hurt >= 2 or troubled >= 2:
+			var recovery := _ultimate_with_rule(
+				ultimates, ["sanctuary", "guardian_pact", "curtain_return", "chain_compound"])
+			if recovery != "":
+				return {"ability": recovery, "target": null}
+		if hurt > 0 and _planned_enemy(system) != null:
+			var shelter := _ultimate_with_rule(
+				ultimates, ["vow_of_life", "unyielding_line", "counter_phalanx"])
+			if shelter != "":
+				return {"ability": shelter, "target": null}
+		return {}
+
+	# 攻撃重視。奥義は毎戦の初手ではなく、主戦か劣勢を返す札として使う。
+	# 3人が半分を切る／誰かが倒れる、のどちらかを危機とする。
+	var crisis := fallen > 0 or hurt >= 3
+	var toughest := _toughest_enemy(system)
+	var boss_fight := (
+		toughest != null
+		and bool(Database.monster(toughest.source_id).get("boss", false))
+	)
+
+	# 予告を止められるなら、総威力より先に止める。ただの通常戦の予告へ
+	# 1戦1回札を毎回切らず、主戦か危機にだけ使う。
+	var casting := _planned_enemy(system)
+	if casting != null and (boss_fight or crisis):
+		var interrupt := _ultimate_with_rule(
+			ultimates, ["lockbreaker_round", "time_exchange", "time_pilfer"])
+		if interrupt != "":
+			return {"ability": interrupt, "target": casting}
+
+	# 強敵には、先に後続の三撃を伸ばすか耐性を抜く。
+	#
+	# HP が少し高い通常敵まで「強敵」にすると、1 戦ごとに回復する奥義を
+	# 道中で毎回開幕使用し、温存する判断が消える。看破・標は主戦だけ先行する。
+	if boss_fight and crisis:
+		var setup := _ultimate_with_rule(ultimates, ["hunter_mark", "phase_reveal"])
+		if setup != "":
+			return {"ability": setup, "target": toughest}
+
+	# その場で最も大きく戦況を動かす攻撃奥義。power 0 の複合奥義にも
+	# 固有の評価を与え、単なる数値技だけが選ばれ続けないようにする。
+	# ただし通常戦で無傷なら使わない。1 戦制限は「毎戦ただ押すボタン」ではなく、
+	# 主戦か、多数の敵に押し込まれた時の切り返しとして選ぶ。
+	if not crisis or (not boss_fight and system.living_enemies().size() < 4):
+		return {}
+	var best := ""
+	var best_score := -1
+	for id in ultimates:
+		var ab := Database.ability(id)
+		var rule := String(ab.get("ultimate_rule", ""))
+		var score := int(ab.get("power", 0)) * maxi(int(ab.get("hits", 1)), 1)
+		if String(ab.get("target", "")) == "all_enemies":
+			score = score * mini(system.living_enemies().size(), 3)
+		match rule:
+			"fourfold_collapse", "fourfold_edge":
+				score = int(ab.get("power", 0)) * 4
+			"astral_beast_array", "beast_procession":
+				score += 180
+			"wise_furnace":
+				score = 90 + actor.mp * 2
+			"twin_ring_cast":
+				score = 260
+			"fate_cards", "curtain_return":
+				score = 190
+			"time_pilfer", "time_exchange", "zero_time_field":
+				score = 120
+		if score > best_score or (score == best_score and id < best):
+			best_score = score
+			best = id
+	if best == "":
+		return {}
+	return {"ability": best, "target": _ultimate_target(system, best)}
+
+
+static func _ultimate_with_rule(ids: Array[String], ordered_rules: Array[String]) -> String:
+	for rule in ordered_rules:
+		for id in ids:
+			if String(Database.ability(id).get("ultimate_rule", "")) == rule:
+				return id
+	return ""
+
+
+static func _planned_enemy(system: BattleSystem) -> Battler:
+	for foe in system.living_enemies():
+		if foe.planned_ability != "":
+			return foe
+	return null
+
+
+static func _toughest_enemy(system: BattleSystem) -> Battler:
+	var toughest: Battler = null
+	for foe in system.living_enemies():
+		if (
+			toughest == null
+			or foe.hp > toughest.hp
+			or (foe.hp == toughest.hp and foe.id < toughest.id)
+		):
+			toughest = foe
+	return toughest
+
+
+static func _ultimate_target(system: BattleSystem, ability_id: String) -> Battler:
+	var ab := Database.ability(ability_id)
+	var scope := String(ab.get("target", "one_enemy"))
+	if scope in ["self", "all_enemies", "all_allies"]:
+		return null
+	var rule := String(ab.get("ultimate_rule", ""))
+	if rule == "pacify":
+		for foe in system.living_enemies():
+			if (
+				not bool(Database.monster(foe.source_id).get("boss", false))
+				and foe.hp * 100 / maxi(foe.max_hp, 1) <= 50
+			):
+				return foe
+	if rule in ["hunter_mark", "phase_reveal"]:
+		return _toughest_enemy(system)
+	var target: Battler = null
+	for foe in system.living_enemies():
+		if target == null or foe.hp < target.hp or (foe.hp == target.hp and foe.id < target.id):
+			target = foe
+	return target
 
 
 ## いのちだいじに の前半（起こす・癒す・治す）。やることが無ければ空。
@@ -145,9 +297,9 @@ static func _weakness_plan(system: BattleSystem, actor: Battler) -> Dictionary:
 		for foe in system.living_enemies():
 			if element not in foe.weak:
 				continue
-			var power := int(ab.get("power", 0)) * maxi(int(ab.get("hits", 1)), 1)
-			if power > best_power:
-				best_power = power
+			var score := _attack_score(system, actor, id, foe)
+			if score > best_power:
+				best_power = score
 				best_id = id
 				best_target = foe
 	if best_id == "":
@@ -180,18 +332,109 @@ static func _best_attack(system: BattleSystem, actor: Battler, mode: Mode) -> St
 	var best := "attack"
 	var best_score := 0
 	var foes := system.living_enemies().size()
+	var target := _best_target(system, actor, "attack")
 	for id in system.usable_abilities(actor):
 		var ab := Database.ability(id)
 		if String(ab.get("kind", "")) not in ["physical", "magical"]:
 			continue
 		if mode == Mode.SAFE and int(ab.get("mp", 0)) > 0:
 			continue
+		# 技どうしの比較は、実ダメージを完全に先読みしない。そこまで最適化すると
+		# オートだけが毎手番の最善解を知り、同じ500 seedで難度帯を壊した。
+		# 威力/CTBを土台にしつつ、防御・耐性・予告・状態・副次目的を補正に使う。
 		var score := int(ab.get("power", 0)) * maxi(int(ab.get("hits", 1)), 1)
+		if target != null:
+			var magical := String(ab.get("kind", "")) == "magical"
+			score = maxi(score - target.defense / (8 if magical else 4), 1)
+			var element := String(ab.get("element", ""))
+			if element in target.weak:
+				score = score * 2
+			elif element in target.resist:
+				score = score / 2
 		if String(ab.get("target", "")) in ["group_enemy", "all_enemies"]:
-			# 範囲は敵が多いときだけ得。1 体に撃っても減衰で損をする。
+			# 総ダメージを全部足すと範囲だけが常時最適になる。人数は見るが、
+			# 各個撃破の価値を残すため3体までを半分の重みで数える。
 			score = score * mini(foes, 3) / 2
+		match String(ab.get("effect", "")):
+			"poison":
+				if target != null and target.poison_turns <= 0:
+					score += 8
+			"stillness":
+				if target != null and target.planned_ability != "":
+					score += 24
+			"mend":
+				if _most_hurt(system) != null:
+					score += 18
+			"steal_and_haste":
+				if target != null and not system.stolen_targets.has(target.id):
+					score += 12
 		score = score * 100 / maxi(int(ab.get("cost", 100)), 1)
 		if score > best_score:
 			best_score = score
 			best = id
+	return best
+
+
+## 防御・弱点・予告・状態・人数・副次効果を含む、乱数を使わない見積もり。
+## 実ダメージの乱数は BattleSystem だけが引く。オートが先に乱数を消費してはならない。
+static func _attack_score(
+	system: BattleSystem, actor: Battler, ability_id: String, target: Battler
+) -> int:
+	var ab := Database.ability(ability_id)
+	var magical := String(ab.get("kind", "")) == "magical"
+	var power := int(ab.get("power", 0))
+	var hits := maxi(int(ab.get("hits", 1)), 1)
+	var base := (actor.mag if magical else actor.atk) * power / 100
+	var reduction := target.defense / 4 if magical else target.defense / 2
+	if bool(ab.get("pierce", false)):
+		reduction = 0
+	var per_hit := maxi(base - reduction, 1)
+	var element := String(ab.get("element", ""))
+	if element in target.weak:
+		per_hit = per_hit * BattleSystem.ELEMENT_WEAK / 100
+	elif element in target.resist:
+		per_hit = per_hit * BattleSystem.ELEMENT_RESIST / 100
+	var score := per_hit * hits
+	var scope := String(ab.get("target", "one_enemy"))
+	if scope in ["group_enemy", "all_enemies"]:
+		var count := system.living_enemies().size()
+		# 総ダメージをそのまま足すと、敵を倒さず薄く削る範囲技を過大評価する。
+		# 撃破による被害軽減も半分の価値として残し、人数は見るが常時最適にしない。
+		score = score * BattleSystem.spread_bonus(count) * mini(count, 3) / 200
+
+	# 同じ威力なら、今の戦況をもう一つ解く技を優先する。
+	match String(ab.get("effect", "")):
+		"poison":
+			if target.poison_turns <= 0 and target.hp > score:
+				score += target.max_hp / 12
+		"afterimage", "execute":
+			if target.hp <= score:
+				score += 90
+		"mend":
+			for friend in system.living_allies():
+				if friend.hp * 100 / maxi(friend.max_hp, 1) <= HURT_RATIO:
+					score += 70
+					break
+		"stillness":
+			if target.planned_ability != "":
+				score += 120
+		"steal_and_haste":
+			if not system.stolen_targets.has(target.id):
+				score += 75
+	return score * 100 / maxi(int(ab.get("cost", 100)), 1)
+
+
+static func _best_target(
+	system: BattleSystem, actor: Battler, ability_id: String
+) -> Battler:
+	var best: Battler = null
+	for foe in system.living_enemies():
+		# 敵を1体減らす価値は、防御差による数点の効率より大きい。
+		# 弱点は前段の _weakness_plan が拾うので、通常時は手負いを集中して落とす。
+		if (
+			best == null
+			or foe.hp < best.hp
+			or (foe.hp == best.hp and foe.id < best.id)
+		):
+			best = foe
 	return best

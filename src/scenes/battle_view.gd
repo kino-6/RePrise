@@ -296,6 +296,25 @@ func debug_open_spell_menu() -> void:
 	_open_list("skill")
 
 
+func debug_open_ultimate_menu() -> void:
+	if _state != State.COMMAND:
+		return
+	# 現在の職がじゅもん職でも特技職でも、奥義を含む側を開く。
+	var kind := "skill"
+	var ultimate_id := ""
+	for id in _actor.abilities:
+		var ab := Database.ability(id)
+		if String(ab.get("ultimate_rule", "")) == "":
+			continue
+		kind = String(ab.get("menu", "skill"))
+		ultimate_id = id
+	if ultimate_id == "":
+		return
+	_open_list(kind)
+	_list_index = maxi(_list_ids.find(ultimate_id), 0)
+	_refresh()
+
+
 # --------------------------------------------------------------------------
 # 第 1 階層
 # --------------------------------------------------------------------------
@@ -304,7 +323,9 @@ func debug_open_spell_menu() -> void:
 ## その者が使える技を、サブメニュー別に分けて返す。
 func _abilities_in(menu: String) -> Array[String]:
 	var result: Array[String] = []
-	for id in system.usable_abilities(_actor):
+	# 押せない技も一覧には残す。消すと「MP不足」「1戦制限」なのか、
+	# そもそも未習得なのかが区別できない（F-7）。
+	for id in _actor.abilities:
 		if String(Database.ability(id).get("menu", "")) == menu:
 			result.append(id)
 	return result
@@ -434,6 +455,11 @@ func _input_list(event: InputEvent) -> void:
 
 
 func _begin_ability(ability_id: String) -> void:
+	var unavailable := system.ability_unavailable_reason(_actor, ability_id)
+	if unavailable != "":
+		Sound.play("cancel")
+		_refresh()
+		return
 	_pending_item = ""
 	_pending_ability = ability_id
 	var scope := String(Database.ability(ability_id).get("target", "one_enemy"))
@@ -525,6 +551,9 @@ func _execute(target: Battler) -> void:
 		_show(item_lines)
 		return
 	var lines := system.perform(_actor, _pending_ability, target)
+	if not system.last_action_consumed:
+		# 不成立理由を読んだら、手番開始処理を二重に通さず同じコマンドへ戻す。
+		_resume_actor = _actor
 	_play_ability_sfx(_pending_ability)
 	_play_status_sfx()
 	_show(lines)
@@ -1175,15 +1204,25 @@ func _draw_list() -> void:
 	# 見出しは列より広く取る。「つぎのてばん」は値（2〜3 桁）より長い。
 	_cell(
 		origin + Vector2(LIST_NAME_W + LIST_MP_W - 24.0, 2), LIST_COST_W + 24.0
-	).line("つぎのてばん", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+	).line(Terms.ABILITY_WAIT_REMAIN, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	var first := (_list_index / LIST_ROWS) * LIST_ROWS
 	for i in range(first, mini(first + LIST_ROWS, _list_ids.size())):
 		var at := origin + Vector2(0, 20 + (i - first) * LIST_LINE)
 		var on := i == _list_index and _state == State.LIST
+		var unavailable := (
+			""
+			if _list_kind == "item"
+			else system.ability_unavailable_reason(_actor, _list_ids[i])
+		)
 		if on:
 			draw_texture(CURSOR_TEX, (at + Vector2(-14, 2)).floor())
-		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
+		var tint := (
+			PixelUI.C_HP_LOW
+			if unavailable != ""
+			else PixelUI.C_TEXT if on
+			else PixelUI.C_TEXT_DIM
+		)
 
 		# **3 列それぞれに幅を持たせる。** 固定のオフセットで置いていたので、
 		# 技名が長い行だけ MP に食い込む作りだった（外部化で名前が伸びると必ず出る）。
@@ -1204,7 +1243,14 @@ func _draw_list() -> void:
 			"%d" % mp if mp > 0 else "-",
 			PixelUI.C_MP if mp > 0 else PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 		_cell(at + Vector2(LIST_NAME_W + LIST_MP_W, 2), LIST_COST_W).line(
-			"%d" % _actor.scaled_cost(int(ab.get("cost", 100))),
+			(
+				"%d/%d" % [
+					system.ultimate_uses_left(_actor, _list_ids[i]),
+					int(ab.get("uses_per_battle", 0)),
+				]
+				if int(ab.get("uses_per_battle", 0)) > 0
+				else "%d" % _actor.scaled_cost(int(ab.get("cost", 100)))
+			),
 			PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	# 説明文。選んでいるものが何をするかは、常に見えていてよい。
@@ -1215,6 +1261,11 @@ func _draw_list() -> void:
 			else Database.ability(_list_ids[_list_index])
 		)
 		desc = String(data.get("desc", ""))
+		if _list_kind != "item":
+			var unavailable := system.ability_unavailable_reason(
+				_actor, _list_ids[_list_index])
+			if unavailable != "":
+				desc = Terms.ABILITY_CANNOT_USE % unavailable
 	_cell(
 		Vector2(inner.position.x + 4, inner.end.y - 18), inner.size.x - 8.0
 	# **説明は 14px。** 品名も技名も data 側にあり漢字を含む。12px では潰れる（D-5）。

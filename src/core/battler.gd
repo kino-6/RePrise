@@ -73,6 +73,16 @@ var charged: bool = false
 var rune_turns: int = 0
 var tamed: bool = false
 
+## ★7・8 の奥義が戦場へ残す、戦闘中だけの印（F-6b）。
+##
+## View に状態を持たせるとオートと手動で結果が割れるため、被弾の成立条件は
+## Battler に寄せる。どれも `BattleSystem.start()` で必ず消える。
+var endure_hits: int = 0       # 致死傷を受けても HP 1 で踏みとどまる回数
+var decoy_hits: int = 0        # 次の被弾そのものを無効にする回数
+var exposed_hits: int = 0      # 次に受ける攻撃が深くなる回数
+var pierce_casts: int = 0      # 次の魔法が属性耐性を無視する回数
+var reload_turns: int = 0      # 通常攻撃・防御以外を使えない残り手番
+
 ## 状態異常。CTB では時間に触る効果がいちばん強く効くので、そこに絞る。
 ## ねむり: 手番が来ても動けず、そのぶん後ろへ回る
 ## どく  : 手番が来るたびに削れる（速い者ほど早く減る）
@@ -129,8 +139,15 @@ func can_pay(ability: Dictionary) -> bool:
 
 ## 与えられたダメージを適用し、実際に減った量を返す。
 func apply_damage(amount: int) -> int:
+	if amount > 0 and decoy_hits > 0:
+		decoy_hits -= 1
+		return 0
 	var before := hp
-	hp = clampi(hp - maxi(amount, 0), 0, max_hp)
+	var after := clampi(hp - maxi(amount, 0), 0, max_hp)
+	if after <= 0 and hp > 0 and endure_hits > 0:
+		endure_hits -= 1
+		after = 1
+	hp = after
 	return before - hp
 
 

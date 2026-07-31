@@ -53,8 +53,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "counter_phalanx"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "veteran_barrage",
         "reward": "master"
       }
     ],
@@ -121,8 +127,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "sanctuary"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "returning_bell",
         "reward": "master"
       }
     ],
@@ -188,8 +200,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "phase_reveal"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "fourfold_collapse",
         "reward": "master"
       }
     ],
@@ -255,8 +273,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "shade_pilfer"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "time_pilfer",
         "reward": "master"
       }
     ],
@@ -328,8 +352,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "unyielding_line"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "vow_of_life",
         "reward": "master"
       }
     ],
@@ -402,8 +432,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "shadow_double"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "thousand_shadow_break",
         "reward": "master"
       }
     ],
@@ -474,8 +510,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "hunter_mark"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "sky_arrow_rain",
         "reward": "master"
       }
     ],
@@ -547,8 +589,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "opposition_edge"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "fourfold_edge",
         "reward": "master"
       }
     ],
@@ -619,8 +667,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "guardian_pact"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "astral_beast_array",
         "reward": "master"
       }
     ],
@@ -690,8 +744,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "lockbreaker_round"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "full_barrage",
         "reward": "master"
       }
     ],
@@ -763,8 +823,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "chain_compound"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "wise_furnace",
         "reward": "master"
       }
     ],
@@ -835,8 +901,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "formula_reprise"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "twin_ring_cast",
         "reward": "master"
       }
     ],
@@ -907,8 +979,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "time_exchange"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "zero_time_field",
         "reward": "master"
       }
     ],
@@ -980,8 +1058,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "pacify"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "beast_procession",
         "reward": "master"
       }
     ],
@@ -1050,8 +1134,14 @@
         "reward": "inherit_sign"
       },
       {
+        "rank": 7,
+        "need": 890,
+        "ability": "fate_cards"
+      },
+      {
         "rank": 8,
         "need": 1220,
+        "ability": "curtain_return",
         "reward": "master"
       }
     ],

@@ -382,10 +382,53 @@ static var CMD_SPELL := Vocabulary.word("terms", "cmd_spell", "じゅもん")
 static var CMD_SKILL := Vocabulary.word("terms", "cmd_skill", "とくぎ")
 static var CMD_GUARD := Vocabulary.word("terms", "cmd_guard", "ぼうぎょ")
 static var CMD_ESCAPE := Vocabulary.word("terms", "cmd_escape", "にげる")
+static var ABILITY_WAIT_REMAIN := Vocabulary.word(
+	"terms", "ability_wait_remain", "まち / のこり")
+static var ABILITY_CANNOT_USE := Vocabulary.word(
+	"terms", "ability_cannot_use", "使えない: %s")
+static var REASON_NO_ABILITY := Vocabulary.word(
+	"terms", "reason_no_ability", "技のデータがない")
+static var REASON_MP := Vocabulary.word("terms", "reason_mp", "MPが 足りない")
+static var REASON_RELOADING := Vocabulary.word(
+	"terms", "reason_reloading", "装填中は こうげきか ぼうぎょだけ")
+static var REASON_USED := Vocabulary.word(
+	"terms", "reason_used", "この戦闘では もう使えない")
+static var REASON_NO_FALLEN := Vocabulary.word(
+	"terms", "reason_no_fallen", "倒れている仲間が いない")
+static var REASON_NO_TARGET := Vocabulary.word(
+	"terms", "reason_no_target", "対象が いない")
+static var REASON_PICK_CASTING := Vocabulary.word(
+	"terms", "reason_pick_casting", "構えている敵を 選ぶ")
+static var REASON_NO_CASTING := Vocabulary.word(
+	"terms", "reason_no_casting", "構えている敵が いない")
+static var REASON_FULL_MP := Vocabulary.word(
+	"terms", "reason_full_mp", "MPが 満ちていない")
+static var REASON_NO_REPLAY := Vocabulary.word(
+	"terms", "reason_no_replay", "再演できる魔法が まだない")
+static var REASON_TWO_SPELLS := Vocabulary.word(
+	"terms", "reason_two_spells", "攻撃魔法を 2つ習得していない")
+static var REASON_BOSS := Vocabulary.word("terms", "reason_boss", "主には 通じない")
+static var REASON_ALERT := Vocabulary.word(
+	"terms", "reason_alert", "相手が まだ警戒している")
+static var REASON_NO_PACIFY := Vocabulary.word(
+	"terms", "reason_no_pacify", "弱った非ボスが いない")
 static var NONE := Vocabulary.word("terms", "none", "なし")
 static var RESULT_SURVIVED := Vocabulary.word("terms", "result_survived", "生還")
 static var RESULT_WIPED := Vocabulary.word("terms", "result_wiped", "全滅")
 static var NO_CHANGE := Vocabulary.word("terms", "no_change", "かわらない")
+static var MASTERY_LEARNED := Vocabulary.word("terms", "mastery_learned", "しゅうとく")
+static var MASTERY_REMAIN := Vocabulary.word("terms", "mastery_remain", "あと%d")
+static var CURRENT_JOB_SKILLS := Vocabulary.word(
+	"terms", "current_job_skills", "げんしょくの技 %d")
+static var CURRENT_JOB_SKILLS_HELP := Vocabulary.word(
+	"terms", "current_job_skills_help",
+	"現職技は常設。下2枠に過去職を足す。")
+static var INHERIT_SKILL_SLOT := Vocabulary.word(
+	"terms", "inherit_skill_slot", "継承技 %d")
+static var INHERIT_SIGN_SLOT := Vocabulary.word(
+	"terms", "inherit_sign_slot", "継承印 %d")
+static var STRONGHOLD_LOADOUT_HINT := Vocabulary.word(
+	"terms", "stronghold_loadout_hint", "→ で 継承技と継承印")
 static var SOLD_OUT := Vocabulary.word("terms", "sold_out", "それは 売り切れだ")
 static var BOUGHT := Vocabulary.word("terms", "bought", "%s を 買った")
 static var TURN_ORDER := Vocabulary.word("terms", "turn_order", "順")

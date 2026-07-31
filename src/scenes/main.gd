@@ -510,6 +510,20 @@ func _capture(which: String) -> void:
 		"job":
 			_enter_stronghold()
 			stronghold.debug_open_job_menu(0)
+		"inherit":
+			_enter_stronghold()
+			var member := GameState.active_party()[0]
+			for job_id in Database.job_ids():
+				member.job_exp[job_id] = 9999
+				for entry in Database.job(job_id).get("mastery", []):
+					var ability_id := String(entry.get("ability", ""))
+					if ability_id != "" and ability_id not in member.learned:
+						member.learned.append(ability_id)
+			var candidates := member.inheritable_abilities()
+			if not candidates.is_empty():
+				member.inherited[0] = candidates[0]
+			GameState.inherit_signs = ["soldier"]
+			stronghold.debug_open_loadout(0)
 		"depart":
 			# 潜る理由の 3 行が名簿と重なっていないかを見るため
 			_enter_stronghold()
@@ -764,7 +778,7 @@ func _capture(which: String) -> void:
 				if battle.is_awaiting_command():
 					break
 			# 技が増えたときのサブウィンドウの見え方を確かめる。
-			battle.debug_open_spell_menu()
+			battle.debug_open_ultimate_menu()
 		"cover":
 			# 場面転換の覆い（B-3）。**覆いきる途中**を撮る。
 			# 実際の切り替えに任せると、どの覆いがいつ鳴るかが撮影と噛み合わない

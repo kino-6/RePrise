@@ -173,6 +173,7 @@ godot --headless --export-release "Windows Desktop" build/windows/RePrise.exe   
 | `title` | タイトル |
 | `stronghold` | 拠点 |
 | `job` | 拠点の職業えらび（上級職の解放表示を含む） |
+| `inherit` | 拠点の継承構成（現職技 / 継承技2枠 / 継承印） |
 | `upgrade` | 拠点のアップグレード（資源 42 を仮に入れる） |
 | `explore` | 探索 |
 | `world` | ワールドの全景 |

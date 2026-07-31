@@ -60,7 +60,7 @@ static func portrait_of(job_id: String) -> Texture2D:
 ## 覚えた技の一覧は 4 列 x 3 段。職業 4 x ランク 3 = 12 個で必ず収まる。
 const ABILITY_COLUMNS := 4
 
-enum State { MEMBER, JOB, UPGRADE, PARTY, RULES }
+enum State { MEMBER, JOB, LOADOUT, UPGRADE, PARTY, RULES }
 
 var members: Array[PartyMember] = []
 
@@ -73,6 +73,7 @@ var _upgrade_ids: Array = []
 var _party_index := 0
 var _upgrade_index := 0
 var _rule_index := 0
+var _loadout_row := 0
 var _notice := Notice.new()
 var _input_lock := 0.0
 
@@ -151,6 +152,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_input_member(event)
 		State.JOB:
 			_input_job(event)
+		State.LOADOUT:
+			_input_loadout(event)
 		State.UPGRADE:
 			_input_upgrade(event)
 		State.PARTY:
@@ -168,6 +171,11 @@ func _input_member(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_up"):
 		_index = (_index - 1 + rows) % rows
 		Sound.play("cursor")
+		queue_redraw()
+	elif event.is_action_pressed("ui_right") and _index < members.size():
+		Sound.play("confirm")
+		_loadout_row = 0
+		_state = State.LOADOUT
 		queue_redraw()
 	elif event.is_action_pressed("confirm"):
 		Sound.play("confirm")
@@ -236,6 +244,16 @@ func debug_open_job_menu(member_index: int) -> void:
 	_open_job_menu()
 
 
+## 開発用。継承技 2 枠と継承印 1～2 枠を同じ画面で撮る。
+func debug_open_loadout(member_index: int) -> void:
+	if members.is_empty():
+		return
+	_index = clampi(member_index, 0, members.size() - 1)
+	_loadout_row = 0
+	_state = State.LOADOUT
+	queue_redraw()
+
+
 func _open_job_menu() -> void:
 	var member := _selected()
 	_job_index = maxi(_job_ids.find(member.job_id), 0)
@@ -270,6 +288,62 @@ func _input_job(event: InputEvent) -> void:
 		queue_redraw()
 	elif event.is_action_pressed("confirm"):
 		_apply_job()
+
+
+## 出撃前の構成。上 2 行は選択中の仲間の継承技、下 1～2 行はパーティ共通の継承印。
+func _input_loadout(event: InputEvent) -> void:
+	var rows := 2 + GameState.inherit_slots()
+	if event.is_action_pressed("cancel"):
+		Sound.play("cancel")
+		_state = State.MEMBER
+		queue_redraw()
+	elif event.is_action_pressed("ui_down"):
+		_loadout_row = (_loadout_row + 1) % rows
+		Sound.play("cursor")
+		queue_redraw()
+	elif event.is_action_pressed("ui_up"):
+		_loadout_row = (_loadout_row - 1 + rows) % rows
+		Sound.play("cursor")
+		queue_redraw()
+	elif event.is_action_pressed("ui_right") or event.is_action_pressed("confirm"):
+		_cycle_loadout(1)
+	elif event.is_action_pressed("ui_left"):
+		_cycle_loadout(-1)
+
+
+func _cycle_loadout(direction: int) -> void:
+	var member := _selected()
+	if member == null:
+		return
+	if _loadout_row < PartyMember.INHERIT_SLOTS:
+		var choices: Array[String] = [""]
+		choices.append_array(member.inheritable_abilities())
+		var current := String(member.inherited[_loadout_row])
+		var at := maxi(choices.find(current), 0)
+		for offset in range(1, choices.size() + 1):
+			var candidate := String(choices[posmod(at + direction * offset, choices.size())])
+			if member.set_inherited(_loadout_row, candidate):
+				GameState.save_game()
+				Sound.play("confirm")
+				queue_redraw()
+				return
+	else:
+		var sign_slot := _loadout_row - PartyMember.INHERIT_SLOTS
+		var signs: Array[String] = [""]
+		signs.append_array(GameState.available_signs())
+		var current := (
+			String(GameState.inherit_signs[sign_slot])
+			if sign_slot < GameState.inherit_signs.size()
+			else ""
+		)
+		var at := maxi(signs.find(current), 0)
+		for offset in range(1, signs.size() + 1):
+			var candidate := String(signs[posmod(at + direction * offset, signs.size())])
+			if GameState.set_inherit_sign(sign_slot, candidate):
+				Sound.play("confirm")
+				queue_redraw()
+				return
+	Sound.play("cancel")
 
 
 ## 熟練一覧に入る行数。枠の高さから決まる。
@@ -559,6 +633,12 @@ func _draw_detail() -> void:
 	# 転職を選んでいるあいだは行き先の職業で見せる。姿と能力の変化を確定前に確認できる。
 	var shown_job := String(_job_ids[_job_index]) if _state == State.JOB else member.job_id
 	var origin := PixelUI.content(DETAIL_RECT).position
+	if _state == State.JOB:
+		_draw_job_progress(member, shown_job, origin)
+		return
+	if _state == State.LOADOUT:
+		_draw_loadout_detail(member, origin)
+		return
 
 	# 立ち絵は 2 倍に引き伸ばす。等倍だと 24x32 が余白に埋もれて誰の話か分からない。
 	# 整数倍なのでドットは崩れない。
@@ -629,6 +709,98 @@ func _draw_detail() -> void:
 			row + Vector2(MASTERY_NAME_W + MASTERY_STAR_W, 2),
 			Vector2(MASTERY_TEXT_W, PixelUI.LINE)
 		)).line(_mastery_text(member, job_id), PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+
+
+## 選択中の職の 8 段階を、要求値まで含めて 1 画面に出す（F-7）。
+##
+## 以前は現在の ★ 数しか見えず、★6 の印と ★7/8 の奥義が「データにはあるが
+## プレイヤーには存在しない報酬」だった。8 行を固定し、空段も作らない。
+func _draw_job_progress(member: PartyMember, job_id: String, origin: Vector2) -> void:
+	var rank := member.mastery_rank(job_id)
+	var points := member.mastery_points(job_id)
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 0), Vector2(286, PixelUI.LINE)
+	)).row(
+		_job_name(job_id),
+		"★%d/8　%d" % [rank, points],
+		PixelUI.C_ACTIVE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_HEAD
+	)
+
+	var mastery: Array = Database.job(job_id).get("mastery", [])
+	for i in mastery.size():
+		var entry: Dictionary = mastery[i]
+		var stage := int(entry.get("rank", i + 1))
+		var need := int(entry.get("need", 0))
+		@warning_ignore("integer_division")
+		var col := i / 4
+		var row := i % 4
+		var at := origin + Vector2(6 + col * 146, 22 + row * 32)
+		var reward := _job_reward_label(job_id, entry)
+		var reached := points >= need
+		var marker := (
+			"M" if String(entry.get("reward", "")) == "master"
+			else "◇" if String(entry.get("reward", "")) == "inherit_sign"
+			else ""
+		)
+		var progress := (
+			Terms.MASTERY_LEARNED
+			if reached else Terms.MASTERY_REMAIN % (need - points)
+		)
+		UiPanel.inside(self, Rect2(at, Vector2(140, PixelUI.LINE))).line(
+			"★%d%s %s" % [stage, marker, progress],
+			PixelUI.C_ACTIVE if reached else PixelUI.C_TEXT_DIM,
+			PixelUI.SIZE_SUB
+		)
+		var ability := Database.ability(String(entry.get("ability", "")))
+		if int(ability.get("uses_per_battle", 0)) > 0:
+			reward += " 1/1"
+		UiPanel.inside(self, Rect2(
+			at + Vector2(12, 15), Vector2(128, PixelUI.LINE)
+		)).line(
+			reward,
+			PixelUI.C_TEXT if reached else PixelUI.C_TEXT_DIM,
+			PixelUI.SIZE_SUB
+		)
+
+
+func _job_reward_label(job_id: String, entry: Dictionary) -> String:
+	var ability_id := String(entry.get("ability", ""))
+	var reward_id := String(entry.get("reward", ""))
+	var parts: Array[String] = []
+	if ability_id != "":
+		var ability := Database.ability(ability_id)
+		parts.append(String(ability.get("name", ability_id)))
+	if reward_id == "inherit_sign":
+		var sign: Dictionary = Database.job(job_id).get("inherit_sign", {})
+		parts.append(String(sign.get("name", "かいほう")).replace("の印", "のしるし"))
+	return "・".join(parts) if not parts.is_empty() else "ほうしゅうなし"
+
+
+func _draw_loadout_detail(member: PartyMember, origin: Vector2) -> void:
+	var current := member.job_abilities()
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 0), Vector2(286, PixelUI.LINE)
+	)).row(
+		"%s　%s" % [member.name, _job_name(member.job_id)],
+		Terms.CURRENT_JOB_SKILLS % current.size(),
+		PixelUI.C_ACTIVE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_HEAD
+	)
+	UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 22), Vector2(286, PixelUI.LINE)
+	)).line(
+		Terms.CURRENT_JOB_SKILLS_HELP,
+		PixelUI.C_TEXT_DIM
+	)
+	for i in current.size():
+		@warning_ignore("integer_division")
+		var col := i / 4
+		var row := i % 4
+		var ability_id := String(current[i])
+		var at := origin + Vector2(12 + col * 142, 48 + row * 22)
+		UiPanel.inside(self, Rect2(at, Vector2(134, PixelUI.LINE))).line(
+			String(Database.ability(ability_id).get("name", ability_id)),
+			PixelUI.C_TEXT
+		)
 
 
 ## 出撃の名簿と、アップグレードの一覧の列幅。
@@ -815,6 +987,8 @@ func _draw_menu() -> void:
 	PixelUI.draw_window(self, MENU_RECT, WINDOW_TEX)
 	if _state == State.JOB:
 		_draw_job_menu()
+	elif _state == State.LOADOUT:
+		_draw_loadout()
 	elif _state == State.UPGRADE or _index == _upgrade_row():
 		_draw_upgrade_desc()
 	elif _state == State.RULES or _index == _rules_row():
@@ -882,7 +1056,12 @@ func _draw_learned() -> void:
 	var origin := menu.position
 	var panel := UiPanel.inside(self, Rect2(
 		origin + Vector2(8, 0), Vector2(menu.size.x - 16.0, menu.size.y)))
-	panel.line(Terms.STRONGHOLD_LEARNED_TITLE, PixelUI.C_TEXT_DIM)
+	panel.row(
+		Terms.STRONGHOLD_LEARNED_TITLE,
+		Terms.STRONGHOLD_LOADOUT_HINT,
+		PixelUI.C_TEXT_DIM,
+		PixelUI.C_TEXT_DIM
+	)
 
 	if member.learned.is_empty():
 		panel.skip(4.0)
@@ -902,6 +1081,44 @@ func _draw_learned() -> void:
 			Vector2(ABILITY_COL_W - 4.0, PixelUI.LINE)
 		)).line(
 			String(Database.ability(ability_id).get("name", ability_id)), PixelUI.C_TEXT)
+
+
+func _draw_loadout() -> void:
+	var member := _selected()
+	if member == null:
+		return
+	var menu := PixelUI.content(MENU_RECT)
+	var rows := 2 + GameState.inherit_slots()
+	for row in rows:
+		var at := menu.position + Vector2(18, 2 + row * 18)
+		var on := row == _loadout_row
+		if on:
+			MenuList.draw_cursor(self, CURSOR_TEX, at)
+		var label := ""
+		var value := ""
+		if row < PartyMember.INHERIT_SLOTS:
+			label = Terms.INHERIT_SKILL_SLOT % (row + 1)
+			var ability_id := String(member.inherited[row])
+			value = (
+				String(Database.ability(ability_id).get("name", ability_id))
+				if ability_id != "" else Terms.NONE
+			)
+		else:
+			var slot := row - PartyMember.INHERIT_SLOTS
+			label = Terms.INHERIT_SIGN_SLOT % (slot + 1)
+			var job_id := (
+				String(GameState.inherit_signs[slot])
+				if slot < GameState.inherit_signs.size() else ""
+			)
+			value = (
+				String(InheritSign.definition(job_id).get("name", job_id))
+				if job_id != "" else Terms.NONE
+			)
+		UiPanel.inside(self, Rect2(at, Vector2(112, PixelUI.LINE))).line(
+			label, PixelUI.C_ACTIVE if on else PixelUI.C_TEXT_DIM)
+		UiPanel.inside(self, Rect2(
+			at + Vector2(116, 0), Vector2(menu.size.x - 142, PixelUI.LINE)
+		)).line(value, PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM)
 
 
 func _draw_hint() -> void:

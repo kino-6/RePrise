@@ -154,11 +154,28 @@ def _selftest() -> int:
         ok = got == want_fail
         bad += 0 if ok else 1
         print("  %s  %s" % ("OK" if ok else "NG", name))
+    # 奥義 Gate も、意図的に壊した「回数 2・固有ルールなし」を拒否する。
+    broken_ultimate = {
+        "broken": {
+            "uses_per_battle": 2,
+            "kind": "special",
+            "target": "self",
+            "effect": "ultimate_broken",
+        }
+    }
+    ultimate_problems = check_ultimate_contracts(
+        broken_ultimate, {}, "var _in_ultimate\nfunc ultimate_uses_left():\n\tpass")
+    ultimate_ok = (
+        any("1 戦 1 回ではない" in p for p in ultimate_problems)
+        and any("固有ルールが無い" in p for p in ultimate_problems)
+    )
+    bad += 0 if ultimate_ok else 1
+    print("  %s  %s" % ("OK" if ultimate_ok else "NG", "壊れた奥義契約を落とす"))
     print("---")
     if bad:
         print("検査器が壊れている（%d 件）" % bad)
         return 1
-    print("検査器は期待どおり動く（%d 件）" % len(cases))
+    print("検査器は期待どおり動く（%d 件）" % (len(cases) + 1))
     return 0
 
 
@@ -204,6 +221,56 @@ def check_vocabulary() -> list[str]:
     return problems
 
 
+def check_ultimate_contracts(
+    abilities: dict, jobs: dict, source: str
+) -> list[str]:
+    """★7・8 奥義 30 種の、データと共通入口の接続を見る（F-6b）。"""
+    problems: list[str] = []
+    ultimate_ids = {
+        name for name, ability in abilities.items()
+        if int(ability.get("uses_per_battle", 0)) > 0
+    }
+    if len(ultimate_ids) != 30:
+        problems.append("奥義が 30 種ではない（%d 種）" % len(ultimate_ids))
+
+    rules: dict[str, str] = {}
+    ranked: dict[int, list[str]] = {7: [], 8: []}
+    for job_id, job in sorted(jobs.items()):
+        for entry in job.get("mastery", []):
+            rank = int(entry.get("rank", 0))
+            if rank not in ranked:
+                continue
+            ability_id = str(entry.get("ability", ""))
+            if ability_id:
+                ranked[rank].append(ability_id)
+    for rank in [7, 8]:
+        if len(ranked[rank]) != 15:
+            problems.append("★%d の奥義が 15 職ぶん無い（%d）" % (
+                rank, len(ranked[rank])))
+
+    for ability_id in sorted(ultimate_ids):
+        ability = abilities[ability_id]
+        if int(ability.get("uses_per_battle", 0)) != 1:
+            problems.append("奥義 %s が 1 戦 1 回ではない" % ability_id)
+        rule = str(ability.get("ultimate_rule", ""))
+        if not rule:
+            problems.append("奥義 %s に固有ルールが無い" % ability_id)
+            continue
+        if rule in rules:
+            problems.append("奥義 %s と %s が同じ固有ルール %s" % (
+                rules[rule], ability_id, rule))
+        rules[rule] = ability_id
+        if '"%s":' % rule not in source:
+            problems.append("奥義 %s のルール %s が戦闘へ未接続" % (
+                ability_id, rule))
+
+    if "_in_ultimate" not in source:
+        problems.append("奥義から奥義を再演しない再帰防止が無い")
+    if "ultimate_uses_left" not in source:
+        problems.append("奥義の残り回数を UI/オートから読めない")
+    return problems
+
+
 def main(argv: list[str]) -> int:
     if "--selftest" in argv:
         return _selftest()
@@ -216,6 +283,13 @@ def main(argv: list[str]) -> int:
     print("技 %d 個を、役割（種別・対象・属性・効果）ごとに突き合わせた" % len(abilities))
     problems = judge(dominated, ALLOWED)
     problems += check_vocabulary()
+    jobs = {
+        k: v for k, v in
+        json.loads((ROOT / "data" / "jobs.json").read_text(encoding="utf-8")).items()
+        if isinstance(v, dict)
+    }
+    source = (ROOT / "src" / "battle" / "battle_system.gd").read_text(encoding="utf-8")
+    problems += check_ultimate_contracts(abilities, jobs, source)
     if problems:
         for note in problems:
             print("  - %s" % note)
