@@ -95,7 +95,7 @@ static func generate(
 	map.plaza_pos = _choose_plaza(map, layout_rng)
 	_paint_plaza(map)
 	_paint_main_street(map)
-	_place_profile_facilities(map, layout_rng)
+	_place_profile_facilities(map, layout_rng, profile.layout)
 	_paint_landmark(map)
 	_place_decorations(map, decor_rng)
 
@@ -201,28 +201,85 @@ static func _add_path_tile(
 
 
 ## 広場の左右へ宿と店を置き、別々の枝道で結ぶ。
-static func _place_profile_facilities(map: TownMap, rng: DetRng) -> void:
-	var door_y := map.plaza_pos.y - 2
-	var left_x := maxi(map.plaza_pos.x - rng.range_i(5, 6), 4)
-	var right_x := mini(map.plaza_pos.x + rng.range_i(5, 6), map.width - 5)
-	var left_size := Vector2i(rng.range_i(5, 6), rng.range_i(3, 4))
-	var right_size := Vector2i(rng.range_i(5, 6), rng.range_i(3, 4))
-	var left_plot := _plot_for_door(Vector2i(left_x, door_y), left_size)
-	var right_plot := _plot_for_door(Vector2i(right_x, door_y), right_size)
-	var inn_left := rng.chance(50)
-	var left_kind := TownMap.T_DOOR if inn_left else TownMap.T_SHOP
-	var right_kind := TownMap.T_SHOP if inn_left else TownMap.T_DOOR
-	var left_door := _place_building(map, left_plot, left_kind)
-	var right_door := _place_building(map, right_plot, right_kind)
-	map.inn_pos = left_door if inn_left else right_door
-	map.shop_pos = right_door if inn_left else left_door
+## 宿と店を置く。**間取りの型で、まとまり方と空地の使い方を変える**（P-4）。
+##
+## それまでは型が 1 つしかなく、どの町も「広場の左右に横長の建物を 1 棟ずつ」
+## だった。色と人物が変わっても**輪郭が同じ**なので、並べて見ると同じ町に見える。
+static func _place_profile_facilities(
+	map: TownMap, rng: DetRng, layout: String
+) -> void:
+	var plaza := map.plaza_pos
+	# 型ごとに「2 棟をどこへ置くか」と「広場のどこへ繋ぐか」を変える。
+	var first := Vector2i.ZERO
+	var second := Vector2i.ZERO
+	var first_anchor := Vector2i.ZERO
+	var second_anchor := Vector2i.ZERO
+	# **主街路（広場から南の入口へ伸びる列）は空けたまま**にする。
+	# ここを塞ぐと「迷わせない入口」が壊れるので、型は左右と上下のずらし方で作る。
+	match layout:
+		"waystation":
+			# 街道宿場型。**斜めにずらす。** 手前と奥に 1 棟ずつ。
+			first = Vector2i(plaza.x - 5, plaza.y + 3)
+			second = Vector2i(plaza.x + 5, plaza.y - 3)
+			first_anchor = plaza + Vector2i(-2, 1)
+			second_anchor = plaza + Vector2i(2, -1)
+		"workshop":
+			# 工房街型。**2 棟を西へ横並びのひと塊に**して、東を作業場（空地）にする。
+			#
+			# 縦に積むと**下の建物が上の扉を塞ぐ**（実際にそうなって
+			# 「必須施設へ届かない」で落ちた）。扉は建物の南辺に開くので、
+			# その真下が空いていないと入れない。横並びなら両方の南が空く。
+			# 西と北の **L 字**。横に並べると敷地が重なって扉を塞ぎ、
+			# 縦に積むと下の建物が上の扉を塞ぐ（どちらも実際に踏んだ）。
+			# 別の辺へ置けば、寸法が振れても重ならない。
+			first = Vector2i(plaza.x - 6, plaza.y - 1)
+			second = Vector2i(plaza.x, plaza.y - 5)
+			first_anchor = plaza + Vector2i(-2, 0)
+			second_anchor = plaza + Vector2i(0, -2)
+		"terrace":
+			# 段丘・水辺型。**遠く対角へ離し**、あいだに帯が通る。
+			first = Vector2i(plaza.x - 7, plaza.y - 4)
+			second = Vector2i(plaza.x + 7, plaza.y + 3)
+			first_anchor = plaza + Vector2i(-2, -2)
+			second_anchor = plaza + Vector2i(2, 2)
+		_:
+			# 市場広場型。広場が主役で、2 棟が左右から広場へ face する。
+			first = Vector2i(plaza.x - rng.range_i(5, 6), plaza.y - 2)
+			second = Vector2i(plaza.x + rng.range_i(5, 6), plaza.y - 2)
+			first_anchor = plaza + Vector2i(-2, 0)
+			second_anchor = plaza + Vector2i(2, 0)
+
+	# 枠の中へ収める。**入口の契約（南辺中央）は型に関係なく守る。**
+	first = _inside(map, first)
+	second = _inside(map, second)
+	var first_size := Vector2i(rng.range_i(5, 6), rng.range_i(3, 4))
+	var second_size := Vector2i(rng.range_i(5, 6), rng.range_i(3, 4))
+	var inn_first := rng.chance(50)
+	var first_door := _place_building(
+		map, _plot_for_door(first, first_size),
+		TownMap.T_DOOR if inn_first else TownMap.T_SHOP
+	)
+	var second_door := _place_building(
+		map, _plot_for_door(second, second_size),
+		TownMap.T_SHOP if inn_first else TownMap.T_DOOR
+	)
+	map.inn_pos = first_door if inn_first else second_door
+	map.shop_pos = second_door if inn_first else first_door
+
+	# **看板は 2 棟を建ててから。** 同時に置くと隣の壁に上書きされる。
+	_place_sign(map, first_door)
+	_place_sign(map, second_door)
 
 	map.facility_paths.clear()
-	_connect_facility(
-		map, left_door, map.plaza_pos + Vector2i(-2, 0)
-	)
-	_connect_facility(
-		map, right_door, map.plaza_pos + Vector2i(2, 0)
+	_connect_facility(map, first_door, first_anchor)
+	_connect_facility(map, second_door, second_anchor)
+
+
+## 建物の入口として置ける範囲へ寄せる（外壁と到着余白を避ける）。
+static func _inside(map: TownMap, at: Vector2i) -> Vector2i:
+	return Vector2i(
+		clampi(at.x, 4, map.width - 5),
+		clampi(at.y, 4, map.height - 6)
 	)
 
 
@@ -328,11 +385,23 @@ static func _place_building(map: TownMap, plot: Rect2i, entrance: int) -> Vector
 			map.set_tile(x, y, TownMap.T_WALL)
 	var door := Vector2i(plot.position.x + plot.size.x / 2, plot.end.y - 1)
 	map.set_tile(door.x, door.y, entrance)
-	# 看板を入口の隣に。何の建物かが近づく前に分かる。
-	var sign_at := Vector2i(door.x + 2, door.y)
-	if sign_at.x < plot.end.x:
-		map.set_tile(sign_at.x, sign_at.y, TownMap.T_SIGN)
 	return door
+
+
+## 入口の隣に看板を置く。何の建物かが近づく前に分かる。
+##
+## **2 棟を建ててから呼ぶ。** 建物と同時に置くと、隣の建物の壁が
+## 看板を上書きする（工房街型で 2 棟を寄せたら実際にそうなった）。
+## 置ける側は型によって違うので、近い順に空いている所を探す。
+static func _place_sign(map: TownMap, door: Vector2i) -> void:
+	for offset in [Vector2i(2, 0), Vector2i(-2, 0), Vector2i(1, 0), Vector2i(-1, 0)]:
+		var at: Vector2i = door + offset
+		if not map.in_bounds(at.x, at.y):
+			continue
+		if map.get_tile(at.x, at.y) != TownMap.T_WALL:
+			continue
+		map.set_tile(at.x, at.y, TownMap.T_SIGN)
+		return
 
 
 ## 町人を置く。

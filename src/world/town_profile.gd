@@ -3,6 +3,53 @@ extends RefCounted
 
 const TownDialogue := preload("res://src/world/town_dialogue.gd")
 
+## 間取りの型（P-4）。**台詞を読まなくても、形で町が違うと分かるように。**
+##
+## それまでは生業も支配も違うのに、どの町も「広場の左右に横長の建物を 1 棟ずつ」
+## だった。色と人物は変わっても**輪郭が同じ**なので、並べて見ると同じ町に見える。
+## 内部指紋 50 通りという関門は座標差を見ていたが、
+## **人が見て別の町と分かるか**は見ていなかった。
+##
+##   market     市場広場型   … 広場が主役。2 棟が広場へ face する
+##   waystation 街道宿場型   … 主街路沿いに縦に並ぶ。入口寄りと奥
+##   workshop   工房街型     … 2 棟をひと塊に。向かいが作業場（空地）
+##   terrace    段丘・水辺型 … 対角へ離す。あいだに帯（水辺・段丘）が通る
+const LAYOUTS := ["market", "waystation", "workshop", "terrace"]
+
+## 生業ごとの、取りうる型の組。**生業だけでは足りない。**
+##
+## 生業は生物相で絞られるので、1 つの世界（同じような土地）では 4 種類ほどしか
+## 出ない。生業だけで型を決めると、**その世界の町が 1〜2 種類の形に偏る**
+## （実際、洞の生物相では 200 町のうち 149 が同じ型になった）。
+##
+## そこで**生業と支配の 2 要素**で決める ―― 生業が「どんな土地の使い方か」を、
+## 支配が「まとまりの厳しさ」を決める、という筋。乱数は引かない。
+const LAYOUT_BY_INDUSTRY := {
+	"trade": ["market", "waystation"],
+	"guild": ["market", "workshop"],
+	"council": ["market", "terrace"],
+	"pilgrimage": ["waystation", "market"],
+	"ferry": ["waystation", "terrace"],
+	"watch": ["waystation", "workshop"],
+	"imperial_bureau": ["waystation", "market"],
+	"mining": ["workshop", "terrace"],
+	"workshop": ["workshop", "market"],
+	"imperial_supply": ["workshop", "waystation"],
+	"farming": ["terrace", "market"],
+	"beast_ranch": ["terrace", "waystation"],
+}
+
+## 支配のうち、**引き締まった側**（1 つ目の型を採る）。
+## それ以外は緩い側として 2 つ目を採る。
+const TIGHT_RULERS := ["council", "watch"]
+
+
+static func layout_family(industry_id: String, ruler_id: String = "") -> String:
+	if not LAYOUT_BY_INDUSTRY.has(industry_id):
+		return "market"
+	var pair: Array = LAYOUT_BY_INDUSTRY[industry_id]
+	return String(pair[0] if ruler_id in TIGHT_RULERS else pair[1])
+
 ## 町の意味を、間取りより先に決める設定。
 ##
 ## 生業・支配・問題・目印を別々の後付け抽選にすると、鉱山町なのに農夫だけが
@@ -87,6 +134,9 @@ const PROBLEMS := [
 ]
 
 var industry_id := ""
+
+## 間取りの型（P-4）。生業から決まるので、**同じ生業なら同じ形**になる。
+var layout := "market"
 var ruler_id := ""
 var problem_id := ""
 var landmark_id := ""
@@ -133,6 +183,7 @@ static func generate(
 	profile.problem_role = String(problem.role)
 	profile.ruler_role = String(ruler.role)
 	profile.industry_line = _pick_line(rng, "industries", industry)
+	profile.layout = layout_family(profile.industry_id, profile.ruler_id)
 	profile.problem_line = _pick_line(rng, "problems", problem)
 	profile.ruler_line = _pick_line(rng, "rulers", ruler)
 	return profile

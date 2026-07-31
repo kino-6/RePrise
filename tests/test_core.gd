@@ -39,6 +39,7 @@ func _initialize() -> void:
 	_test_inherit_signs()
 	_test_upgrades_add_choices()
 	_test_turn_plates_stay_unique()
+	_test_town_layouts_differ()
 	_test_arc_endings_in_chronicle()
 	_test_data_integrity()
 	_test_save_migration()
@@ -394,6 +395,44 @@ func _test_arc_endings_in_chronicle() -> void:
 	# 戦記が載せる口を持っているか。
 	var text := FileAccess.get_file_as_string("res://src/game/chronicle.gd")
 	_check("戦記が結末を受け取る", text.contains("cross_world_endings"))
+
+
+## 町の形が Profile で変わる（P-4）。**台詞を読まなくても別の町と分かる。**
+##
+## それまでは生業も支配も違うのに、どの町も「広場の左右に横長の建物を 1 棟ずつ」
+## だった。色と人物が変わっても**輪郭が同じ**なので、並べると同じ町に見える。
+## 内部指紋の関門は座標差を見ていたが、**人が見て別の町と分かるか**は
+## 見ていなかった。
+func _test_town_layouts_differ() -> void:
+	# **生業だけでは足りない。** 生業は生物相で絞られるので、1 つの世界では
+	# 4 種類ほどしか出ない。生業と支配の 2 要素で決める。
+	var seen := {}
+	var doors := {}
+	for seed_value in range(1, 60):
+		var town := TownGenerator.generate(
+			DetRng.new(seed_value), 3, "dungeon",
+			(seed_value - 1) % 4, seed_value % TownProfile.cycle_size()
+		)
+		seen[town.profile.layout] = true
+		# 施設の置き方が型ごとに違うこと（宿と店の相対位置で見る）。
+		var rel := town.inn_pos - town.shop_pos
+		doors[town.profile.layout] = doors.get(town.profile.layout, [])
+		(doors[town.profile.layout] as Array).append(rel)
+	_check("同じ生物相で 3 種以上の大構成が出る", seen.size() >= 3,
+		"(%d 種: %s)" % [seen.size(), str(seen.keys())])
+
+	# **型ごとに施設のまとまり方が違うこと。** 同じなら「色替えだけ」になる。
+	var shapes := {}
+	for family in doors:
+		var rels: Array = doors[family]
+		# その型で最も多い相対位置の「向き」を代表にする。
+		var sample: Vector2i = rels[0]
+		shapes[family] = "%d:%d" % [signi(sample.x), signi(sample.y)]
+	var distinct := {}
+	for family in shapes:
+		distinct[String(shapes[family])] = true
+	_check("型ごとに施設のまとまり方が違う", distinct.size() >= 2,
+		"(%s)" % str(shapes))
 
 
 ## 行動順の札で、同種の敵を最後まで見分けられる（P-1）。
