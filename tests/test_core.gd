@@ -2303,9 +2303,31 @@ func _test_boss_encounter() -> void:
 
 	var foes := Encounter.build_boss(DetRng.new(1), 10)
 	_equal("主の編成は 1 体", foes.size(), 1)
-	# 階層補正をかけると、調整点がデータと補正式の 2 か所に散る。
+	# **階層補正はかけない。** 危険度で伸ばすと、調整点がデータと補正式の
+	# 2 か所に散る。主は終点にしか出ないので、危険度で動かす意味も無い。
+	#
+	# 代わりに**主だけの倍率が 1 つある**（`Encounter.BOSS_STAT_PERCENT`）。
+	# 入れた理由は D-8 ―― それまで Lv14 の万全な party が 7 体の主すべてに
+	# **100% 勝っていた**。party は装備と Lv で伸びるのに、主の生の数値は
+	# 据え置きだったため、相対的に主だけが取り残されていた。
 	var raw := Database.monster(foes[0].source_id)
-	_equal("主に階層補正はかからない", foes[0].max_hp, int(raw.get("hp", 0)))
+	_equal(
+		"主は階層補正ではなく主専用の倍率で伸びる",
+		foes[0].max_hp,
+		int(raw.get("hp", 0)) * Encounter.BOSS_STAT_PERCENT / 100
+	)
+	# **場でいちばん鈍い駒にしない。** 山場の相手が最も動けないのは筋が通らない。
+	_check(
+		"主の速さに下限がある",
+		foes[0].agi >= Encounter.BOSS_AGI_FLOOR,
+		"(agi %d)" % foes[0].agi
+	)
+	# **行動回数で釣り合わせる。** 1 対 4 なので、標準の速さでは山場にならない。
+	_check(
+		"主は標準より速く動く",
+		foes[0].cost_scale < CtbScheduler.STANDARD_COST,
+		"(cost %d)" % foes[0].cost_scale
+	)
 	_check("主は複数の技を持つ", foes[0].abilities.size() >= 3)
 
 

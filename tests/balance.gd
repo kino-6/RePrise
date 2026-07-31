@@ -64,6 +64,11 @@ func _initialize() -> void:
 	Database.reload()
 	_read_args()
 
+	if _boss_probe > 0:
+		_run_boss_probe(_boss_probe)
+		quit()
+		return
+
 	print("=== 世界シミュレータ ===")
 	print("%d ラン × %d 方針" % [_runs, POLICY_NAMES.size()])
 
@@ -87,10 +92,59 @@ func _initialize() -> void:
 	quit()
 
 
+## 主戦だけを取り出して測る（D-8）。
+##
+## 世界を 1 周させてからでは、主の強さだけを動かした効き目が読めない
+## （道中の乱れに埋もれる）。城に着いた頃の party を作って、主とだけ戦わせる。
+##
+##     godot --headless --script tests/balance.gd -- --boss=200
+func _run_boss_probe(count: int) -> void:
+	print("=== 主戦だけ（Lv %d の party × %d 回）===" % [BOSS_PROBE_LEVEL, count])
+	var tally := {}
+	for i in count:
+		var rng := DetRng.new(i * 7919 + 13).fork("boss")
+		var members := _fresh_party()
+		for m in members:
+			m.level = BOSS_PROBE_LEVEL
+			m.hp = m.max_hp()
+			m.mp = m.max_mp()
+		var boss := Encounter.build_boss(rng, WorldMap.MAX_DANGER)
+		if boss.is_empty():
+			continue
+		var name := boss[0].name
+		var state := {
+			"steps": 0, "battles": 0, "gold": 0, "danger": 10, "dead": false,
+			"turns_by_foes": {}, "turns_by_danger": {}, "rests": 0,
+			"gear_stock": [] as Array[String],
+		}
+		var won := _fight(members, boss, rng, WorldMap.MAX_DANGER, state)
+		var row: Array = tally.get(name, [0, 0, 0])
+		var turns := 0
+		for key in state["turns_by_foes"]:
+			turns += int(state["turns_by_foes"][key][1])
+		tally[name] = [int(row[0]) + 1, int(row[1]) + (1 if won else 0), int(row[2]) + turns]
+	var names: Array = tally.keys()
+	names.sort()
+	var total := 0
+	var wins := 0
+	for name in names:
+		var row: Array = tally[name]
+		total += int(row[0])
+		wins += int(row[1])
+		print("  %-16s %3d 戦  勝率 %3d%%  平均 %4.1f 手番" % [
+			name, int(row[0]), int(row[1]) * 100 / maxi(int(row[0]), 1),
+			int(row[2]) / float(maxi(int(row[0]), 1)),
+		])
+	print("  ---")
+	print("  合計 %d 戦 / party の勝率 %d%%" % [total, wins * 100 / maxi(total, 1)])
+
+
 func _read_args() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--runs="):
 			_runs = maxi(int(arg.trim_prefix("--runs=")), 1)
+		elif arg.begins_with("--boss="):
+			_boss_probe = maxi(int(arg.trim_prefix("--boss=")), 1)
 		elif arg == "--detail":
 			_detail = true
 
@@ -176,14 +230,31 @@ const LONG_TURNS := 30
 ## 宝箱 1 つぶんの基準ゴールド（`main.gd` の `_on_chest` と同じ扱い）。
 const CHEST_GOLD := 40
 
-## 全周で目指す帯（tasks.md の D-2）。**外れたら終了コード 1。**
-const REACH_MIN := 28
-const REACH_MAX := 38
-const WIN_MIN := 10
-const WIN_MAX := 18
+## 全周で目指す帯。**外れたら終了コード 1。**
+##
+## 前の帯（到達 28〜38 / 勝利 10〜18）は**壊れた Sim の数字から引かれていた**。
+## 宿にも寄らず宝箱も開けない party を描写した 35% が、そのまま目標になっていた。
+## 事故でできた辛さを設計として固定することになるので、引き直した。
+##
+## いまの方針は「**到達は起きてよい、勝利は稀であるべき**」。
+## 旅がゲーム本体なので着けないと何も始まらない。主が山場で、その差
+## （着いたのに勝てなかった）が物語になる。
+##
+## 到達の上限が高いのは、判定が**全周**（洞を全部まわる最も手厚い遊び方）で
+## 行われるため。下限 45 は「旅が緩すぎない」ことの確認に残す。
+const REACH_MIN := 45
+const REACH_MAX := 85
+const WIN_MIN := 12
+const WIN_MAX := 25
 
 ## 帯を外れた項目。空でなければ落ちる。
 var _out_of_band: Array[String] = []
+
+## 主戦だけを測るときの party のレベル。
+## **城に着いた頃の実測**（全周で Lv 15.0 / 封だけで Lv 13.0）の低いほう寄り。
+const BOSS_PROBE_LEVEL := 14
+
+var _boss_probe := 0
 
 const ChestReward := preload("res://src/dungeon/chest_reward.gd")
 

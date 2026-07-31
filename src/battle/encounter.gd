@@ -108,12 +108,46 @@ static func build_elite(
 
 
 ##
+## 城の主が動く速さ（百分率）。**小さいほど速く、何度も動く。**
+##
+## ここを入れるまで、主は関門になっていなかった ―― Lv14 の万全な party は
+## 7 体の主すべてに **100% 勝っていた**（`--boss=140` の実測）。
+##
+## 原因は数値ではなく**行動回数**だった。1 対 4 なので、23 手番の戦いで主が
+## 動けるのは 4 回ほど。しかもデータ側の `cost_scale` は 115〜160 と、
+## 標準（100）より**遅い**。山場のはずの相手が、いちばん動けない相手だった。
+##
+## HP や攻撃力を盛る手もあるが、それは「硬いだけの壁」になる。
+## **動く回数で釣り合わせる**ほうが、CTB の土俵の上で戦いになる。
+## 主ごとの差（重い機械は遅い、託宣は速い）は割合として残る。
+const BOSS_COST_PERCENT := 59
+
+## 主の能力の倍率と、速さの下限。**数字はすべて実測で決める**
+## （`tests/balance.gd -- --boss=200` が主戦だけを取り出して測る）。
+const BOSS_STAT_PERCENT := 122
+const BOSS_AGI_FLOOR := 27
+
+
 static func build_boss(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[Battler]:
 	var pool := Database.boss_ids_for_floor(floor_number)
 	var result: Array[Battler] = []
 	if pool.is_empty():
 		return result
-	result.append(_to_battler(rng.pick(pool), 1, first_id))
+	var boss := _to_battler(rng.pick(pool), 1, first_id)
+	# **主は階層補正を受けない**（`_to_battler` へ 1 を渡している）。
+	# 生の数値が終点用に書かれているからだが、party 側は装備と Lv で伸びるので、
+	# 相対的に主だけが取り残されていた。ここで 1 か所だけ倍率を掛ける
+	# ―― 7 体それぞれの持ち味（重い機械は硬い、託宣は速い）は割合として残る。
+	boss.max_hp = maxi(boss.max_hp * BOSS_STAT_PERCENT / 100, 1)
+	boss.hp = boss.max_hp
+	boss.atk = maxi(boss.atk * BOSS_STAT_PERCENT / 100, 1)
+	boss.mag = boss.atk
+	boss.defense = maxi(boss.defense * BOSS_STAT_PERCENT / 100, 1)
+	# **場でいちばん鈍い駒にしない。** 生の agi は 9〜18 で、Lv14 の party
+	# （22〜78）より遅い。山場の相手が最も動けないのは筋が通らない。
+	boss.agi = maxi(boss.agi, BOSS_AGI_FLOOR)
+	boss.cost_scale = maxi(boss.cost_scale * BOSS_COST_PERCENT / 100, 20)
+	result.append(boss)
 	return result
 
 
