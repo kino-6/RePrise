@@ -30,6 +30,7 @@ func _initialize() -> void:
 	_test_docs_hygiene()
 	_test_no_white_flash()
 	_test_single_ai_connection()
+	_test_cross_world_placements_wired()
 	_test_data_integrity()
 	_test_save_migration()
 	_test_save_to_disk()
@@ -331,6 +332,43 @@ func _test_encounter_gap() -> void:
 ## 消す事故を 2 度起こした。数えるのは行数ではなく**済んだ行が残っていないか**。
 ##
 ## 済んだ項目は `[x]` を付けて `docs/tasks_archive.md` へ移す（消さない）。
+## またぐ物語の置き場が全部繋がっている（A-4）。
+##
+## 置き場はカタログ側（`data/cross_world_arcs.json`）で増える。増やしたのに
+## `main.gd` で拾っていないと、**その段階は一生出ない**。しかも画面には
+## 何も出ないので気づけない（実際、拠点と戦記の 2 つしか繋がっていなかった）。
+##
+## あわせて `WorldGenerator.verify()` が、その置き場に該当する拠点地の
+## 実在を見ていることを確かめる ―― 繋いでも、置く場所が無い世界では出ない。
+func _test_cross_world_placements_wired() -> void:
+	var raw: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string("res://data/cross_world_arcs.json"))
+	_check("またぐ物語のカタログが読める", typeof(raw) == TYPE_DICTIONARY)
+	if typeof(raw) != TYPE_DICTIONARY:
+		return
+	var placements := {}
+	for arc in (raw as Dictionary).get("arcs", []):
+		for beat in (arc as Dictionary).get("beats", []):
+			placements[String((beat as Dictionary).get("placement", ""))] = true
+
+	var main_text := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	var missing: Array[String] = []
+	for name in placements:
+		var id := String(name)
+		if id == "":
+			continue
+		if not main_text.contains('"%s"' % id):
+			missing.append(id)
+	_check(
+		"置き場がすべて main.gd で拾われている", missing.is_empty(),
+		"(未接続: %s)" % ", ".join(missing)
+	)
+
+	# 置く場所そのものが世界に在るか。
+	var world_text := FileAccess.get_file_as_string("res://src/world/world_generator.gd")
+	_check("verify が段階の置き場を見ている", world_text.contains("BEAT_BANDS"))
+
+
 ## LLM の接続点は 1 か所（D-3）。
 ##
 ## 接続点が散ると、片方だけタイムアウトを直したり、片方だけ `think` を

@@ -913,6 +913,53 @@ func _enter_stronghold() -> void:
 	_fade_to(Mode.STRONGHOLD)
 
 
+## またぐ物語の段階を、その場に重ねる（A-4）。
+##
+## 置き場は 6 つ（拠点・戦記・町 2 種・洞・主戦の直前）。**出す口はここ 1 つ**に
+## する ―― 場所ごとに「段階を探して出して進める」を書くと、片方だけ
+## `advance` を忘れて段階が止まる（実際に拠点の実装だけがあった）。
+##
+## 出し方は場所で変える:
+##
+##   * **町と洞は流す**（`toast`）。歩いている最中に窓で止めると、
+##     どこへ向かっていたか分からなくなる。
+##   * **主戦の直前は止める**（窓）。ここは読ませる場面で、しかも
+##     読み終わってから戦いが始まる必要がある。
+##
+## 段階が無ければ何もせず false。呼ぶ側は「無ければ素通り」でよい。
+func _show_cross_world_beat(placement: String) -> bool:
+	var beat := GameState.cross_world_beat(placement)
+	if beat.is_empty():
+		return false
+	var line := GameState.cross_world_line(beat)
+	if GameState.cross_world_is_last():
+		# 最後の段階は選ばせる。どこで出会っても三択は同じ窓で。
+		_open_cross_world_choice(beat)
+		return true
+	GameState.advance_cross_world()
+	if placement == "castle_pre_boss":
+		_pending_boss_after_beat = true
+		event_view.open_outcome(
+			GameState.cross_world_title(), [line], GameState.floor_number)
+		_outcome_open = true
+		_set_mode(Mode.EVENT)
+		return true
+	hud.toast(line)
+	return false   # 流すだけなので、呼ぶ側の流れは止めない
+
+
+## 町に入ったときの置き場。危険度で 2 段に分ける（設計文書の表と同じ）。
+func _town_placement() -> String:
+	return "town_low" if GameState.floor_number <= TOWN_LOW_MAX else "town_mid"
+
+
+## 危険度一〜四が「浅い町」。
+const TOWN_LOW_MAX := 4
+
+## 段階を読み終えたら主戦を始める、の控え。
+var _pending_boss_after_beat := false
+
+
 ## またぐ物語の最後の段階。三択を出して結末を決める。
 ##
 ## `EventView` を使い回す（世界内の拍と同じ作り）。**窓を増やさない。**
@@ -1054,6 +1101,7 @@ func _enter_floor() -> void:
 	# 「寄るか急ぐか」の判断が消える。洞の見返りは宝箱と出店。
 	# 洞の中の絵はその土地の生物相から来る（雪原の洞は雪原の絵）。
 	_guardian_battle = false
+	_show_cross_world_beat("cave_mid")
 	_map = DungeonGenerator.generate(GameState.rng_for("terrain"), GameState.floor_number, false)
 	_map.biome = String(GameState.site.get("tileset", "dungeon"))
 	_door_warned = false
@@ -1233,6 +1281,7 @@ func _open_town() -> void:
 	_encounter_rng = GameState.rng_for("encounter")
 	explore.setup(_town, _encounter_rng, _leader_job())
 	Sound.play_bgm("town")
+	_show_cross_world_beat(_town_placement())
 	hud.toast(_town.town_name)
 	_fade_to(Mode.EXPLORE)
 
@@ -1689,6 +1738,10 @@ func _remember_choice() -> String:
 func _close_outcome() -> void:
 	_outcome_open = false
 	_set_mode(Mode.EXPLORE)
+	if _pending_boss_after_beat:
+		_pending_boss_after_beat = false
+		_on_boss_reached()
+		return
 	if _pending_fight_grade > 0:
 		var grade := _pending_fight_grade
 		_pending_fight_grade = 0
@@ -1885,6 +1938,10 @@ func _on_boss_reached() -> void:
 		# 主のデータが無い階に扉を置いてしまった場合の保険。詰ませない。
 		push_warning("危険度 %d に主がいない" % GameState.floor_number)
 		hud.toast("扉は かたく とざされている…")
+		return
+	# **主戦の直前に段階を挟む。** 読み終えてから扉が開く
+	# （`_close_outcome` が控えを見て `_on_boss_reached` を呼び直す）。
+	if _show_cross_world_beat("castle_pre_boss"):
 		return
 	Sound.play("boss_gate")
 	effect.play("imperial_alarm")

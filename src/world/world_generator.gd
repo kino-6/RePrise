@@ -144,6 +144,15 @@ static func _place_events(map: WorldMap, rng: DetRng) -> void:
 ## **見た目ではなく到達性と構造を見る。** 綺麗な世界でも、封に届かなければ
 ## そのランは最初から負けが決まっている。目で見て気づけない類の壊れ方なので、
 ## 機械に測らせる。テスト（`_test_world_generation`）もここを呼ぶ。
+## またぐ物語の段階が置かれる帯（`docs/cross_world_story_design.md` の表と同じ）。
+## **ここを増やしたら、その帯の拠点地が必ず生まれるかを verify で見る。**
+const BEAT_BANDS := [
+	{"name": "浅い町（危険度 1〜4）", "kind": "town", "min": 1, "max": 4},
+	{"name": "中ほどの町（危険度 4〜7）", "kind": "town", "min": 4, "max": 7},
+	{"name": "中ほどの洞（危険度 4〜7）", "kind": "cave", "min": 4, "max": 7},
+]
+
+
 static func verify(map: WorldMap) -> Array[String]:
 	var problems: Array[String] = []
 	if map == null:
@@ -288,6 +297,27 @@ static func verify(map: WorldMap) -> Array[String]:
 		problems.append("生物相が細切れ（同一隣接 %d%%）" % [
 			same_neighbors * 100 / neighbor_pairs
 		])
+
+	# **またぐ物語の置き場が実在して、歩けること**（A-4）。
+	#
+	# 段階は「浅い町」「中ほどの町」「中ほどの洞」に置かれる。その帯に
+	# 該当する拠点地が世界に無いと、**その段階は一生出ない**。物語が
+	# 途中で止まっていても、画面には何も出ないので気づけない。
+	for band in BEAT_BANDS:
+		var kind := String(band["kind"])
+		var found := false
+		for pos in map.sites:
+			var site: Dictionary = map.sites[pos]
+			if String(site.get("kind", "")) != kind:
+				continue
+			var danger := int(site.get("danger", 1))
+			if danger < int(band["min"]) or danger > int(band["max"]):
+				continue
+			if reachable.call(pos):
+				found = true
+				break
+		if not found:
+			problems.append("%s が無い（またぐ物語の段階が出ない）" % String(band["name"]))
 
 	return problems
 

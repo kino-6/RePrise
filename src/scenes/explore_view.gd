@@ -408,6 +408,7 @@ func _draw() -> void:
 			var tex := _folk_texture(String(town.folk[pos].get("kind", "")))
 			if tex == null:
 				continue
+			_draw_character_shadow(Vector2(who * TILE) + CHAR_OFFSET)
 			# NPC は 24x32 の 1 コマ（歩かないので切り出しは先頭だけ）。
 			draw_texture_rect_region(
 				tex, Rect2((Vector2(who * TILE) + CHAR_OFFSET).floor(), Vector2(CHAR_W, CHAR_H)),
@@ -417,11 +418,22 @@ func _draw() -> void:
 	if hero_tex == null:
 		return
 	var at := Vector2(player_pos * TILE) + CHAR_OFFSET
+	_draw_character_shadow(at)
 	draw_texture_rect_region(
 		hero_tex,
 		Rect2(at.x, at.y, CHAR_W, CHAR_H),
 		Rect2(_frame * CHAR_W, facing * CHAR_H, CHAR_W, CHAR_H)
 	)
+
+
+## 地形の細かい模様と人物の足を分離する、共通の接地影。
+##
+## 魔法使いの絵そのものは十分読めるのに、実画面では足元が草や石畳へ溶けていた。
+## 主人公とNPCへ同じ影を置き、「別々の素材を貼った」印象も弱める。
+func _draw_character_shadow(at: Vector2) -> void:
+	var dark := Color8(0x08, 0x0A, 0x12)
+	draw_rect(Rect2((at + Vector2(4, 28)).floor(), Vector2(16, 2)), dark, true)
+	draw_rect(Rect2((at + Vector2(7, 30)).floor(), Vector2(10, 1)), dark, true)
 
 
 ## 町の人の見た目。**役の名前がそのまま絵の名前**（`npc_<役>.png`）。

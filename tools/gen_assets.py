@@ -1324,6 +1324,152 @@ NPC_ROLES = [
     "imperial_officer",
 ]
 
+# NPC の候補は同じ 24x32 でも、実際には幅14〜18px・高さ29〜30pxの
+# 細長い立ち絵だった。基準にする `hero_mage` は幅22px・高さ27pxで、
+# 町へ並べると NPC だけ別の縮尺に見える。候補原画の輪郭は残しつつ、
+# **ゲームへ出す直前にフィールドキャラの体格とパレットへ翻訳する。**
+#
+# 暖かな茶革へ戻さず、黒い漆・象牙・一系統の差し色という作品の語彙へ揃える。
+NPC_ACCENTS = {
+    "innkeeper": ("#58D8B8", "#187860"),
+    "merchant": ("#E878C8", "#903060"),
+    "elder": ("#C098F8", "#603878"),
+    "scout": ("#58B8D8", "#286878"),
+    "guard": ("#F06868", "#903038"),
+    "healer": ("#58E0C0", "#187860"),
+    "blacksmith": ("#F08050", "#983828"),
+    "miner": ("#B890F0", "#604878"),
+    "ferryman": ("#68C8E8", "#286878"),
+    "farmer": ("#88D878", "#487038"),
+    "beastkeeper": ("#D87858", "#783828"),
+    "mechanic": ("#58D8D8", "#287878"),
+    "scribe": ("#A890E8", "#504070"),
+    "refugee": ("#D85868", "#783040"),
+    "pilgrim": ("#D0A0F0", "#684878"),
+    "performer": ("#F070B0", "#903058"),
+    "imperial_officer": ("#E85050", "#882028"),
+}
+
+NPC_TARGET_H = 27
+NPC_MIN_W = 19
+NPC_MAX_W = 22
+
+
+def _rgba(hex_color: str) -> tuple[int, int, int, int]:
+    rgb = snes(hex_color)
+    return (rgb[0], rgb[1], rgb[2], 255)
+
+
+NPC_K = _rgba("#0E0A16")
+NPC_DARK = _rgba("#241C38")
+NPC_MID = _rgba("#403650")
+NPC_IVORY_SHADOW = _rgba("#A8B0C0")
+NPC_IVORY = _rgba("#E8DCC8")
+NPC_WHITE = _rgba("#F8F0E0")
+
+
+def _opaque_bbox(sheet: Canvas) -> tuple[int, int, int, int]:
+    points = [
+        (x, y)
+        for y in range(sheet.h)
+        for x in range(sheet.w)
+        if sheet.get(x, y) != TRANSPARENT
+    ]
+    if not points:
+        raise ValueError("人物が透明だけになっている")
+    return (
+        min(x for x, _y in points),
+        min(y for _x, y in points),
+        max(x for x, _y in points),
+        max(y for _x, y in points),
+    )
+
+
+def _npc_palette_color(
+    color: tuple[int, int, int, int],
+    low: float,
+    high: float,
+    accent: tuple[tuple[int, int, int, int], tuple[int, int, int, int]],
+) -> tuple[int, int, int, int]:
+    """候補の明暗配置を、黒・象牙・差し色1系統へ写す。
+
+    元の RGB をそのまま明るくすると、茶色い農民・軍服・革装備という
+    候補側の癖まで強調される。ここでは**形と陰影だけを借りる**。
+    """
+    r, g, b, _a = color
+    luminance = r * 0.2126 + g * 0.7152 + b * 0.0722
+    level = (luminance - low) / max(high - low, 1.0)
+    saturation = (max(r, g, b) - min(r, g, b)) / float(max(max(r, g, b), 1))
+    accent_light, accent_dark = accent
+    if level < 0.14:
+        return NPC_K
+    if level < 0.31:
+        return NPC_DARK
+    if level < 0.49:
+        return accent_dark if saturation >= 0.16 else NPC_MID
+    if level < 0.67:
+        return accent_light if saturation >= 0.20 else NPC_IVORY_SHADOW
+    if level < 0.84:
+        return NPC_IVORY_SHADOW
+    if level < 0.94:
+        return NPC_IVORY
+    return NPC_WHITE
+
+
+def _prepare_npc(role: str, source: Canvas) -> Canvas:
+    """細長い候補を、`hero_mage` と同じ接地・頭身・明暗へ正規化する。"""
+    x0, y0, x1, y1 = _opaque_bbox(source)
+    source_w = x1 - x0 + 1
+    source_h = y1 - y0 + 1
+    target_w = max(NPC_MIN_W, min(NPC_MAX_W, round(source_w * 1.25)))
+    target_x = (CHAR_W - target_w) // 2
+    target_y = CHAR_H - NPC_TARGET_H
+
+    opaque = [px for px in source.px if px != TRANSPARENT]
+    lightness = sorted(
+        px[0] * 0.2126 + px[1] * 0.7152 + px[2] * 0.0722
+        for px in opaque
+    )
+    # 端の1色に引っ張られないよう、5〜95百分位を階調の両端にする。
+    low = lightness[int((len(lightness) - 1) * 0.05)]
+    high = lightness[int((len(lightness) - 1) * 0.95)]
+    bright, dark = NPC_ACCENTS[role]
+    accent = (_rgba(bright), _rgba(dark))
+
+    out = Canvas(CHAR_W, CHAR_H)
+    for dy in range(NPC_TARGET_H):
+        sy = y0 + min(source_h - 1, (dy * source_h) // NPC_TARGET_H)
+        for dx in range(target_w):
+            sx = x0 + min(source_w - 1, (dx * source_w) // target_w)
+            color = source.get(sx, sy)
+            if color == TRANSPARENT:
+                continue
+            out.set(
+                target_x + dx,
+                target_y + dy,
+                _npc_palette_color(color, low, high, accent),
+            )
+    return out
+
+
+def _verify_npc_runtime_style(role: str, sheet: Canvas) -> None:
+    """寸法だけ同じで別規格の人物が、再び町へ混ざるのを止める。"""
+    x0, y0, x1, y1 = _opaque_bbox(sheet)
+    width, height = x1 - x0 + 1, y1 - y0 + 1
+    drawn = [px for px in sheet.px if px != TRANSPARENT]
+    fill = len(drawn) / float(max(width * height, 1))
+    bright = sum(max(px[:3]) >= 200 for px in drawn) / float(len(drawn))
+    if not NPC_MIN_W <= width <= NPC_MAX_W:
+        raise ValueError(f"npc_{role}: 実画面幅が規格外（{width}px）")
+    if height != NPC_TARGET_H or y1 != CHAR_H - 1:
+        raise ValueError(
+            f"npc_{role}: 高さ・接地が規格外（上{y0} 下{y1} 高さ{height}）"
+        )
+    if fill < 0.40:
+        raise ValueError(f"npc_{role}: 輪郭が細すぎる（充填率 {fill:.2f}）")
+    if bright < 0.06:
+        raise ValueError(f"npc_{role}: 象牙の明部が足りない（{bright:.2f}）")
+
 
 ## 職業どうしのシルエットが重なりすぎている、とみなす基準。
 ##
@@ -1467,13 +1613,25 @@ def build_battle_backgrounds() -> None:
 
 
 def build_npcs() -> None:
-    for role in NPC_ROLES:
+    contact = Canvas(CHAR_W * 6, CHAR_H * 3)
+    made = 0
+    for i, role in enumerate(NPC_ROLES):
         sheet = _load_sheet(f"candidate_npc_{role}", (24, 32))
         if sheet is None:
             continue
+        sheet = _prepare_npc(role, sheet)
+        _verify_sheet(f"npc_{role}", sheet, (24, 32))
+        _verify_npc_runtime_style(role, sheet)
         sheet.to_png(ASSETS / "sprites" / f"npc_{role}.png")
         sheet.scaled(4).to_png(PREVIEW / f"npc_{role}.png")
+        contact.blit(sheet, (i % 6) * CHAR_W, (i // 6) * CHAR_H)
+        made += 1
         print(f"  取り込み: npc_{role}.png")
+    contact.scaled(4).to_png(PREVIEW / "npc_runtime_contact.png")
+    print(
+        "  NPC実画面規格: %d種（幅%d〜%d / 高さ%d / 下端接地）"
+        % (made, NPC_MIN_W, NPC_MAX_W, NPC_TARGET_H)
+    )
 
 
 # 非戦闘イベント用の 4 コマ演出と、画面全体を覆う 8 コマ遷移。
