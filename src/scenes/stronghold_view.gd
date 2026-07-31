@@ -810,8 +810,6 @@ func _draw_loadout_detail(member: PartyMember, origin: Vector2) -> void:
 ## 口上に使える高さ（窓の内側 150px から見出しぶんを引いた残り）。
 const DEPART_NOTE_H := 120.0
 
-const DEPART_NAME_W := 58.0
-const DEPART_JOB_W := 112.0
 const UPGRADE_NAME_W := 144.0
 const UPGRADE_LEVEL_W := 56.0
 const UPGRADE_PRICE_W := 60.0
