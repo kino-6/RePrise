@@ -62,6 +62,17 @@ var resist: Array[String] = []
 ## 通常攻撃に乗る属性（炎の武器など）。
 var attack_element: String = ""
 
+## ★5 の象徴技が置いていく状態（F-6a）。**どれも数手番で切れる。**
+##
+##   counter_turns  受けた傷を返す（せんし「むかえうち」）
+##   charged        次の一撃が守りを抜いて重くなる（じゅうし「そうてん」）
+##   rune_turns     刃に移した属性の残り（まけんし「るんのやいば」）
+##   tamed          倒さずに戦いから降りた（まじゅうつかい「てなずけ」）
+var counter_turns: int = 0
+var charged: bool = false
+var rune_turns: int = 0
+var tamed: bool = false
+
 ## 状態異常。CTB では時間に触る効果がいちばん強く効くので、そこに絞る。
 ## ねむり: 手番が来ても動けず、そのぶん後ろへ回る
 ## どく  : 手番が来るたびに削れる（速い者ほど早く減る）
@@ -96,7 +107,9 @@ func status_tag() -> String:
 
 
 func is_alive() -> bool:
-	return hp > 0
+	# **手懐けた相手は「生きているが戦っていない」。** 倒したのではないので
+	# 経験値も戦利品も出ないが、場からは降りる（まじゅうつかい「てなずけ」）。
+	return hp > 0 and not tamed
 
 
 @warning_ignore("integer_division")

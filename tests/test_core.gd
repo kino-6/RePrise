@@ -35,6 +35,7 @@ func _initialize() -> void:
 	_test_cross_world_placements_wired()
 	_test_twelve_arcs_rotate()
 	_test_eight_stage_mastery()
+	_test_signature_abilities()
 	_test_arc_endings_in_chronicle()
 	_test_data_integrity()
 	_test_save_migration()
@@ -390,6 +391,58 @@ func _test_arc_endings_in_chronicle() -> void:
 	# 戦記が載せる口を持っているか。
 	var text := FileAccess.get_file_as_string("res://src/game/chronicle.gd")
 	_check("戦記が結末を受け取る", text.contains("cross_world_endings"))
+
+
+## ★5 の象徴技が 15 職ぶんあって、実際に撃てる（F-6a）。
+##
+## **1 職 1 技で、別職へ配らない。** ★5 は職の顔なので、共有した瞬間に
+## 「どの職で行くか」の答えが薄まる。
+##
+## 撃てることまで見る ―― データに在るだけでは「実行時に通る経路」にならない
+## （このリポジトリで何度も起きた失敗がそれ）。
+func _test_signature_abilities() -> void:
+	var owners := {}
+	var missing: Array[String] = []
+	for job_id in Database.job_ids():
+		var found := ""
+		for entry in Database.job(String(job_id)).get("mastery", []):
+			if int((entry as Dictionary).get("rank", 0)) == 5:
+				found = String((entry as Dictionary).get("ability", ""))
+		if found == "":
+			missing.append(String(job_id))
+			continue
+		owners[found] = owners.get(found, 0) + 1
+	_check("15 職すべてに ★5 がある", missing.is_empty(), str(missing))
+	var shared: Array[String] = []
+	for id in owners:
+		if int(owners[id]) > 1:
+			shared.append(String(id))
+	_check("★5 を別職へ配っていない", shared.is_empty(), str(shared))
+
+	# **実際に撃てること。** 15 職ぶん、その技で 1 手番を通す。
+	var broke: Array[String] = []
+	for job_id in Database.job_ids():
+		var ability := ""
+		for entry in Database.job(String(job_id)).get("mastery", []):
+			if int((entry as Dictionary).get("rank", 0)) == 5:
+				ability = String((entry as Dictionary).get("ability", ""))
+		if ability == "":
+			continue
+		var caster := PartyMember.create("ため", String(job_id))
+		caster.level = 20
+		caster.learned.append(ability)
+		var party: Array[Battler] = [caster.to_battler(0)]
+		party[0].mp = party[0].max_mp
+		var rng := DetRng.new(99).fork("sig")
+		var foes := Encounter.build(rng, 5, 100, "")
+		if foes.is_empty():
+			continue
+		var system := BattleSystem.new()
+		system.start(party, foes, rng, 5)
+		var said := system.perform(party[0], ability, foes[0])
+		if said.is_empty():
+			broke.append("%s -> %s" % [job_id, ability])
+	_check("★5 が 15 職ぶん撃てる", broke.is_empty(), str(broke))
 
 
 ## 熟練が 8 段階になっても、古いセーブが壊れない（F-3）。

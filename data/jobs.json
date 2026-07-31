@@ -43,6 +43,11 @@
         "ability": "double_slash"
       },
       {
+        "rank": 5,
+        "need": 440,
+        "ability": "counter_stance"
+      },
+      {
         "rank": 6,
         "need": 640,
         "reward": "inherit_sign"
@@ -99,6 +104,11 @@
         "rank": 4,
         "need": 280,
         "ability": "cure_all"
+      },
+      {
+        "rank": 5,
+        "need": 440,
+        "ability": "chain_prayer"
       },
       {
         "rank": 6,
@@ -158,6 +168,11 @@
         "ability": "frost"
       },
       {
+        "rank": 5,
+        "need": 440,
+        "ability": "triune"
+      },
+      {
         "rank": 6,
         "need": 640,
         "reward": "inherit_sign"
@@ -213,6 +228,11 @@
         "rank": 4,
         "need": 280,
         "ability": "poison_blade"
+      },
+      {
+        "rank": 5,
+        "need": 440,
+        "ability": "shadow_take"
       },
       {
         "rank": 6,
@@ -276,6 +296,11 @@
         "rank": 4,
         "need": 340,
         "ability": "cure_all"
+      },
+      {
+        "rank": 5,
+        "need": 440,
+        "ability": "oath_shield"
       },
       {
         "rank": 6,
@@ -342,6 +367,11 @@
         "ability": "lull"
       },
       {
+        "rank": 5,
+        "need": 440,
+        "ability": "afterimage"
+      },
+      {
         "rank": 6,
         "need": 640,
         "reward": "inherit_sign"
@@ -402,6 +432,11 @@
         "rank": 4,
         "need": 340,
         "ability": "rapid_shot"
+      },
+      {
+        "rank": 5,
+        "need": 440,
+        "ability": "venom_rain"
       },
       {
         "rank": 6,
@@ -467,6 +502,11 @@
         "ability": "double_slash"
       },
       {
+        "rank": 5,
+        "need": 440,
+        "ability": "rune_edge"
+      },
+      {
         "rank": 6,
         "need": 640,
         "reward": "inherit_sign"
@@ -529,6 +569,11 @@
         "ability": "blast"
       },
       {
+        "rank": 5,
+        "need": 440,
+        "ability": "call_beast"
+      },
+      {
         "rank": 6,
         "need": 640,
         "reward": "inherit_sign"
@@ -588,6 +633,11 @@
         "rank": 4,
         "need": 360,
         "ability": "assassinate"
+      },
+      {
+        "rank": 5,
+        "need": 440,
+        "ability": "reload"
       },
       {
         "rank": 6,
@@ -653,6 +703,11 @@
         "ability": "cure_all"
       },
       {
+        "rank": 5,
+        "need": 440,
+        "ability": "compound"
+      },
+      {
         "rank": 6,
         "need": 640,
         "reward": "inherit_sign"
@@ -715,6 +770,11 @@
         "ability": "sage_strike"
       },
       {
+        "rank": 5,
+        "need": 440,
+        "ability": "stillness"
+      },
+      {
         "rank": 6,
         "need": 640,
         "reward": "inherit_sign"
@@ -775,6 +835,11 @@
         "rank": 4,
         "need": 400,
         "ability": "time_stop"
+      },
+      {
+        "rank": 5,
+        "need": 440,
+        "ability": "time_wedge"
       },
       {
         "rank": 6,
@@ -840,6 +905,11 @@
         "ability": "beast_roar"
       },
       {
+        "rank": 5,
+        "need": 440,
+        "ability": "tame"
+      },
+      {
         "rank": 6,
         "need": 640,
         "reward": "inherit_sign"
@@ -898,6 +968,11 @@
         "rank": 4,
         "need": 280,
         "ability": "wild_card"
+      },
+      {
+        "rank": 5,
+        "need": 440,
+        "ability": "grand_gamble"
       },
       {
         "rank": 6,

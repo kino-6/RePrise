@@ -147,6 +147,15 @@ func begin_turn_effects(actor: Battler) -> Dictionary:
 			_check_finished()
 			return {"lines": lines, "skipped": true}
 
+	# ★5 の状態の寿命（F-6a）。**数手番で切れる**ので、掛け直す判断が生まれる。
+	if actor.counter_turns > 0:
+		actor.counter_turns -= 1
+	if actor.rune_turns > 0:
+		actor.rune_turns -= 1
+		if actor.rune_turns <= 0:
+			actor.attack_element = ""
+			lines.append("%sの　刃から 色が 抜けた" % actor.name)
+
 	if actor.sleep_turns > 0:
 		actor.sleep_turns -= 1
 		lines.append("%sは　ねむっている…" % actor.name)
@@ -260,6 +269,11 @@ func _strike(
 	if element == "" and not magical:
 		element = actor.attack_element
 	var spread := _spread_scale(String(ab.get("target", "one_enemy")), targets.size())
+	# **呼び声**（しょうかんし「よびごえ」）。数が多いほど応えるものが増える。
+	# 群れの割り引き（`_spread_scale`）を打ち消す方向なので、
+	# 「多い相手ほど効く」という、ほかに無い形になる。
+	if String(ab.get("effect", "")) == "swarm":
+		spread = spread * (100 + targets.size() * SWARM_PER_FOE) / 100
 
 	for t in targets:
 		if not t.is_alive():
@@ -272,12 +286,27 @@ func _strike(
 
 		var total := 0
 		var tag := ""
+		# **装填**（じゅうし「そうてん」）。次の一撃だけ守りを抜いて重くなる。
+		var shot_power := power
+		var shot_pierce := bool(ab.get("pierce", false))
+		if actor.charged:
+			shot_power = shot_power * CHARGED_POWER / 100
+			shot_pierce = true
 		for _i in hits:
 			if not receiver.is_alive():
 				break
-			var dmg := _damage(actor, receiver, power * spread / 100, magical, element)
+			var dmg := _damage(
+				actor, receiver, shot_power * spread / 100, magical, element, shot_pierce)
 			receiver.apply_damage(dmg)
 			total += dmg
+			# **反撃**（せんし「むかえうち」）。受けた傷をそのまま返す。
+			if receiver.counter_turns > 0 and receiver.is_alive() and actor.is_alive():
+				var back := dmg * COUNTER_RATE / 100
+				if back > 0:
+					actor.apply_damage(back)
+					lines.append("%sが　むかえうった！ %s に %d" % [
+						receiver.name, actor.name, back])
+		actor.charged = false
 		tag = _element_tag(receiver, element)
 		if hits > 1:
 			lines.append("%sに　%d の ダメージ！（%d 回）%s" % [receiver.name, total, hits, tag])
@@ -294,6 +323,11 @@ func _strike(
 				receiver.poison_turns = POISON_TURNS
 				lines.append("%sは　どくに おかされた！" % receiver.name)
 
+		# **三つの理**（まほうつかい「みつのことわり」）。炎・氷・雷を同時に通す。
+		if receiver.is_alive() and total > 0 				and String(ab.get("effect", "")) == "triune":
+			for one in ["fire", "ice", "bolt"]:
+				lines.append_array(_element_effect(actor, receiver, one, total))
+
 		# **属性の効き目**（F-5）。弱点倍率だけで終わらせない ――
 		# 倍率しか無いと、弱点を持たない相手には炎も氷も雷も同じ技になる。
 		if receiver.is_alive() and total > 0:
@@ -301,6 +335,12 @@ func _strike(
 
 		if not receiver.is_alive():
 			lines.append("%sを　たおした！" % receiver.name)
+			# **残影**（にんじゃ「ざんえい」）。倒しきればすぐ次が動ける。
+			# 倒せなかったときは何も起きない ―― 決めきる技であって、
+			# 押すだけで速くなる技ではない。
+			if String(ab.get("effect", "")) == "afterimage":
+				actor.next_at = maxi(actor.next_at - AFTERIMAGE_GAIN, 0)
+				lines.append("%sは　影を のこして next へ" % actor.name)
 
 	# 攻めながら味方も癒す技（賢者の一撃）。攻撃と回復を 1 手で兼ねるので、
 	# 手番の価値がいちばん高い。そのぶんコストと MP は重くしてある。
@@ -493,6 +533,74 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				lines.append_array(_steal_from(actor, t))
 			"random":
 				lines.append_array(_play_around(actor, t))
+			"counter":
+				# 構えて待つ。受けた傷をそのまま返す（せんし）。
+				actor.guarding = true
+				actor.counter_turns = SIGNATURE_TURNS
+				lines.append("%sは　むかえうちの かまえ" % actor.name)
+			"chain":
+				# 全員を癒し、いちばん深い傷の者を速める（そうりょ）。
+				var worst: Battler = null
+				for friend in (living_allies() if actor.is_ally else living_enemies()):
+					if worst == null or friend.hp * 100 / maxi(friend.max_hp, 1) 							< worst.hp * 100 / maxi(worst.max_hp, 1):
+						worst = friend
+				if worst != null:
+					worst.agi_scale = 150
+					worst.agi_scale_turns = BUFF_TURNS
+					lines.append("%sの　いのりが %s に とどいた" % [actor.name, worst.name])
+			"cover_all":
+				# 全員を自分の背へ置く（せいきし）。
+				for friend in (living_allies() if actor.is_ally else living_enemies()):
+					if friend != actor:
+						friend.protected_by = actor
+				lines.append("%sが　みんなを 背にした" % actor.name)
+			"rune_edge":
+				# 刃に属性を移す。しばらく通常攻撃に乗る（まけんし）。
+				actor.attack_element = RUNE_ELEMENTS[
+					rng.range_i(0, RUNE_ELEMENTS.size() - 1)]
+				actor.rune_turns = SIGNATURE_TURNS
+				lines.append("%sの　刃が 色を おびた" % actor.name)
+			"reload":
+				# 弾を込める。次の一撃が守りを抜いて重くなる（じゅうし）。
+				actor.charged = true
+				lines.append("%sは　弾を こめた" % actor.name)
+			"stillness":
+				# 構えを解かせ、動きを止める（けんじゃ）。
+				t.planned_ability = ""
+				t.agi_scale = 70
+				t.agi_scale_turns = BUFF_TURNS
+				t.next_at += CtbScheduler.wait_for(t.effective_agi(), 40)
+				lines.append("%sは　動きを 止められた" % t.name)
+			"pull_turn":
+				# 味方ひとりの手番を今へ引き寄せる（じじゅつし）。
+				# **いちばん早い者より前に置く。** 絶対時刻を持たないので、
+				# 場でいちばん早い `next_at` を基準にする。
+				var soonest := t.next_at
+				for b in scheduler.living():
+					soonest = mini(soonest, b.next_at)
+				t.next_at = maxi(soonest - 1, 0)
+				lines.append("%sの　手番が すぐ来る！" % t.name)
+			"tame":
+				# **倒さずに戦いから降ろす**（まじゅうつかい）。弱った相手ほど応じる。
+				# 撃破ではないので経験値も戦利品も出ない ―― 速さと引き換えの決着。
+				var ratio := t.hp * 100 / maxi(t.max_hp, 1)
+				if _is_boss(t):
+					lines.append("%sには　通じない" % t.name)
+				elif rng.range_i(0, 99) < TAME_BASE - ratio:
+					t.tamed = true
+					lines.append("%sは　戦いから おりた" % t.name)
+					_check_finished()
+				else:
+					lines.append("%sは　応じない" % t.name)
+			"steal_and_haste":
+				lines.append_array(_steal_from(actor, t))
+				actor.agi_scale = 150
+				actor.agi_scale_turns = BUFF_TURNS
+				lines.append("%sは　そのまま 先へ 回った" % actor.name)
+			"all_or_nothing":
+				# **全部の出目をまとめて通す**（あそびにん）。良いも悪いも全部くる。
+				for roll in 6:
+					lines.append_array(_play_around(actor, t, roll))
 			"random_pick":
 				# **同じ乱数表の範囲版にしない**（F-2）。`あそぶ` は出たとこ勝負、
 				# `きまぐれ` は**三つ引いて ましなものを選ぶ**。
@@ -518,6 +626,23 @@ func _pick_best_whim(actor: Battler, target: Battler) -> Array[String]:
 			best_score = score
 			best = roll
 	return _play_around(actor, target, best)
+
+
+## 装填の倍率と、反撃で返す割合と、残影で戻る量。
+## 呼び声が敵 1 体ごとに増える割合。
+const SWARM_PER_FOE := 18
+
+const CHARGED_POWER := 170
+const COUNTER_RATE := 60
+const AFTERIMAGE_GAIN := 70
+
+
+## ★5 の象徴技が残る手番数と、細かい数値。
+const SIGNATURE_TURNS := 3
+## 刃に乗せられる属性（`_element_effect` が実装しているもの）。
+const RUNE_ELEMENTS: Array[String] = ["fire", "ice", "bolt", "dark"]
+## 手懐けの基準。相手の残り体力（%）を引いた値が確率になる。
+const TAME_BASE := 85
 
 
 ## 何回引くか、と出目の good さ（`_play_around` の match と同じ並び）。
