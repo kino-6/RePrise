@@ -11,7 +11,12 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import godot_run
 import sys
 from pathlib import Path
 
@@ -35,18 +40,18 @@ SCREENS = [
 
 
 def _run_or_kill(cmd: list[str], timeout: float = 180.0) -> str:
-    """走らせて出力を返す。時間切れなら殺してから空を返す。"""
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, encoding="utf-8", errors="replace",
-    )
-    try:
-        out, _ = proc.communicate(timeout=timeout)
-        return out or ""
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.communicate()
-        return ""
+    """走らせて出力を返す。**どう終わっても木ごと落とす**（`godot_run` に任せる）。
+
+    ここは 33 画面を並列で立てるので、1 回の失敗で 33 個残ることがある。
+    実際に 41 個まで溜まってデスクトップヒープが枯れ、以後の起動が
+    accesskit の 0x80070008 で落ちるようになった。
+    """
+    # `godot --accessibility disabled` は `godot_run.run()` が付ける。
+    args = [a for a in cmd if a != "godot"]
+    if args[:2] == ["--accessibility", "disabled"]:
+        args = args[2:]
+    _code, out = godot_run.run(args, timeout=timeout)
+    return out
 
 
 def _check_one(name: str) -> tuple[str, list[str]]:

@@ -448,12 +448,17 @@ func _job_name(job_id: String) -> String:
 
 
 func _max_rank(job_id: String) -> int:
-	return Database.job(job_id).get("mastery", []).size()
+	# **項目数で数えない。** F-3 で段が飛び飛びになった（★5 と ★7 は F-6 が
+	# 入れるまで空く）ので、数えると 6 段のように見える。
+	return PartyMember.max_rank_of(job_id)
 
 
 ## ★ で埋めた熟練度。数字だけより「あと 1 段」が直感で分かる。
 func _stars(rank: int, max_rank: int) -> String:
-	return "★".repeat(rank) + "☆".repeat(maxi(max_rank - rank, 0))
+	# **星を並べない**（F-3 で段階が 4 → 8 になった）。8 個並べると 96px 要り、
+	# 職名（最長「しょうかんし」で 84px）と点数（54px）と合わせて枠に収まらない。
+	# 数で出せば桁が増えても幅が変わらない。`field_menu` の職業一覧でも同じ理由。
+	return "★%d/%d" % [rank, maxi(max_rank, 1)]
 
 
 ## 「72/160」の形。最大まで行っていたら到達点だけを出す。
@@ -628,6 +633,11 @@ func _draw_detail() -> void:
 
 ## 出撃の名簿と、アップグレードの一覧の列幅。
 ## いずれも固定のオフセットで置いていたので、名が長い行だけ隣へ食い込んでいた。
+## 口上に使える高さと、名簿を始める位置。
+## 3 文が折り返して 5〜6 行になるので、名簿は行間を詰めて下へ入れる。
+## 口上に使える高さ（窓の内側 150px から見出しぶんを引いた残り）。
+const DEPART_NOTE_H := 120.0
+
 const DEPART_NAME_W := 58.0
 const DEPART_JOB_W := 112.0
 const UPGRADE_NAME_W := 144.0
@@ -641,9 +651,9 @@ const ABILITY_COL_W := 118.0
 ## 熟練の一覧の列幅。**合計は立ち絵の左端（208）に収める。**
 ## 固定のオフセットで置いていた頃の 96 / 148 と同じ位置だが、
 ## いまは幅として渡すので、長い職名はその列の中で詰まる。
-const MASTERY_NAME_W := 92.0
-const MASTERY_STAR_W := 52.0
-const MASTERY_TEXT_W := 58.0
+const MASTERY_NAME_W := 88.0
+const MASTERY_STAR_W := 46.0
+const MASTERY_TEXT_W := 62.0
 
 
 func _draw_departure_note() -> void:
@@ -655,29 +665,22 @@ func _draw_departure_note() -> void:
 	# 1 行目が「なぜ門を開くか」、残りが「何を失い、何が残るか」。
 	# 文言は Lore 側（根拠は docs/premise.md）。**外部化した文なので長さを前提にしない** ――
 	# `data/vocabulary.json` で差し替えられるので、はみ出しは呼ぶ側で防ぐ。
-	for i in Lore.DEPART_LINES.size():
-		UiPanel.inside(self, Rect2(
-			origin + Vector2(6, 26 + i * 19), Vector2(width, PixelUI.LINE)
-		)).line(Lore.DEPART_LINES[i], PixelUI.C_TEXT_DIM)
+	# **折り返す。** 口上は `Lore`（＝`data/vocabulary.json`）側なので、
+	# 差し替えで長さが変わる。1 行決め打ちだと長い文が `…` に化ける
+	# （実際に 2 行が詰まった）。
+	var note := UiPanel.inside(self, Rect2(
+		origin + Vector2(6, 26), Vector2(width, DEPART_NOTE_H)))
+	for line in Lore.DEPART_LINES:
+		note.paragraph(String(line), PixelUI.C_TEXT_DIM)
 
-	for i in members.size():
-		var m := members[i]
-		# 前提の 3 行を入れたぶん、名簿を下げて行間を詰める。
-		# 窓の内側は 150px しかないので、4 人目（84+48+文字高）でちょうど収まる。
-		var row := origin + Vector2(6, 84 + i * 16)
-		# 名前・職・星の 3 列。列ごとに幅を持つので、名前が長くても職に食い込まない。
-		UiPanel.inside(self, Rect2(row, Vector2(DEPART_NAME_W, PixelUI.LINE))).line(
-			m.name, PixelUI.C_TEXT)
-		UiPanel.inside(self, Rect2(
-			row + Vector2(DEPART_NAME_W, 0), Vector2(DEPART_JOB_W, PixelUI.LINE)
-		)).line(_job_name(m.job_id), PixelUI.C_TEXT_DIM)
-		UiPanel.inside(self, Rect2(
-			row + Vector2(DEPART_NAME_W + DEPART_JOB_W, 2),
-			Vector2(width - DEPART_NAME_W - DEPART_JOB_W, PixelUI.LINE)
-		)).line(
-			_stars(m.mastery_rank(), _max_rank(m.job_id)),
-			PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
-		)
+	# **名簿はここに出さない。**
+	#
+	# 窓の内側は 150px で、見出しを引くと 124px。口上は折り返すと 6 行（108px）
+	# 要るので、名簿 4 行（48px）とは**どうやっても両立しない**。
+	# 行間を詰めて押し込むのは、どちらも読みにくくするだけだった。
+	#
+	# 名簿は左の一覧に出ているし、段階は編成と職業えらびで見られる。
+	# ここが伝えるのは**何を失い、何が残るか**の 1 点でよい。
 
 
 ## 編成。名簿の全員を並べ、連れて行く者に印を付ける。

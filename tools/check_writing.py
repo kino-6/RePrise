@@ -76,6 +76,7 @@ REGRESSION_PHRASES = {
     "かなしい話ほど よく はやる",
     "にげてきた。それだけだ",
     "詮索は せぬ",
+    "夜中に何かが隊を分断した",
 }
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
@@ -236,6 +237,10 @@ def check_vocabulary(data: dict) -> list[str]:
     return problems
 
 
+def check_events(data: dict) -> list[str]:
+    return _regressions("event", data)
+
+
 def check_sources() -> list[str]:
     problems: list[str] = []
     generator = (ROOT / "src/world/town_generator.gd").read_text(encoding="utf-8")
@@ -266,6 +271,9 @@ def check_sources() -> list[str]:
         source = (ROOT / relative).read_text(encoding="utf-8")
         if "WritingQuality" not in source:
             problems.append(f"source: {relative}が文章品質Gateを通らない")
+    chronicle_ai = (ROOT / "src/game/chronicle_ai.gd").read_text(encoding="utf-8")
+    if "matches_facts(lines, _expected_facts)" not in chronicle_ai:
+        problems.append("source: AI戦記が勝敗・戦績との一致を検査しない")
 
     old_prompt = "あなたは SFC 期の日本語 RPG"
     for relative in ["src/scenes/main.gd", "src/game/chronicle_ai.gd"]:
@@ -279,6 +287,7 @@ def run_checks() -> list[str]:
     problems.extend(check_town(_load("data/town_dialogue.json")))
     problems.extend(check_story(_load("data/story_arcs.json")))
     problems.extend(check_cross_world(_load("data/cross_world_arcs.json")))
+    problems.extend(check_events(_load("data/world_events.json")))
     problems.extend(check_vocabulary(_load("data/vocabulary.json")))
     problems.extend(check_sources())
     return problems
@@ -348,7 +357,7 @@ def main(argv: list[str]) -> int:
     print("  町NPC: 17役 / 町設定: 8生業・4支配・8問題")
     print("  一世界物語: 差し込み後54文字以内")
     print("  世界横断: 決着文が差し込み後54文字以内")
-    print("  AI候補: 意味不明・古風・抽象語過多を項目ごとに拒否")
+    print("  AI候補: 意味不明・古風・抽象語過多・戦績不一致を拒否")
     print("---")
     if problems:
         for problem in problems:

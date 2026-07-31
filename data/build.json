@@ -1,6 +1,6 @@
 {
   "_comment": "tools/stamp_version.py が git から作る。手で書かない。書き出しは gen_assets.py と書き出し（export）の前に走らせる。",
-  "hash": "3e0e1d1",
+  "hash": "7a978e6",
   "date": "2026-07-31",
   "dirty": true
 }

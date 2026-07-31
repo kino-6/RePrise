@@ -225,7 +225,10 @@ godot --path . -- --play=240 --dev-level=8         # レベル 8 から始めて
   いまの合わせ先は 直行 0% / 寄り道 6% / 全周 22%。
   **直行で勝てるようになったら「寄るか急ぐか」が判断として死んでいる。**
 - 見た目を変えたら `--shot=` で撮って**実際に画像を見る**。目視せずに「できた」と言わない。
-- 絵を足したら `python tools/check_terms.py                            # 造語の直書きを検出
+- 絵を足したら `python tools/godot_run.py --shot=title                 # Godot を走らせて必ず始末する
+python tools/godot_run.py --reap                      # 居残った Godot を掃除する
+python tools/check_terms.py                           # 造語の直書きを検出
+python tools/check_abilities.py                       # 押す理由の無い技
 python tools/check_assets.py` を通す。**候補・生成物・実行時参照の
   三段**を数え、生成済みなのに参照 0 の分類があれば落ちる。
   「画像はあるが一度も出ない」を何度も繰り返したので機械に見させる
@@ -330,6 +333,12 @@ python tools/check_assets.py` を通す。**候補・生成物・実行時参照
 - `class_name` を新規追加したら `--import` を挟まないとテストが「識別子が無い」で落ちる。
 - PowerShell 5.1 では `&&` が使えない。`;` と `if ($?)` を使う。
   ネイティブ exe への `2>&1` も避ける（成功しても失敗扱いになる）。
+- **Godot を素で走らせない。** `python tools/godot_run.py` を通す。
+  撮影や自動プレイの Godot が居残り、**41 個まで溜まって Windows の
+  デスクトップヒープが枯れた**。以後の起動が accesskit の `0x80070008` で
+  落ちるようになり、**症状が「起動失敗」の形で出るので原因に気づきにくい**。
+  `subprocess.run(timeout=)` では足りない（Windows では孫が残る）。
+  `taskkill /T /F` で木ごと落とす。溜まったら `--reap` で掃除する。
 - 撮影が `accesskit_windows` のパニックで落ちることがある（メモリ資源の一時不足）。
   `godot --path . --accessibility disabled -- --shot=...` で回避できる。
 - ウィンドウタイトルは `DisplayServer.window_set_title()` で入れても戻る。ルート

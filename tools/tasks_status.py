@@ -36,7 +36,9 @@ done = [
 ]
 recent = done[-5:][::-1]
 
-TASK_ID = re.compile(r"\b([A-H]-\d+)\b")
+# 新しい監査系列を足すたび範囲を書き換えると、そのタスクだけ台帳から消える。
+# 英大文字1字＋番号を共通のID契約にする（P-1 などのプレイテスト項目も数える）。
+TASK_ID = re.compile(r"\b([A-Z]-\d+)\b")
 
 
 def _titles(text, mark):
@@ -104,6 +106,7 @@ def _selftest():
         ("証跡なしを見つける", {"A-1": 1}, {}, ["A-1"], True),
         ("未完了どうしの衝突を見つける", {}, {"A-1": 2}, [], True),
         ("正しい台帳は通る", {"A-1": 1}, {"B-2": 1}, [], False),
+        ("後発系列の ID も数える", {"P-1": 1}, {"Q-2": 1}, [], False),
     ]
     bad = 0
     for name, done_map, open_map, missing, want_fail in cases:

@@ -41,6 +41,16 @@
         "rank": 4,
         "need": 280,
         "ability": "double_slash"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -89,6 +99,16 @@
         "rank": 4,
         "need": 280,
         "ability": "cure_all"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -136,6 +156,16 @@
         "rank": 4,
         "need": 280,
         "ability": "frost"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -183,6 +213,16 @@
         "rank": 4,
         "need": 280,
         "ability": "poison_blade"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -206,8 +246,8 @@
       ]
     },
     "unlock": {
-      "soldier": 2,
-      "priest": 2
+      "soldier": 4,
+      "priest": 4
     },
     "growth": {
       "hp": 8,
@@ -236,6 +276,16 @@
         "rank": 4,
         "need": 340,
         "ability": "cure_all"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -260,8 +310,8 @@
       ]
     },
     "unlock": {
-      "thief": 2,
-      "mage": 2
+      "thief": 4,
+      "mage": 4
     },
     "growth": {
       "hp": 5,
@@ -290,6 +340,16 @@
         "rank": 4,
         "need": 340,
         "ability": "lull"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -312,8 +372,8 @@
       ]
     },
     "unlock": {
-      "thief": 2,
-      "soldier": 2
+      "thief": 4,
+      "soldier": 4
     },
     "growth": {
       "hp": 7,
@@ -342,6 +402,16 @@
         "rank": 4,
         "need": 340,
         "ability": "rapid_shot"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -365,8 +435,8 @@
       ]
     },
     "unlock": {
-      "soldier": 2,
-      "mage": 2
+      "soldier": 4,
+      "mage": 4
     },
     "growth": {
       "hp": 7,
@@ -395,6 +465,16 @@
         "rank": 4,
         "need": 340,
         "ability": "double_slash"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -417,8 +497,8 @@
       ]
     },
     "unlock": {
-      "mage": 2,
-      "priest": 2
+      "mage": 4,
+      "priest": 4
     },
     "growth": {
       "hp": 4,
@@ -447,6 +527,16 @@
         "rank": 4,
         "need": 340,
         "ability": "blast"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -468,8 +558,8 @@
       ]
     },
     "unlock": {
-      "ranger": 2,
-      "thief": 2
+      "ranger": 4,
+      "thief": 4
     },
     "growth": {
       "hp": 6,
@@ -498,6 +588,16 @@
         "rank": 4,
         "need": 360,
         "ability": "assassinate"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -521,8 +621,8 @@
       ]
     },
     "unlock": {
-      "mage": 2,
-      "thief": 2
+      "mage": 4,
+      "thief": 4
     },
     "growth": {
       "hp": 6,
@@ -551,6 +651,16 @@
         "rank": 4,
         "need": 360,
         "ability": "cure_all"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -573,8 +683,8 @@
       ]
     },
     "unlock": {
-      "priest": 3,
-      "mage": 3
+      "priest": 4,
+      "mage": 4
     },
     "growth": {
       "hp": 6,
@@ -603,6 +713,16 @@
         "rank": 4,
         "need": 400,
         "ability": "sage_strike"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -625,8 +745,8 @@
       ]
     },
     "unlock": {
-      "mage": 3,
-      "ninja": 2
+      "mage": 4,
+      "ninja": 4
     },
     "growth": {
       "hp": 5,
@@ -655,6 +775,16 @@
         "rank": 4,
         "need": 400,
         "ability": "time_stop"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -678,8 +808,8 @@
       ]
     },
     "unlock": {
-      "ranger": 2,
-      "soldier": 2
+      "ranger": 4,
+      "soldier": 4
     },
     "growth": {
       "hp": 8,
@@ -708,6 +838,16 @@
         "rank": 4,
         "need": 360,
         "ability": "beast_roar"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [
@@ -758,6 +898,16 @@
         "rank": 4,
         "need": 280,
         "ability": "wild_card"
+      },
+      {
+        "rank": 6,
+        "need": 640,
+        "reward": "inherit_sign"
+      },
+      {
+        "rank": 8,
+        "need": 1220,
+        "reward": "master"
       }
     ],
     "starting_gear": [

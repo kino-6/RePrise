@@ -594,7 +594,7 @@
       "selection": {"weight": 7, "min_runs_attempted": 6, "min_completed_arcs": 1},
       "span": {"min_runs": 5, "max_runs": 9, "cooldown_runs": 5},
       "promise": "異なる主が遺した言葉を、敗者の戯言として切り捨てない。",
-      "reversal": "主たちは世界を閉じる敵であると同時に、砦から流れ込む何かを封じる役目も負っていた。",
+      "reversal": "主たちは世界を閉じる敵であると同時に、銀の門から流れ込む砦の力を封じる役目も負っていた。",
       "skin": {
         "title": ["主たちの遺言", "敵が守った門", "途切れた警告"],
         "anchor_name": ["門守", "封じ手", "最後の主"],

@@ -239,6 +239,17 @@ func mastery_points(id: String = "") -> int:
 	return int(job_exp.get(id if id != "" else job_id, 0))
 
 
+## その職の最終段階（いちばん大きい `rank`）。
+##
+## **項目数で数えない。** F-3 で段が飛び飛びになった（★5 と ★7 は F-6 が
+## 入れるまで空く）ので、数えると 6 段のように見える。
+static func max_rank_of(id: String) -> int:
+	var top := 0
+	for entry in Database.job(id).get("mastery", []):
+		top = maxi(top, int((entry as Dictionary).get("rank", 0)))
+	return top
+
+
 ## 現在の熟練度ランク（0 = 未熟）。
 func mastery_rank(id: String = "") -> int:
 	var target := id if id != "" else job_id
@@ -316,11 +327,52 @@ func can_take_job(target_job: String) -> bool:
 	var job := Database.job(target_job)
 	if job.is_empty():
 		return false
+	# **一度就いた職は永久に開いたまま**（F-3）。条件を ★2 から ★4 へ上げたとき、
+	# 既にその職で戦っていた人が再び封鎖されるのはおかしい。
+	# 熟練を貯めた記録（`job_exp`）が、そのまま「就いたことがある」証拠になる。
+	if int(job_exp.get(target_job, 0)) > 0:
+		return true
 	for required_job in job.get("unlock", {}).keys():
 		var need := int(job["unlock"][required_job])
 		if mastery_rank(String(required_job)) < need:
 			return false
 	return true
+
+
+## その職で継承印を得ているか（★6）。**装着できる印の枚数に効く。**
+func has_inherit_sign(id: String = "") -> bool:
+	return _reward_reached("inherit_sign", id)
+
+
+## その職を極めたか（★8）。
+func is_job_master(id: String = "") -> bool:
+	return _reward_reached("master", id)
+
+
+## 段階の報酬に届いているか。技ではない報酬（継承印・マスター）を見る。
+##
+## **空報酬の段階を作らない**ための仕組みでもある ―― 技を持たない段階には
+## `reward` が要り、`reward` の無い段階は `mastery` に置けない
+## （`check_abilities.py` が落とす）。
+func _reward_reached(reward: String, id: String) -> bool:
+	var target := id if id != "" else job_id
+	var points := mastery_points(target)
+	for entry in Database.job(target).get("mastery", []):
+		var row: Dictionary = entry
+		if String(row.get("reward", "")) != reward:
+			continue
+		if points >= int(row.get("need", 0)):
+			return true
+	return false
+
+
+## 継承印を得た職の数。**装着できる枠**の元になる（E-2 がここに乗る）。
+func inherit_signs() -> int:
+	var count := 0
+	for id in job_exp:
+		if has_inherit_sign(String(id)):
+			count += 1
+	return count
 
 
 ## まだ就けない職業の、残っている条件。拠点で「あと何が要るか」を出すのに使う。

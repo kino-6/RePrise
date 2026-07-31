@@ -30,6 +30,9 @@ const PROMPT := """あなたは現代の日本語RPGを担当するゲームラ�
 
 制約:
 - 各行34文字以内。改行で3行に区切る。
+- 1行目に「危険度」とその数値、勝敗を書く。
+- 2行目に獲得ゴールドの数値を書く。
+- 3行目に一行の結果を書く。
 - 自然で簡潔な現代日本語にする。主語と結果を省きすぎない。
 - 雰囲気だけの比喩、意味深な独り言、説明のない抽象語を使わない。
 - 古風な語尾、不自然な空白、三点リーダーを使わない。
@@ -48,6 +51,7 @@ const TIMEOUT := 8.0
 ## 接続点が 2 つあると、片方だけタイムアウトを直したり、
 ## 片方だけ think を切り忘れたりする（実際に別々に書いていた）。
 var _ai: LocalAI = null
+var _expected_facts: Dictionary = {}
 
 
 func _ready() -> void:
@@ -60,7 +64,8 @@ func _ready() -> void:
 ## 生成を依頼する。返りは signal で、失敗したときは何も飛ばさない。
 ## 呼び出し側は既にテンプレート版を表示していること。
 func request(summary: Dictionary) -> void:
-	var facts := JSON.stringify(Chronicle.facts_for_llm(summary), "  ")
+	_expected_facts = Chronicle.facts_for_llm(summary)
+	var facts := JSON.stringify(_expected_facts, "  ")
 	_ai.ask(PROMPT % [Lore.WORLD, facts], TIMEOUT, "chronicle")
 
 
@@ -95,5 +100,41 @@ func _clean(text: String) -> PackedStringArray:
 		lines.append(line)
 		if lines.size() >= 3:
 			break
-	# 途中の一行だけを採用すると、記録としての意味が欠ける。
-	return lines if lines.size() == 3 else PackedStringArray()
+	# 途中の一行や、数値・勝敗が事実と一致しない文章は採用しない。
+	# 自然な文でも事実を創作していれば、校正済みテンプレートのほうが安全。
+	if lines.size() != 3 or not matches_facts(lines, _expected_facts):
+		return PackedStringArray()
+	return lines
+
+
+## 文法だけでなく、戦記に必須の事実が本文へ残っているかを見る。
+## AIが「城に包まれた」のような未提供の出来事を補っても、数値と勝敗を
+## 回収できなければ表示せず、呼び出し元のテンプレートへ戻す。
+static func matches_facts(lines: PackedStringArray, facts: Dictionary) -> bool:
+	if lines.size() != 3 or facts.is_empty():
+		return false
+	var text := "\n".join(lines)
+	if "危険度%d" % int(facts.get("danger", -1)) not in text:
+		return false
+	var gold := int(facts.get("gold", 0))
+	if gold > 0 and "%dゴールド" % gold not in text:
+		return false
+	var outcome := String(facts.get("outcome", ""))
+	match outcome:
+		"全滅":
+			if not _contains_any(text, ["全滅", "力尽き", "敗れ", "失われ"]):
+				return false
+		"生還":
+			if not _contains_any(text, ["生還", "守った", "救った", "倒した"]):
+				return false
+		_:
+			if outcome == "" or outcome not in text:
+				return false
+	return true
+
+
+static func _contains_any(text: String, words: Array[String]) -> bool:
+	for word in words:
+		if word in text:
+			return true
+	return false

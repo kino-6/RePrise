@@ -753,7 +753,7 @@ func _draw_status() -> void:
 		)).line(Terms.POISON, PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
 
 	var mastery := "★".repeat(m.mastery_rank()) + "☆".repeat(
-		maxi(Database.job(m.job_id).get("mastery", []).size() - m.mastery_rank(), 0)
+		maxi(PartyMember.max_rank_of(m.job_id) - m.mastery_rank(), 0)
 	)
 	# **値は行の右端で揃える。** ラベルから固定の位置に置くと、長いラベル
 	# （「しょくぎょうの 熟練」）が必ず値と重なった（実際に重なっていた）。

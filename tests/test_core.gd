@@ -2,6 +2,7 @@ extends SceneTree
 
 const ChestReward := preload("res://src/dungeon/chest_reward.gd")
 const ConfirmFlow := preload("res://src/game/confirm_flow.gd")
+const ChronicleAIText := preload("res://src/game/chronicle_ai.gd")
 
 ## 決定性の検証。
 ##
@@ -30,8 +31,10 @@ func _initialize() -> void:
 	_test_docs_hygiene()
 	_test_no_white_flash()
 	_test_single_ai_connection()
+	_test_chronicle_ai_fact_gate()
 	_test_cross_world_placements_wired()
 	_test_twelve_arcs_rotate()
+	_test_eight_stage_mastery()
 	_test_arc_endings_in_chronicle()
 	_test_data_integrity()
 	_test_save_migration()
@@ -87,6 +90,32 @@ func _check(label: String, condition: bool, detail: String = "") -> void:
 
 func _equal(label: String, actual: Variant, expected: Variant) -> void:
 	_check(label, actual == expected, "(実際: %s / 期待: %s)" % [actual, expected])
+
+
+func _test_chronicle_ai_fact_gate() -> void:
+	var facts := {
+		"outcome": "全滅",
+		"danger": 7,
+		"gold": 240,
+		"steps": 18,
+		"party": [],
+	}
+	_check(
+		"AI戦記は勝敗と戦績が一致すれば通る",
+		ChronicleAIText.matches_facts(PackedStringArray([
+			"一行は危険度7で力尽き、世界は失われた。",
+			"戦いで240ゴールドを獲得した。",
+			"遠征の記録だけが銀の砦へ戻った。",
+		]), facts)
+	)
+	_check(
+		"AI戦記は自然な文でも戦績が無ければ落ちる",
+		not ChronicleAIText.matches_facts(PackedStringArray([
+			"一行は城に包まれた。",
+			"最後の攻撃は届かなかった。",
+			"一人だけが砦へ戻った。",
+		]), facts)
+	)
 
 
 # --------------------------------------------------------------------------
@@ -363,6 +392,50 @@ func _test_arc_endings_in_chronicle() -> void:
 	_check("戦記が結末を受け取る", text.contains("cross_world_endings"))
 
 
+## 熟練が 8 段階になっても、古いセーブが壊れない（F-3）。
+##
+## **★1〜4 の必要値は動かしていない。** ここを動かすと、貯めた点の意味が
+## 変わって「段階が下がった」ように見える。段階を増やすときに
+## いちばんやってはいけないこと。
+func _test_eight_stage_mastery() -> void:
+	# 上限が伸びていること。
+	var ranks := {}
+	for entry in Database.job("soldier").get("mastery", []):
+		ranks[int((entry as Dictionary).get("rank", 0))] = true
+	_check("★6 の段階がある", ranks.has(6))
+	_check("★8 の段階がある", ranks.has(8))
+
+	# **古いセーブの点がそのままの段階を指すこと。**
+	var m := PartyMember.create("ためし", "soldier")
+	m.job_exp["soldier"] = 280   # 旧上限（★4）ちょうど
+	_equal("旧上限の点は今も ★4", m.mastery_rank("soldier"), 4)
+	_check("★4 では継承印はまだ", not m.has_inherit_sign("soldier"))
+	m.job_exp["soldier"] = 640
+	_equal("640 点で ★6", m.mastery_rank("soldier"), 6)
+	_check("★6 で継承印を得る", m.has_inherit_sign("soldier"))
+	_check("★6 ではまだマスターではない", not m.is_job_master("soldier"))
+	m.job_exp["soldier"] = 1220
+	_equal("1220 点で ★8", m.mastery_rank("soldier"), 8)
+	_check("★8 でマスター", m.is_job_master("soldier"))
+
+	# **一度就いた上位職は再び封鎖しない。** 条件を ★2 から ★4 へ上げたので、
+	# ここが無いと「前に就いていた職に戻れない」が起きる。
+	var old_hand := PartyMember.create("ふるて", "soldier")
+	old_hand.job_exp["paladin"] = 30     # 昔ちょっと就いていた
+	_check("就いたことがある職は開いたまま", old_hand.can_take_job("paladin"))
+	var rookie := PartyMember.create("しんまい", "soldier")
+	_check("就いたことが無ければ条件を見る", not rookie.can_take_job("paladin"))
+	rookie.job_exp["soldier"] = 280
+	rookie.job_exp["priest"] = 280
+	_check("両方 ★4 で開く", rookie.can_take_job("paladin"))
+
+	# 保存と復元。
+	var saved := m.to_dict()
+	var back := PartyMember.from_dict(saved)
+	_equal("復元しても ★8", back.mastery_rank("soldier"), 8)
+	_check("復元してもマスター", back.is_job_master("soldier"))
+
+
 ## 十二型が全部出て、同じ型が続かない（A-5）。
 ##
 ## 型を足しても、選出の条件（`min_runs_attempted` / `min_completed_arcs`）が
@@ -622,7 +695,10 @@ func _test_data_integrity() -> void:
 		if mastery.is_empty():
 			no_mastery.append(String(job_id))
 		for entry in mastery:
+			# 技を持たない段階（★6 継承印 / ★8 マスター）は技を指さない。
 			var ability_id := String(entry.get("ability", ""))
+			if ability_id == "":
+				continue
 			if Database.ability(ability_id).is_empty():
 				missing_ability.append("%s -> %s" % [job_id, ability_id])
 		for required in job.get("unlock", {}).keys():
@@ -2475,14 +2551,22 @@ func _test_database_loaded() -> void:
 	_equal("せんしの名前", Database.job("soldier").get("name", ""), "せんし")
 	_check("_comment が除かれている", not Database.jobs.has("_comment"))
 
-	# すべての職業の習得技が実在すること（データの綴り間違いは静かに壊れるので必ず検査）
+	# すべての職業の習得技が実在すること（データの綴り間違いは静かに壊れるので必ず検査）。
+	#
+	# **技を持たない段階もある**（F-3）。★6 の継承印と ★8 のマスターは技ではない。
+	# ただし**空報酬は認めない** ―― `ability` か `reward` のどちらかは必ず要る。
 	var missing := []
+	var empty_stage := []
 	for job_id in Database.job_ids():
 		for entry in Database.job(job_id).get("mastery", []):
 			var ability_id := String(entry.get("ability", ""))
-			if not Database.abilities.has(ability_id):
+			var reward := String(entry.get("reward", ""))
+			if ability_id == "" and reward == "":
+				empty_stage.append("%s ★%d" % [job_id, int(entry.get("rank", 0))])
+			elif ability_id != "" and not Database.abilities.has(ability_id):
 				missing.append("%s -> %s" % [job_id, ability_id])
 	_check("習得技がすべて実在する", missing.is_empty(), str(missing))
+	_check("段階を増やすだけの空報酬が無い", empty_stage.is_empty(), str(empty_stage))
 
 	# モンスターの技も同様
 	var bad_monster := []
