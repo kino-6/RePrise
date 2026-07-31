@@ -343,17 +343,35 @@ func dev_mode_name() -> String:
 ## 開発用。画面と階層をまとめた 1 行。自動プレイの記録に使う。
 ## 画面名だけだと「階を降りた」が記録に出てこない。
 func dev_status() -> String:
-	if _mode == Mode.EXPLORE or _mode == Mode.BATTLE or _mode == Mode.SHOP:
-		var place := "世界"
-		match String(GameState.site.get("kind", "")):
-			"town":
-				place = "町"
-			"cave":
-				place = "洞%d階" % int(GameState.site.get("floor", 1))
-			"castle":
-				place = "城"
-		return "%s %s 危険度%d" % [dev_mode_name(), place, GameState.floor_number]
+	# **戦闘中は開始時の場所を出す**（P-5）。
+	#
+	# `end_run()` がラン状態を危険度 1 へ戻したあとも画面はまだ主戦のままなので、
+	# 現在値を読むと `BATTLE 城 危険度10 → BATTLE 城 危険度1 → RESULT` と記録され、
+	# **「主戦中に場所が巻き戻った」と誤読できる**。プレイ本体の不具合ではないが、
+	# 証跡としては弱い。開始時に控えたものを、戦いが終わるまで出す。
+	if _mode == Mode.BATTLE and _battle_place != "":
+		return "%s %s 危険度%d" % [dev_mode_name(), _battle_place, _battle_danger]
+	if _mode == Mode.EXPLORE or _mode == Mode.SHOP:
+		return "%s %s 危険度%d" % [
+			dev_mode_name(), _place_name(), GameState.floor_number]
 	return dev_mode_name()
+
+
+## いま居る場所の呼び名（監査用）。
+func _place_name() -> String:
+	match String(GameState.site.get("kind", "")):
+		"town":
+			return "町"
+		"cave":
+			return "洞%d階" % int(GameState.site.get("floor", 1))
+		"castle":
+			return "城"
+	return "世界"
+
+
+## 戦闘を始めたときの場所と危険度（監査用の控え）。
+var _battle_place := ""
+var _battle_danger := 0
 
 
 ## 開発用。さいきょう装備を掛け直す。**自動プレイと装備画面で同じ処理を通す。**
@@ -1600,6 +1618,9 @@ func _apply_mode(mode: Mode) -> void:
 	else:
 		gear_offer.close()
 	# 遷移の中点で探索画面へ切り替わっても、覆いが完全に開くまでは動かさない。
+	# 戦いを離れたら監査用の控えを外す（P-5）。**戦闘中だけの値**。
+	if mode != Mode.BATTLE:
+		_battle_place = ""
 	explore.set_active(mode == Mode.EXPLORE and not _transition_input_locked)
 	# 保留していた装備をここで聞く（C-9）。歩ける状態になったので。
 	if mode == Mode.EXPLORE and not _pending_gear.is_empty():
@@ -2000,6 +2021,9 @@ func _on_boss_reached() -> void:
 
 
 func _begin_battle(foes: Array[Battler], is_boss: bool) -> void:
+	# 監査用に、始めた場所を控える（P-5）。
+	_battle_place = _place_name()
+	_battle_danger = GameState.floor_number
 	if foes.is_empty():
 		return
 	var members := GameState.active_party()
