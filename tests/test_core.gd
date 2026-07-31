@@ -37,6 +37,7 @@ func _initialize() -> void:
 	_test_eight_stage_mastery()
 	_test_signature_abilities()
 	_test_inherit_signs()
+	_test_upgrades_add_choices()
 	_test_turn_plates_stay_unique()
 	_test_arc_endings_in_chronicle()
 	_test_data_integrity()
@@ -428,6 +429,58 @@ func _test_turn_plates_stay_unique() -> void:
 	bar.free()
 
 
+## アップグレードは段ごとに**選択**を増やす（E-1）。
+##
+## それまでは「ゴールド +40」「やくそう +1」のように**数値を足すだけ**だった。
+## 段を上げても手強さが下がるだけで、**遊ぶ側の判断は 1 つも増えない** ――
+## 上げた人が楽になるだけの報酬になっていた。
+##
+## ここは「段を 1 つ上げたとき、選べるものが増えるか」を見る。
+## 増えなければ、その段は数値が増えただけということ。
+func _test_upgrades_add_choices() -> void:
+	_equal(
+		"役割が名前で分かる",
+		String(Database.upgrade("handmemory").get("name", "")),
+		"継承印の枠"
+	)
+	# 支給品の型は段ごとに増える。
+	_equal("0 段でも 1 つは選べる", RunChoice.supply_sets(0).size(), 1)
+	var grew := true
+	for level in range(0, 3):
+		if RunChoice.supply_sets(level + 1).size() <= RunChoice.supply_sets(level).size():
+			grew = false
+	_check("段を上げると支給品の型が増える", grew)
+
+	# 店の重点は 1 段目から開く。
+	_equal("0 段では棚を選べない", RunChoice.shop_focus(0).size(), 0)
+	_check("1 段で選べるようになる", RunChoice.shop_focus(1).size() >= 2)
+
+	# **全体として、段を上げるたびに選択が増える。**
+	var levels := {"provisions": 0, "connections": 0, "seal_lore": 0,
+		"lifeline": 0, "handmemory": 0}
+	var reader := func(id: String) -> int: return int(levels.get(id, 0))
+	var before := RunChoice.count_at(reader)
+	var stalled: Array[String] = []
+	for id in levels:
+		levels[id] = 1
+		var after := RunChoice.count_at(reader)
+		if after <= before:
+			stalled.append(String(id))
+		before = after
+	_check("どの強化も選択を増やす", stalled.is_empty(), str(stalled))
+
+	# **役割の重なりが無い。** 同じ effect を 2 つの強化が持っていたら、
+	# どちらを上げても同じことが起きる（実際に支給品が 3 つに割れていた）。
+	var effects := {}
+	var dup: Array[String] = []
+	for id in Database.upgrade_ids():
+		var effect := String(Database.upgrade(String(id)).get("effect", ""))
+		if effects.has(effect):
+			dup.append("%s / %s" % [effects[effect], id])
+		effects[effect] = id
+	_check("強化どうしで役割が重ならない", dup.is_empty(), str(dup))
+
+
 ## 継承印（E-2）。**★6 で開き、装着制で、常時発動ではない。**
 ##
 ## 設計文書が禁じているのは 2 つ ―― **恒久能力値の加算**（「上げた人が強い」だけに
@@ -456,7 +509,7 @@ func _test_inherit_signs() -> void:
 	# `GameState` はオートロードで headless から触れないので、判断は
 	# `InheritSign`（静的クラス）に置いてある。ここはそちらを見る。
 	_equal("基本は 1 枠", InheritSign.slots(0), 1)
-	_equal("手の記憶を極めると 2 枠", InheritSign.slots(InheritSign.SLOT_NEED), 2)
+	_equal("継承印の枠を広げると 2 枠", InheritSign.slots(InheritSign.SLOT_NEED), 2)
 	_equal("それ以上は増えない", InheritSign.slots(999), InheritSign.MAX_SLOTS)
 
 	var rookie := PartyMember.create("しんまい", "soldier")
@@ -2626,9 +2679,12 @@ func _test_run_rules() -> void:
 	_equal("綱を断つ誓約は命の綱を止める", state.lifeline_left, 0)
 	_check("制約下でも職業の初期装備は支給する",
 		not state.active_party()[0].equipment.is_empty())
-	# 駆け抜け 200% のあと、旅の手引き +30% / 手の記憶 +15%。
+	# 駆け抜け 200% のあと、旅の手引き +30%。
 	_equal("加速と強化で経験値が増える", state.run_exp_reward(100), 260)
-	_equal("加速と強化で熟練が増える", state.run_mastery_reward(100), 230)
+	# **熟練に強化の上乗せは無い**（E-1）。`継承印の枠` は「熟練が早く貯まる」
+	# という数値の報酬だったが、それは段を上げた人が楽になるだけで
+	# 判断が増えない。継承印の枠を開く役へ移した。加速のぶんだけが乗る。
+	_equal("加速で熟練が増える", state.run_mastery_reward(100), 200)
 	_equal("中断に出撃時の規律を残す",
 		state.to_suspend()["run_rules"], state.active_run_rules)
 

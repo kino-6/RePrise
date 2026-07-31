@@ -2,39 +2,30 @@
   "_comment": "拠点の恒久強化。能力値には触れない。立ち上がり・情報・保険・価格に加え、難度解放・誓約枠・周回加速・成長速度を伸ばす。高段階は単なる数値増加ではなく、新しい遊び方を解放する。",
   "provisions": {
     "name": "旅支度",
-    "desc": "出撃するとき ゴールドを持って出られる。",
-    "effect": "start_gold",
-    "value": 40,
+    "desc": "出撃するとき、支給品の型を選べる。段ごとに型が増える。",
+    "effect": "supply_sets",
+    "value": 1,
     "levels": 3,
     "cost": 6,
     "cost_step": 5
   },
   "handmemory": {
-    "name": "手の記憶",
-    "desc": "職業の熟練が 早く身につく。",
-    "effect": "mastery_gain",
-    "value": 15,
-    "levels": 3,
+    "name": "継承印の枠",
+    "desc": "持ち込める継承印が、1つから2つになる。",
+    "effect": "sign_slots",
+    "value": 1,
+    "levels": 1,
     "cost": 10,
     "cost_step": 8
   },
   "connections": {
     "name": "商いの伝手",
-    "desc": "道中の出店に 品が多く並ぶ。",
-    "effect": "shop_stock",
-    "value": 1,
-    "levels": 2,
-    "cost": 12,
-    "cost_step": 10
-  },
-  "preparation": {
-    "name": "備え",
-    "desc": "出撃するとき やくそうを持って出られる。",
-    "effect": "start_herb",
+    "desc": "出撃前に、店で厚くする棚を選べる。段ごとに選べる棚が増える。",
+    "effect": "shop_focus",
     "value": 1,
     "levels": 3,
-    "cost": 8,
-    "cost_step": 6
+    "cost": 12,
+    "cost_step": 10
   },
   "seal_lore": {
     "name": "封の言い伝え",
@@ -56,10 +47,10 @@
   },
   "haggle": {
     "name": "商いの目",
-    "desc": "みせの 品が やすく 買える。",
-    "effect": "price_cut",
-    "value": 10,
-    "levels": 3,
+    "desc": "店ごとに 2 つの取り引きが出て、どちらかを選べる。",
+    "effect": "shop_deal",
+    "value": 1,
+    "levels": 2,
     "cost": 11,
     "cost_step": 9
   },
@@ -98,14 +89,5 @@
     "levels": 3,
     "cost": 12,
     "cost_step": 10
-  },
-  "spirit_flask": {
-    "name": "霊水の瓶",
-    "desc": "出撃するとき まほうの水を持って出られる。",
-    "effect": "start_water",
-    "value": 1,
-    "levels": 2,
-    "cost": 10,
-    "cost_step": 12
   }
 }

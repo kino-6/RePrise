@@ -436,11 +436,14 @@ func _apply_upgrades_to_run() -> void:
 		else upgrade_value("lifeline")
 	)
 	if not run_contract_enabled("empty_pack"):
-		gold = upgrade_value("start_gold")
-		var herbs := upgrade_value("start_herb")
+		# **支給品は「選んだ型」で決まる**（E-1）。段が上がると型が増えるので、
+		# 上げた見返りは「量」ではなく「選べる幅」になる。
+		var set_row := RunChoice.supply_set(supply_set_id)
+		gold = int(set_row.get("gold", 0))
+		var herbs := int(set_row.get("herb", 0))
 		if herbs > 0:
 			add_item("herb", herbs)
-		var waters := upgrade_value("start_water")
+		var waters := int(set_row.get("water", 0))
 		if waters > 0:
 			add_item("water", waters)
 
@@ -958,10 +961,49 @@ func upgrade_value(effect: String) -> int:
 ##   * ★6 は構成が開く節目、★8 は職業マスター。役割を分ける。
 var inherit_signs: Array[String] = []
 
+## 出撃時に選んだもの（E-1）。**数値ではなく選択が報酬**なので、
+## 何を選んだかがランの性格になる。
+var supply_set_id := "coin"
+var shop_focus_id := ""
+
+
+## 選べる支給品の型（いまの段で）。
+func supply_sets() -> Array[Dictionary]:
+	return RunChoice.supply_sets(upgrade_level("provisions"))
+
+
+## 支給品の型を選ぶ。**選べない型は拒む。**
+func set_supply_set(id: String) -> bool:
+	for row in supply_sets():
+		if String(row["id"]) == id:
+			supply_set_id = id
+			save_game()
+			return true
+	return false
+
+
+## 選べる店の重点（いまの段で）。
+func shop_focuses() -> Array[Dictionary]:
+	return RunChoice.shop_focus(upgrade_level("connections"))
+
+
+## 店の重点を選ぶ（空文字は「指定しない」）。
+func set_shop_focus(id: String) -> bool:
+	if id == "":
+		shop_focus_id = ""
+		save_game()
+		return true
+	for row in shop_focuses():
+		if String(row["id"]) == id:
+			shop_focus_id = id
+			save_game()
+			return true
+	return false
+
 
 ## 持ち込める枠の数。判断は `InheritSign`（headless から確かめられる場所）。
 func inherit_slots() -> int:
-	return InheritSign.slots(upgrade_value("mastery_gain"))
+	return InheritSign.slots(upgrade_value("sign_slots"))
 
 
 ## 出撃メンバーの誰かが ★6 に届いている職（＝選べる印）。
@@ -974,7 +1016,7 @@ func set_inherit_sign(slot: int, job_id: String) -> bool:
 	while inherit_signs.size() < inherit_slots():
 		inherit_signs.append("")
 	if not InheritSign.can_choose(
-		inherit_signs, slot, job_id, active_party(), upgrade_value("mastery_gain")
+		inherit_signs, slot, job_id, active_party(), upgrade_value("sign_slots")
 	):
 		return false
 	inherit_signs[slot] = job_id
@@ -990,7 +1032,7 @@ func has_sign(job_id: String) -> bool:
 ## 枠や解放に合わなくなったぶんを空ける。**詰めない。**
 func prune_inherit_signs() -> int:
 	return InheritSign.prune(
-		inherit_signs, active_party(), upgrade_value("mastery_gain"))
+		inherit_signs, active_party(), upgrade_value("sign_slots"))
 
 
 # --------------------------------------------------------------------------
@@ -1126,7 +1168,9 @@ func run_exp_reward(base_value: int) -> int:
 func run_mastery_reward(base_value: int) -> int:
 	var value := RunRules.scaled_value(
 		base_value, RunRules.growth_percent(run_rule_config(), "mastery"))
-	return RunRules.scaled_value(value, 100 + upgrade_value("mastery_gain"))
+	# **強化の上乗せは無い**（E-1）。熟練を早く貯める強化は「上げた人が楽になる」
+	# だけで判断が増えないので、`継承印の枠` は印の2枠目を開く役へ移した。
+	return RunRules.scaled_value(value, 100)
 
 
 func apply_run_difficulty(foes: Array[Battler]) -> void:
@@ -1383,6 +1427,8 @@ func to_dict() -> Dictionary:
 		"echo": echo,
 		"upgrades": upgrades,
 		"inherit_signs": inherit_signs,
+		"supply_set": supply_set_id,
+		"shop_focus": shop_focus_id,
 		"run_rules": run_rule_choices,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
 		"active": active_indices,
@@ -1409,6 +1455,8 @@ func load_from_dict(data: Dictionary) -> bool:
 	echo = int(data.get("echo", 0))
 	# 古いセーブに印は無い。**空で始める**（解放そのものは熟練から引くので失われない）。
 	inherit_signs.assign(data.get("inherit_signs", []))
+	supply_set_id = String(data.get("supply_set", "coin"))
+	shop_focus_id = String(data.get("shop_focus", ""))
 	upgrades = data.get("upgrades", {})
 	var raw_rules: Variant = data.get("run_rules", RunRules.default_config())
 	run_rule_choices = (

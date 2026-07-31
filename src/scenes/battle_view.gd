@@ -720,7 +720,7 @@ func _resolve_outcome() -> void:
 		for item_id in reward.get("items", []):
 			GameState.add_item(String(item_id))
 
-		# 旅の速さと「手の記憶」を一つの入口で掛ける。
+		# 旅の速さによる熟練補正を一つの入口で掛ける。
 		var mastery := GameState.run_mastery_reward(int(reward["mastery"]))
 
 		for m in members:

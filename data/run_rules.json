@@ -1,6 +1,11 @@
 {
   "_comment": "出撃ごとの難しさ・加速・誓約。乱数ではなく、プレイヤーが拠点で明示的に選ぶ。強い制約ほど恒久報酬を増やし、加速は周回時間と報酬量を交換する。",
-  "difficulty_order": ["gentle", "standard", "harsh", "ruin"],
+  "difficulty_order": [
+    "gentle",
+    "standard",
+    "harsh",
+    "ruin"
+  ],
   "difficulties": {
     "gentle": {
       "name": "ひかえめ",
@@ -35,7 +40,11 @@
       "unlock": 2
     }
   },
-  "pace_order": ["steady", "brisk", "sprint"],
+  "pace_order": [
+    "steady",
+    "brisk",
+    "sprint"
+  ],
   "paces": {
     "steady": {
       "name": "じっくり",
@@ -62,7 +71,12 @@
       "unlock": 2
     }
   },
-  "contract_order": ["closed_market", "empty_pack", "no_escape", "no_lifeline"],
+  "contract_order": [
+    "closed_market",
+    "empty_pack",
+    "no_escape",
+    "no_lifeline"
+  ],
   "contracts": {
     "closed_market": {
       "name": "商人なき旅",
@@ -71,9 +85,11 @@
     },
     "empty_pack": {
       "name": "空身の誓い",
-      "desc": "強化による初期金と初期道具を受け取らない。資源 +20%。",
+      "desc": "支給品を受け取らない。資源 +20%。",
       "reward_bonus": 20,
-      "requires_any_effect": ["start_gold", "start_herb", "start_water"]
+      "requires_any_effect": [
+        "supply_sets"
+      ]
     },
     "no_escape": {
       "name": "退路を断つ",
@@ -84,7 +100,9 @@
       "name": "綱を断つ",
       "desc": "命の綱を持ち込めない。持ち帰る資源に +15%。",
       "reward_bonus": 15,
-      "requires_any_effect": ["lifeline"]
+      "requires_any_effect": [
+        "lifeline"
+      ]
     }
   }
 }
