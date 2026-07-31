@@ -93,18 +93,84 @@ static func build(
 
 ## イベントで「手強い戦い」と明示された編成。
 ## 通常遭遇をそのまま出すと選択肢の危険表示が嘘になるため、能力を25%上げる。
+## 格上の敵の型。**1 つずつ違うルールを変える。**
+##
+## 前は全能力を一律 1.25 倍していただけだった。それは「強い」だけで
+## **違う戦いにはならない** ―― 技の側で「同じ役割で数値違い」を
+## `check_abilities.py` が落としているのに、敵の側では素通りしていた。
+##
+## 主で採ったのと同じ筋（行動回数で釣り合わせる）を、型ごとに 1 つだけ変える。
+## 倍率は**控えめ**にする ―― ルールが効くのであって、数値で殴るのではない。
+const ELITE_KINDS := [
+	{
+		"id": "vanguard", "name": "せんぽう",
+		"rule": "先に動く。開幕の一手を取られる。",
+	},
+	{
+		"id": "warden", "name": "まもりて",
+		"rule": "仲間をかばう。先に本体を崩さないと通らない。",
+	},
+	{
+		"id": "mirror", "name": "うつしみ",
+		"rule": "受けた傷を返す。大技ほど返ってくる。",
+	},
+	{
+		"id": "herald", "name": "つげしらせ",
+		"rule": "大技を溜める。雷で中断できる。",
+	},
+	{
+		"id": "siphon", "name": "すいとり",
+		"rule": "魔力を吸う。長引くほど技が撃てなくなる。",
+	},
+]
+
+## 格上の能力倍率。**ルールで作るので、数値は控えめに。**
+const ELITE_STAT_PERCENT := 112
+
+
 static func build_elite(
 	rng: DetRng, floor_number: int, first_id: int = 100, biome: String = ""
 ) -> Array[Battler]:
 	var result := build(rng, floor_number, first_id, biome)
+	if result.is_empty():
+		return result
+	# 型は**その戦いに 1 つ**。群れ全部が別のルールを持つと、何が起きているか
+	# 読めなくなる（読めない強さは、強いのではなく理不尽になる）。
+	var kind: Dictionary = ELITE_KINDS[rng.range_i(0, ELITE_KINDS.size() - 1)]
+	var leader := result[0]
+	leader.name = "%s %s" % [String(kind["name"]), leader.name]
+	leader.elite_rule = String(kind["id"])
 	for foe in result:
-		foe.name = "強敵 %s" % foe.name
-		foe.max_hp = maxi(foe.max_hp * 125 / 100, 1)
+		foe.max_hp = maxi(foe.max_hp * ELITE_STAT_PERCENT / 100, 1)
 		foe.hp = foe.max_hp
-		foe.atk = maxi(foe.atk * 125 / 100, 1)
-		foe.mag = maxi(foe.mag * 125 / 100, 1)
-		foe.defense = maxi(foe.defense * 125 / 100, 1)
+		foe.atk = maxi(foe.atk * ELITE_STAT_PERCENT / 100, 1)
+		foe.mag = maxi(foe.mag * ELITE_STAT_PERCENT / 100, 1)
+		foe.defense = maxi(foe.defense * ELITE_STAT_PERCENT / 100, 1)
+	_apply_elite_rule(leader, result)
 	return result
+
+
+## 型ごとのルールを 1 つだけ効かせる。**能力値では作らない。**
+static func _apply_elite_rule(leader: Battler, group: Array[Battler]) -> void:
+	match leader.elite_rule:
+		"vanguard":
+			# 先に動く。開幕の一手を取られるので、構えてから殴る手が要る。
+			leader.cost_scale = maxi(leader.cost_scale * 65 / 100, 20)
+		"warden":
+			# 仲間をかばう。**本体を崩す順**が問われる。
+			for foe in group:
+				if foe != leader:
+					foe.protected_by = leader
+		"mirror":
+			# 受けた傷を返す。大技ほど返るので、削り方を変えることになる。
+			leader.counter_turns = 99
+		"herald":
+			# 大技を溜める。雷（中断）が答えになる ―― F-5 で属性に与えた役割が、
+			# ここで初めて「答えのある問い」になる。
+			leader.planned_ability = "power_slash"
+		"siphon":
+			# 魔力を吸う。長引くほど技が撃てなくなるので、速く決める線が生まれる。
+			leader.attack_element = "dark"
 
 
 ##

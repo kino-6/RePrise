@@ -73,6 +73,9 @@ var charged: bool = false
 var rune_turns: int = 0
 var tamed: bool = false
 
+## 格上の型（`Encounter.ELITE_KINDS` の id）。空なら通常の敵。
+var elite_rule: String = ""
+
 ## ★7・8 の奥義が戦場へ残す、戦闘中だけの印（F-6b）。
 ##
 ## View に状態を持たせるとオートと手動で結果が割れるため、被弾の成立条件は

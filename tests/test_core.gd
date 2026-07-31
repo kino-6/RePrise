@@ -39,6 +39,7 @@ func _initialize() -> void:
 	_test_inherit_signs()
 	_test_sign_effects()
 	_test_reward_reachability()
+	_test_elite_rules()
 	_test_upgrades_add_choices()
 	_test_turn_plates_stay_unique()
 	_test_town_layouts_differ()
@@ -468,6 +469,52 @@ func _test_turn_plates_stay_unique() -> void:
 			kept += 1
 	_equal("識別子が札に残る", kept, suffixed)
 	bar.free()
+
+
+## 格上の敵は**ルールを変える**（数値倍率だけにしない）。
+##
+## 前は全能力を一律 1.25 倍していただけだった。それは「強い」だけで
+## **違う戦いにはならない** ―― 技の側で「同じ役割で数値違い」を
+## `check_abilities.py` が落としているのに、敵の側では素通りしていた。
+##
+## **読めない強さは、強いのではなく理不尽になる。** 型はその戦いに 1 つだけ。
+func _test_elite_rules() -> void:
+	var rules := {}
+	var unwired: Array[String] = []
+	var source := FileAccess.get_file_as_string("res://src/battle/encounter.gd")
+	for kind in Encounter.ELITE_KINDS:
+		var id := String((kind as Dictionary).get("id", ""))
+		rules[id] = true
+		_check("%s に説明がある" % id, String((kind as Dictionary).get("rule", "")) != "")
+		# **実装まで見る。** 表に在るだけでは効かない。
+		if not source.contains('"%s":' % id):
+			unwired.append(id)
+	_check("型のルールが重ならない", rules.size() == Encounter.ELITE_KINDS.size())
+	_check("すべての型が実装へ繋がっている", unwired.is_empty(), str(unwired))
+
+	# **数値倍率だけで作らない。** 倍率は控えめで、差はルールで付ける。
+	_check(
+		"能力の倍率は控えめ", Encounter.ELITE_STAT_PERCENT <= 120,
+		"(%d%%)" % Encounter.ELITE_STAT_PERCENT
+	)
+
+	# **型はその戦いに 1 つ。** 群れ全部が別のルールを持つと読めなくなる。
+	var seen := {}
+	for seed_value in range(1, 40):
+		var foes := Encounter.build_elite(
+			DetRng.new(seed_value).fork("elite"), 6, 100, "")
+		if foes.is_empty():
+			continue
+		var marked := 0
+		for foe in foes:
+			if foe.elite_rule != "":
+				marked += 1
+				seen[foe.elite_rule] = true
+		_equal("型を持つのは 1 体だけ", marked, 1)
+	_check(
+		"多数の種で全部の型が出る", seen.size() == Encounter.ELITE_KINDS.size(),
+		"(%d / %d 型)" % [seen.size(), Encounter.ELITE_KINDS.size()]
+	)
 
 
 ## 成長報酬が「到達できて、効く」（E-3）。
