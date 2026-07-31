@@ -552,7 +552,16 @@ func escape_odds() -> int:
 	var theirs := 0
 	for b in system.living_enemies():
 		theirs += b.effective_agi()
-	return clampi(45 + (ours - theirs) * 2, 15, 92)
+	var odds := 45 + (ours - theirs) * 2
+	# 煙幕。**`けむりだま` は逃げるための技**（F-2）。鈍らせるだけなら
+	# `ときとまれ` の下位互換になり、片方が飾りになる。
+	if system.smoke_screen:
+		odds += SMOKE_ESCAPE_BONUS
+	return clampi(odds, 15, 92)
+
+
+## 煙幕が上げる逃走率。
+const SMOKE_ESCAPE_BONUS := 30
 
 
 func _try_escape() -> void:

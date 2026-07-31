@@ -52,8 +52,9 @@ func ask(prompt: String, timeout: float = 8.0, label: String = "") -> bool:
 		# Qwen3 系は既定で思考ブロックを吐き、num_predict を思考だけで使い切って
 		# 本文が空で返ってくる。思考は要らないので切る。
 		"think": false,
-		# 文体を安定させる。毎回まったく違う調子になると記録に見えない。
-		"options": {"temperature": 0.7, "num_predict": 320},
+		# 文章の揺れを抑える。表層の差は必要だが、比喩と文体まで毎回変えると
+		# NPC や記録が別作品の文章に見える。
+		"options": {"temperature": 0.35, "num_predict": 320},
 	})
 	var error := _request.request(URL, ["Content-Type: application/json"], HTTPClient.METHOD_POST, body)
 	if error != OK:

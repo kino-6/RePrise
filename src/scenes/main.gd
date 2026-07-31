@@ -989,12 +989,13 @@ func _open_cross_world_choice(beat: Dictionary) -> void:
 	_cross_world_open = true
 	event_view.open({
 		"story": true,
-		"skin": {
-			"title": GameState.cross_world_title(),
-			"actor": String(GameState.cross_world.get("skin", {}).get("anchor_name", "")),
-			"cause": GameState.cross_world_line(beat),
-			"flavor": "",
-		},
+			"skin": {
+				"title": GameState.cross_world_title(),
+				# 横断ビートも人物の発話ではなく、出来事を要約する地の文。
+				"actor": "",
+				"cause": GameState.cross_world_line(beat),
+				"flavor": "",
+			},
 		"choices": choices,
 	}, GameState.floor_number)
 	event_view.set_blocked([])
@@ -1020,14 +1021,16 @@ func _on_cross_world_choice(choice: Dictionary) -> void:
 ## **構造は渡すが、決めさせない。** 封の数も帯も既に確定していて、
 ## AI が書くのは名と一文だけ。数を書かせないと明示するのは、
 ## 書いてきたものを `QuestText` が落とすより先に、そもそも書かせないため。
-const QUEST_PROMPT := """あなたは SFC 期の日本語 RPG の名づけ役です。
+const QUEST_PROMPT := """あなたは現代の日本語RPGを担当するゲームライターです。
 次の「封」に、名前と一文を付けてください。
 
 %s
 
 制約:
-- 名前は 10 文字以内。ひらがな主体で、漢字は易しいものだけ。
-- 一文は 34 文字以内。その封が城の主を守っている理由を書く。
+- 名前は10文字以内。地形や材質が想像できる具体的な名詞を使う。
+- 一文は34文字以内。誰が、何を使い、どう守っているかを書く。
+- 雰囲気だけの比喩、意味深な独り言、説明のない抽象語を使わない。
+- 自然で簡潔な現代日本語にする。古風な語尾や不自然な空白を使わない。
 - **数字を書かない。** 英字を書かない。記号・箇条書き・思考過程を書かない。
 - 他社の作品に出てくる固有名詞を使わない。
 - JSON だけを返す: {"seals":[{"name":"…","why":"…"},…3つ]}
@@ -1214,13 +1217,18 @@ func _ask_quest_text() -> void:
 
 ## イベントの表層を AI に頼む。**構造は渡さない**（id・選択肢・数値は含めない）。
 ## `WorldEventCatalog.facts_for_ai()` が既にそこまで削ってある。
-const EVENT_PROMPT := """あなたは SFC 期の日本語 RPG の名づけ役です。
+const EVENT_PROMPT := """あなたは現代の日本語RPGを担当するゲームライターです。
 次の出来事に、題・関係者・原因・情景を付けてください。
 
 %s
 
 制約:
-- それぞれ指定の文字数以内。ひらがな主体で、漢字は易しいものだけ。
+- それぞれ指定の文字数以内。自然で簡潔な現代日本語にする。
+- actorは職業や立場が分かる人物名詞にする。
+- causeは原因となった主体と行動を一文で具体的に書く。
+- flavorは現場で見える物、聞こえる音、匂いのどれかを具体的に書く。
+- 雰囲気だけの比喩、意味深な独り言、説明のない抽象語を使わない。
+- 古風な語尾、不自然な空白、三点リーダーを使わない。
 - **数字を書かない。** 英字を書かない。記号・箇条書き・思考過程を書かない。
 - 他社の作品に出てくる固有名詞を使わない。
 - JSON だけを返す: {"title":"…","actor":"…","cause":"…","flavor":"…"}

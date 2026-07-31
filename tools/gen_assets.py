@@ -2075,6 +2075,10 @@ def _report_hero_similarity(sheets: dict, baselines: dict | None = None) -> None
     )
     for iou, gap, a, b in pairs:
         print("    %-13s %-13s 重なり %.3f（色の距離 %.1f）" % (a, b, iou, gap))
+    raise ValueError(
+        "職業の輪郭が近すぎる組が %d 組ある（基準 %.2f 未満へ描き分ける）"
+        % (len(pairs), MAX_HERO_FEATURE_IOU)
+    )
 
 
 def _ink_ratio(c: Canvas) -> float:
@@ -2948,5 +2952,22 @@ def main() -> None:
         print(f"  {p.relative_to(ROOT)}")
 
 
+def _run_broken_hero_gate() -> None:
+    """輪郭Gateの違反fixture。同じ輪郭を2職へ入れ、終了コード1にする。"""
+    baselines: dict = {}
+    for job in HERO_ACCENTS:
+        source = _load_sheet(f"candidate_hero_{job}", HERO_SHEET_SIZE)
+        if source is None:
+            raise ValueError(f"違反fixtureに必要な hero_{job} が無い")
+        baselines[job] = _prepare_hero_sheet(job, source)
+    broken = dict(baselines)
+    broken["spellblade"] = baselines["paladin"]
+    _report_hero_similarity(broken, baselines)
+    raise RuntimeError("違反fixtureを輪郭Gateが見逃した")
+
+
 if __name__ == "__main__":
-    main()
+    if "--broken-hero-gate" in sys.argv:
+        _run_broken_hero_gate()
+    else:
+        main()

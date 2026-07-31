@@ -41,9 +41,9 @@
   },
   "whirlwind": {
     "name": "つむじぎり",
-    "desc": "敵 1 グループを薙ぐ。数が少ないほど よく効く。",
+    "desc": "敵全体を薙ぐ。重いが、群れごと巻き込む。",
     "kind": "physical",
-    "target": "group_enemy",
+    "target": "all_enemies",
     "menu": "skill",
     "cost": 165,
     "mp": 3,
@@ -51,13 +51,13 @@
   },
   "double_slash": {
     "name": "れんげき",
-    "desc": "3 回続けて斬る。1 発は軽い。",
+    "desc": "三度 斬りつける。重いが、まとめて入る。",
     "kind": "physical",
     "target": "one_enemy",
     "menu": "skill",
     "cost": 150,
     "mp": 3,
-    "power": 62,
+    "power": 72,
     "hits": 3
   },
   "heal": {
@@ -233,24 +233,25 @@
   },
   "smoke": {
     "name": "けむりだま",
-    "desc": "敵全体の動きを鈍らせる。",
+    "desc": "煙で目をくらます。鈍らせ、逃げやすくなる。",
     "kind": "debuff",
     "target": "all_enemies",
     "menu": "skill",
     "cost": 90,
     "mp": 5,
     "power": 0,
-    "effect": "slow"
+    "effect": "slow_and_flee"
   },
   "assassinate": {
     "name": "ひっさつ",
-    "desc": "一点を突く。非常に重い。",
+    "desc": "弱った相手にとどめを刺す。手負いほど深く入る。",
     "kind": "physical",
     "target": "one_enemy",
     "menu": "skill",
     "cost": 165,
     "mp": 8,
-    "power": 240
+    "power": 150,
+    "effect": "execute"
   },
   "lull": {
     "name": "ネブラ",
@@ -340,13 +341,14 @@
   },
   "beast_fang": {
     "name": "けもののきば",
-    "desc": "獣を放って 1 グループを噛ませる。",
+    "desc": "牙を立てる。傷が残り、毒のように蝕む。",
     "kind": "physical",
     "target": "group_enemy",
     "menu": "skill",
     "cost": 145,
     "mp": 2,
-    "power": 105
+    "power": 105,
+    "effect": "poison"
   },
   "play": {
     "name": "あそぶ",
@@ -383,14 +385,14 @@
   },
   "time_stop": {
     "name": "ときとまれ",
-    "desc": "敵全体の行動を鈍らせ、自分を速める。",
+    "desc": "敵全体の動きを鈍らせ、そのぶん自分が先に動く。",
     "kind": "debuff",
     "target": "all_enemies",
     "menu": "spell",
     "cost": 170,
     "mp": 12,
     "power": 0,
-    "effect": "slow"
+    "effect": "slow_and_haste_self"
   },
   "beast_roar": {
     "name": "じゅうのほうこう",
@@ -417,13 +419,13 @@
   },
   "wild_card": {
     "name": "きまぐれ",
-    "desc": "敵 1 グループに何かが起きる。とても軽い。",
+    "desc": "三つの出目から ましなものを選ぶ。敵 1 グループへ。",
     "kind": "special",
     "target": "group_enemy",
     "menu": "skill",
     "cost": 75,
     "mp": 2,
     "power": 0,
-    "effect": "random"
+    "effect": "random_pick"
   }
 }

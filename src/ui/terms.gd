@@ -205,6 +205,31 @@ static var RUN_ABANDON_CHRONICLE := Vocabulary.word(
 
 # --- 任意イベント ---
 static var EVENT_CLOSE := Vocabulary.word("terms", "event_close", "Ｚで とじる")
+static var EVENT_CLOSE_CHOICE := Vocabulary.word(
+	"terms", "event_close_choice", "とじる"
+)
+static var EVENT_OTHER_COUNT := Vocabulary.word(
+	"terms", "event_other_count", "ほか%d"
+)
+static var EVENT_STORY_COST := Vocabulary.word(
+	"terms", "event_story_cost", "代償"
+)
+static var EVENT_STORY_KEEP := Vocabulary.word(
+	"terms", "event_story_keep", "守る"
+)
+static var EVENT_STORY_LOSE := Vocabulary.word(
+	"terms", "event_story_lose", "失う"
+)
+static var EVENT_PAY := Vocabulary.word("terms", "event_pay", "代償")
+static var EVENT_RISK := Vocabulary.word("terms", "event_risk", "危険")
+static var EVENT_GAIN := Vocabulary.word("terms", "event_gain", "得る")
+static var EVENT_MISSING := Vocabulary.word("terms", "event_missing", "不足")
+static var EVENT_CONTINUE := Vocabulary.word(
+	"terms", "event_continue", "Ｚで つづける"
+)
+static var EVENT_CONFIRM_HINT := Vocabulary.word(
+	"terms", "event_confirm_hint", "Ｚ 決定　Ｘ 見送る"
+)
 static var EVENT_DEFER_SUMMARY := Vocabulary.word(
 	"terms", "event_defer_summary", "保留 → 再訪できる"
 )

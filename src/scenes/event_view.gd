@@ -54,7 +54,9 @@ func open_story(beat: Dictionary, story: Dictionary, danger_here: int) -> void:
 		"story": true,
 		"skin": {
 			"title": String(story.get("skin", {}).get("title", "")),
-			"actor": String(story.get("skin", {}).get("anchor_name", "")),
+			# 本文は人物の発話ではなく、出来事を要約する地の文。
+			# 人物名を話者欄へ出すと、三人称の文を本人が話しているように見える。
+			"actor": "",
 			"cause": String(beat.get("line", "")),
 			"flavor": "",
 		},
@@ -74,7 +76,12 @@ func open_outcome(title: String, lines: Array[String], danger_here: int) -> void
 	open({
 		"outcome": true,
 		"skin": {"title": title, "actor": "", "cause": "　".join(body), "flavor": ""},
-		"choices": [{"label": "とじる", "costs": [], "risks": [], "rewards": []}],
+		"choices": [{
+			"label": Terms.EVENT_CLOSE_CHOICE,
+			"costs": [],
+			"risks": [],
+			"rewards": [],
+		}],
 	}, danger_here)
 
 
@@ -208,7 +215,14 @@ func _summary(choice: Dictionary) -> String:
 	# 物語の手は数値を持たない。守るものだけを添える。
 	if bool(event.get("story", false)):
 		var keeps := String(choice.get("keeps", ""))
-		return "" if keeps == "" else PixelUI.clip("のこす: %s" % keeps, 286.0, PixelUI.SIZE_SUB)
+		return (
+			"" if keeps == ""
+			else PixelUI.clip(
+				"%s: %s" % [Terms.EVENT_STORY_KEEP, keeps],
+				286.0,
+				PixelUI.SIZE_TEXT
+			)
+		)
 	var pay := _tokens(choice.get("costs", []), "cost")
 	var gains: Array = choice.get("rewards", [])
 	var count := 0
@@ -217,8 +231,12 @@ func _summary(choice: Dictionary) -> String:
 			count += 1
 	var got := Terms.NONE if count == 0 else _first_token(gains, "reward")
 	if count > 1:
-		got += " ほか%d" % (count - 1)
-	return PixelUI.clip("%s → %s" % [pay if pay != "" else Terms.NONE, got], 286.0, PixelUI.SIZE_SUB)
+		got += " " + Terms.EVENT_OTHER_COUNT % (count - 1)
+	return PixelUI.clip(
+		"%s → %s" % [pay if pay != "" else Terms.NONE, got],
+		286.0,
+		PixelUI.SIZE_TEXT
+	)
 
 
 func _first_token(list: Array, kind: String) -> String:
@@ -259,9 +277,9 @@ func _draw_detail() -> void:
 	# 物語の拍は、払う・失う・のこす を文で出す（トークンではない）。
 	if bool(event.get("story", false)):
 		var rows := [
-			["はらう", String(c.get("pays", ""))],
-			["のこす", String(c.get("keeps", ""))],
-			["手ばなす", String(c.get("loses", ""))],
+			[Terms.EVENT_STORY_COST, String(c.get("pays", ""))],
+			[Terms.EVENT_STORY_KEEP, String(c.get("keeps", ""))],
+			[Terms.EVENT_STORY_LOSE, String(c.get("loses", ""))],
 		]
 		var shown := 0
 		for row in rows:
@@ -269,12 +287,13 @@ func _draw_detail() -> void:
 				continue
 			_detail(origin, shown * 18).line(
 				"%s: %s" % [row[0], row[1]],
-				PixelUI.C_HP_LOW if row[0] == "手ばなす" else PixelUI.C_TEXT,
-				PixelUI.SIZE_SUB
+				PixelUI.C_HP_LOW if row[0] == Terms.EVENT_STORY_LOSE else PixelUI.C_TEXT,
+				PixelUI.SIZE_TEXT
 			)
 			shown += 1
 		if shown == 0:
-			_detail(origin, 0).line("Ｚで つづける", PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+			_detail(origin, 0).line(
+				Terms.EVENT_CONTINUE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 		return
 
 	if bool(c.get("defer", false)):
@@ -288,23 +307,30 @@ func _draw_detail() -> void:
 	# **左右に割らず、行で分ける。** 半分の幅（242px）だと 14px の漢字が入らず、
 	# 12px へ下げると潰れる（D-5）。縦に 1 行使うほうが読める。
 	_detail(origin, 0).row(
-		"はらう: %s" % [
+		"%s: %s" % [Terms.EVENT_PAY,
 			_tokens(c.get("costs", []), "cost")
 			if not c.get("costs", []).is_empty() else Terms.NONE
 		],
-		"あぶない: %s" % [risks if risks != "" else Terms.NONE],
+		"%s: %s" % [Terms.EVENT_RISK, risks if risks != "" else Terms.NONE],
 		PixelUI.C_TEXT_DIM,
 		PixelUI.C_HP_LOW if risks != "" else PixelUI.C_TEXT_DIM
 	)
 	# 代価と報酬は data 側の語（漢字を含む）。**14px より下げない**（D-5）。
 	_detail(origin, 18).line(
-		"もらう: %s" % [_tokens(c.get("rewards", []), "reward")], PixelUI.C_TEXT)
+		"%s: %s" % [
+			Terms.EVENT_GAIN, _tokens(c.get("rewards", []), "reward")
+		],
+		PixelUI.C_TEXT
+	)
 	# 払えないときは、その理由を最優先で出す。
 	if not _blocked.is_empty():
 		_detail(origin, 38).line(
-			"たりない: %s" % "・".join(_blocked), PixelUI.C_HP_LOW, PixelUI.SIZE_SUB)
+			"%s: %s" % [Terms.EVENT_MISSING, "・".join(_blocked)],
+			PixelUI.C_HP_LOW,
+			PixelUI.SIZE_TEXT
+		)
 		return
-	_detail(origin, 38).line("Ｚで きめる　Ｘで 見送る", PixelUI.C_TEXT_DIM)
+	_detail(origin, 38).line(Terms.EVENT_CONFIRM_HINT, PixelUI.C_TEXT_DIM)
 
 
 ## 払えない理由を外から入れる（GameState を知らないので自分では調べない）。

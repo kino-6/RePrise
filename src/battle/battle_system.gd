@@ -216,7 +216,12 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 
 	match kind:
 		"physical", "magical":
-			lines.append_array(_strike(actor, ab, targets, power, kind == "magical"))
+			# **成立条件を持つ一撃は別経路**（F-2）。`ひっさつ` は残り体力で
+			# 効き目が変わるので、素の打撃と同じ式では作れない。
+			if String(ab.get("effect", "")) == "execute" and not targets.is_empty():
+				lines.append_array(_execute_blow(actor, targets[0], ab))
+			else:
+				lines.append_array(_strike(actor, ab, targets, power, kind == "magical"))
 		"heal":
 			for t in targets:
 				if String(ab.get("target", "")) == "one_ally_dead":
@@ -377,6 +382,18 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 		lines.append("%sは　みをまもっている" % actor.name)
 		return lines
 
+	# **「鈍らせる」に何が付いてくるか**（F-2）。相手への効果は下の輪で、
+	# 使い手の側に起きることはここで 1 回だけ。
+	if effect == "slow_and_haste_self":
+		actor.agi_scale = 150
+		actor.agi_scale_turns = BUFF_TURNS
+		# 止めた時間のぶん、自分が先に動く。説明どおりの効き目にする。
+		actor.next_at -= CtbScheduler.wait_for(actor.effective_agi(), TIME_STOP_GAIN)
+	elif effect == "slow_and_flee":
+		# 煙は逃げるための技。**鈍足の上位互換にしない**（`ときとまれ` と
+		# 役割が重なると、強いほうだけ使われて片方が飾りになる）。
+		smoke_screen = true
+
 	for t in targets:
 		match effect:
 			"haste":
@@ -387,6 +404,15 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				t.agi_scale = 70
 				t.agi_scale_turns = BUFF_TURNS
 				# 素早さが落ちた効果を行動順にも即座に反映させる
+				t.next_at += CtbScheduler.wait_for(t.effective_agi(), 40)
+				lines.append("%sの　すばやさが さがった！" % t.name)
+			"slow_and_haste_self", "slow_and_flee":
+				# **同じ「鈍らせる」でも、付いてくるものが違う**（F-2）。
+				# 前は両方とも素の `slow` で、名前と説明だけが違っていた
+				# （`ときとまれ` の説明は「自分を速める」と言っていたのに
+				# 何も速めていなかった）。数値違いは技の作り分けではない。
+				t.agi_scale = 70
+				t.agi_scale_turns = BUFF_TURNS
 				t.next_at += CtbScheduler.wait_for(t.effective_agi(), 40)
 				lines.append("%sの　すばやさが さがった！" % t.name)
 			"sleep":
@@ -410,9 +436,36 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				lines.append_array(_steal_from(actor, t))
 			"random":
 				lines.append_array(_play_around(actor, t))
+			"random_pick":
+				# **同じ乱数表の範囲版にしない**（F-2）。`あそぶ` は出たとこ勝負、
+				# `きまぐれ` は**三つ引いて ましなものを選ぶ**。
+				# 同じ表を単体／範囲で分けただけだと、操作としては同じ技になる。
+				lines.append_array(_pick_best_whim(actor, t))
 			_:
 				lines.append("しかし　なにも おこらなかった")
 	return lines
+
+
+## きまぐれ。**三つ引いて、いちばんましな出目を採る**（F-2）。
+##
+## `あそぶ` と同じ表を使うが、引き方が違う。出たとこ勝負ではなく
+## 「悪い目を避ける」技なので、押すときの気持ちが別になる。
+## 乱数は `DetRng` だけ（同じ種からは同じ出目）。
+func _pick_best_whim(actor: Battler, target: Battler) -> Array[String]:
+	var best := 0
+	var best_score := -1
+	for _i in WHIM_DRAWS:
+		var roll := rng.range_i(0, 5)
+		var score: int = WHIM_SCORE[roll]
+		if score > best_score:
+			best_score = score
+			best = roll
+	return _play_around(actor, target, best)
+
+
+## 何回引くか、と出目の good さ（`_play_around` の match と同じ並び）。
+const WHIM_DRAWS := 3
+const WHIM_SCORE: Array[int] = [0, 0, 3, 2, 2, 1]
 
 
 ## あそぶ。何が起きるか読めないが、コストがとても軽い。
@@ -420,9 +473,44 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 ## 「読めない」を乱数で作るときは、外れも当たりも同じ確率で並べないこと。
 ## 半分は何も起きないくらいで丁度よく、当たったときだけ強い手になる。
 ## あそぶ / きまぐれ。対象 1 体ごとに引き直す（グループでも同じ結果が並ばない）。
-func _play_around(actor: Battler, target: Battler) -> Array[String]:
+## とどめ（`ひっさつ`）。**手負いほど深く入る**（F-2）。
+##
+## 前はただの高威力技で、名前だけが「必殺」だった。連打が最適になるうえ、
+## 「いつ使うか」の判断が無い。相手の残り体力で威力が変わる形にすると、
+## **削ってから当てる**という手順が生まれる。
+func _execute_blow(actor: Battler, target: Battler, ab: Dictionary) -> Array[String]:
+	var ratio := target.hp * 100 / maxi(target.max_hp, 1)
+	var power := int(ab.get("power", 100))
+	if ratio <= EXECUTE_LOW_HP:
+		power = power * EXECUTE_BONUS / 100
+	var dmg := _damage(actor, target, power, false, String(ab.get("element", "")))
+	target.apply_damage(dmg)
 	var lines: Array[String] = []
-	match rng.range_i(0, 5):
+	if ratio <= EXECUTE_LOW_HP:
+		lines.append("%sの ひっさつ！ 急所に 入った！" % actor.name)
+	else:
+		lines.append("%sの ひっさつ！" % actor.name)
+	lines.append("%sに %d の ダメージ！" % [target.name, dmg])
+	if not target.is_alive():
+		lines.append("%sを　たおした！" % target.name)
+	return lines
+
+
+## とどめが深く入る残り体力（百分率）と、そのときの倍率。
+const EXECUTE_LOW_HP := 40
+const EXECUTE_BONUS := 220
+
+## `ときとまれ` で自分が先に動く量。
+const TIME_STOP_GAIN := 60
+
+## 煙幕が張られているか。**逃げやすさに効く**（`けむりだま`）。
+var smoke_screen := false
+
+
+## `roll` を渡すと、その出目で解決する（`きまぐれ` が選んだ目を使う）。
+func _play_around(actor: Battler, target: Battler, roll: int = -1) -> Array[String]:
+	var lines: Array[String] = []
+	match (rng.range_i(0, 5) if roll < 0 else roll):
 		0, 1:
 			lines.append("%sは おどけてみせた。なにも おこらない" % actor.name)
 		2:

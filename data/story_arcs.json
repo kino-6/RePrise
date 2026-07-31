@@ -21,32 +21,32 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "entrusted",
-          "line": "{home_name}で倒れていた{anchor_name}は、{motif}を城にいる弟へ渡してほしいと頼む。勝つことより、返事を聞いてほしいという。"
+          "line": "{home_name}で倒れていた{anchor_name}から、{motif}を城にいる弟へ届けてほしいと頼まれる。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_low",
           "anchor_present": true, "motif_state": "protected",
-          "line": "{anchor_name}は傷を隠して同行し、洞で一行をかばう。夜になると{motif}へ、まだ届いていない返事を書き足している。"
+          "line": "{anchor_name}は傷を隠して同行し、洞で一行をかばう。夜には{motif}へ返事を書き足している。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "opened",
-          "line": "町の記録から、{anchor_name}こそ{home_name}を戦場へ変えた命令の伝令だったと分かる。{motif}には謝罪と、弟へ事実を隠す最後の命令がある。"
+          "line": "町の記録で、{anchor_name}が故郷を戦場にした命令を運んだと分かる。{motif}には弟への謝罪がある。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
           "anchor_present": true, "motif_state": "judged",
-          "line": "城門を前に、{anchor_name}はもう歩けない。封を閉じたまま届けるか、真実を見せるか、本人を最後の道へ連れていくかを一行へ委ねる。"
+          "line": "{anchor_name}は城門で歩けなくなる。手紙をそのまま渡すか、真実を伝えるか、本人を連れていくか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": false, "motif_state": "answered",
-          "line": "城の主は{anchor_name}の弟の姿と声を借り、約束を捨てれば楽になると迫る。一行が掲げた{motif}へ、本物の弟の返事が城内から返る。"
+          "line": "主は弟の姿で手紙を捨てろと迫る。すると城の奥から、本物の弟の返事が届く。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "remembered",
-          "line": "世界が閉じる前、{anchor_name}の名と選んだ答えだけが{motif}に残る。約束は同じ形ではなくても、待っていた者まで届いた。"
+          "line": "選んだ答えは弟へ届いた。{motif}には、{anchor_name}が帰ろうとした事実が残る。"
         }
       ],
       "choices": [
@@ -110,32 +110,32 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "named",
-          "line": "{home_name}の{anchor_name}は、帝国が置き去りにした戦獣を家族だと言い、{motif}の音が届く場所まで一緒に連れていってほしいと頼む。"
+          "line": "{home_name}の{anchor_name}は、帝国が残した戦獣を家族として助けてほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "trusted",
-          "line": "戦獣は命令では動かず、{anchor_name}の{motif}にだけ従う。崩れる洞で一行を背に乗せ、自分の傷を隠して進む。"
+          "line": "戦獣は{anchor_name}の{motif}にだけ応える。洞が崩れると、一行を背に乗せて助ける。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "silenced",
-          "line": "軍医の記録から、{anchor_name}が育てた戦獣の心臓は城の炉と繋がると判明する。止めれば主は弱るが、獣は二度と{motif}へ応えない。"
+          "line": "戦獣の心臓は城の炉につながっていた。止めれば主は弱るが、戦獣は助からない。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
           "anchor_present": true, "motif_state": "chosen",
-          "line": "{anchor_name}は泣かず、獣の命を一行へ預ける。心臓を抜くか、繋がりを子へ分けるか、弱らせず共に主へ挑むかを選ぶ。"
+          "line": "{anchor_name}は戦獣の命を一行に託す。主を弱らせるか、危険を分け合うか、戦獣に任せるか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "defiant",
-          "line": "城の主が戦獣へ最後の命令を下す。{anchor_name}は命令より小さな{motif}を鳴らし、獣がどちらを自分で選ぶか見届ける。"
+          "line": "主が戦獣へ攻撃を命じる。{anchor_name}が{motif}を鳴らすと、戦獣は自分で進む先を選ぶ。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "free",
-          "line": "{motif}は勝利の合図ではなく、命令から解かれた一つの命を呼ぶ音になる。{anchor_name}は結果から目をそらさない。"
+          "line": "戦獣は命令から解放された。{anchor_name}は{motif}を鳴らし、その選択を受け止める。"
         }
       ],
       "choices": [
@@ -199,32 +199,32 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "recorded",
-          "line": "{home_name}では家も人も端から透け始めている。記録係の{anchor_name}は、消える前に全員の名を{motif}へ書く手伝いを求める。"
+          "line": "{home_name}の家と住民が消え始めている。記録係の{anchor_name}は、名簿作りを手伝ってほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "filled",
-          "line": "一行は離れた住民の名と小さな思い出を集める。{anchor_name}は立派な功績より、好きだった料理や喧嘩の理由を{motif}へ残す。"
+          "line": "一行は住民の名と思い出を集める。{anchor_name}は日々の暮らしを{motif}へ書き残す。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "doubted",
-          "line": "地下の装置は、{home_name}が主の作った偽の町だと示す。主を倒せば町は消え、{anchor_name}の集めた{motif}だけが残る。"
+          "line": "地下の装置から、町が主によって作られたと分かる。主を倒せば町も消えてしまう。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "town_high",
           "anchor_present": true, "motif_state": "rewritten",
-          "line": "{anchor_name}は存在の長さで本物か決めないでほしいと言う。町を世界へ縫い留めるか、名だけ持ち出すか、偽の記録そのものを壊すかを選ぶ。"
+          "line": "{anchor_name}は、短い命でも本物だと言う。町を残すか、名簿を運ぶか、装置を壊すか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "claimed",
-          "line": "城の主は{home_name}の住民を自分の創作物だと呼ぶ。{anchor_name}は{motif}を読み上げ、作られた命にも自分で過ごした日々があると答える。"
+          "line": "主は住民を作り物だと切り捨てる。{anchor_name}は{motif}を読み、暮らした日々は本物だと答える。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "carried",
-          "line": "町が残っても消えても、{motif}の名は最後まで読み終えられる。一行は世界の外へ、実在を証明するには十分な重みを持ち帰る。"
+          "line": "町の結末が決まり、名簿も読み終えた。一行は{anchor_name}たちが生きた証を持ち帰る。"
         }
       ],
       "choices": [
@@ -288,32 +288,32 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "surrendered",
-          "line": "{home_name}へ投降した士官{anchor_name}は、城へ送った徴兵隊を救うまで裁きを待ってほしいと{motif}を差し出す。"
+          "line": "{home_name}へ投降した士官{anchor_name}は、徴兵された若者を救うまで裁きを待ってほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_low",
           "anchor_present": true, "motif_state": "used",
-          "line": "{anchor_name}は帝国の合図と通路を使い、一行と捕虜を逃がす。救った若者たちは、かつての指揮官だと知りながら{motif}の後ろを歩く。"
+          "line": "{anchor_name}は帝国の通路を使って捕虜を逃がす。救われた若者たちは、その指示に従う。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "stained",
-          "line": "避難民が{motif}を見て、以前{home_name}を焼く命令へ署名したのは{anchor_name}だと告発する。本人は否定も弁解もしない。"
+          "line": "避難民は、{anchor_name}が以前{home_name}を焼く命令に署名したと告発する。本人も認める。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
           "anchor_present": true, "motif_state": "judged",
-          "line": "残る徴兵隊の居場所を知るのは{anchor_name}だけだ。今ここで拘束するか、救出まで指揮を任せるか、被害者へ決定を委ねるかを選ぶ。"
+          "line": "残る徴兵隊の場所を知るのは{anchor_name}だけだ。拘束するか、救出を任せるか、被害者に決めてもらうか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "raised",
-          "line": "城の主は古い命令を再び読み上げ、従えば全員を帰すと誘う。{anchor_name}は{motif}を掲げるが、最後の命令を出す権利は一行へ返す。"
+          "line": "主は古い命令に従えば全員を帰すと誘う。{anchor_name}は決定を一行へ任せる。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "lowered",
-          "line": "若者たちは帰還し、{anchor_name}の罪も消えない。救った人数を赦しの値段にせず、{motif}は裁きの場まで本人と共に運ばれる。"
+          "line": "若者たちは帰還したが、{anchor_name}の罪は消えない。{motif}は裁きの場へ運ばれる。"
         }
       ],
       "choices": [
@@ -377,32 +377,32 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "heard",
-          "line": "{home_name}で再起動した機械は製造番号を拒み、仮の名を{anchor_name}とする。止まる前に{motif}の続きを知りたいと一行へ頼む。"
+          "line": "{home_name}で再起動した機械は番号を拒み、{anchor_name}と名乗る。{motif}の続きを探している。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "learned",
-          "line": "{anchor_name}は命令にない遠回りをして負傷者を救う。感情を故障と呼びながら、誰も聞いていない時だけ{motif}を練習する。"
+          "line": "{anchor_name}は命令にない行動で負傷者を救う。一人になると{motif}を練習している。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "decoded",
-          "line": "設計図から、{anchor_name}の炉が城門を開く唯一の認証鍵だと分かる。使えば扉は開くが、炉は初期化され人格と{motif}を失う。"
+          "line": "{anchor_name}の炉は城門の認証鍵だった。使えば門は開くが、記憶と人格は初期化される。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
           "anchor_present": true, "motif_state": "completed",
-          "line": "{anchor_name}は恐怖を故障と呼ぶのをやめる。初期化を受け入れるか、記憶を小さな器へ移すか、鍵を使わず城を破るかを一行と選ぶ。"
+          "line": "{anchor_name}は初めて怖いと口にする。初期化するか、記憶を移すか、別の方法で城門を破るか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "sung",
-          "line": "城は製造番号で服従を命じる。{anchor_name}は自分で選んだ名を答え、最後まで覚えた{motif}を一音ずつ鳴らす。"
+          "line": "城が製造番号で服従を命じる。{anchor_name}は自分の名を答え、{motif}を最後まで奏でる。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "inherited",
-          "line": "残った身体や記憶の量にかかわらず、名を選んだ瞬間は消えない。{motif}は命令音でなく、誰かを呼び戻す歌になる。"
+          "line": "{anchor_name}が自分で名を選んだ事実は残った。{motif}は命令ではなく、その名を呼ぶ歌になる。"
         }
       ],
       "choices": [
@@ -466,32 +466,32 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "reflected",
-          "line": "{home_name}で道を知る{anchor_name}は、自分の過去だけ思い出せない。城まで案内する代わりに、{motif}へ映る本当の姿を最後まで見届けてほしいと頼む。"
+          "line": "{home_name}の案内人{anchor_name}は過去を思い出せない。城まで案内する代わりに、正体を確かめてほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_low",
           "anchor_present": true, "motif_state": "shared",
-          "line": "{anchor_name}は一行の傷を自分へ移し、痛みを初めての記憶として大切にする。{motif}には本人と城の主が同時に映る。"
+          "line": "{anchor_name}は一行の傷を引き受ける。{motif}には、本人と城の主が同時に映っている。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "recognized",
-          "line": "封印記録と{motif}は、{anchor_name}が主から切り離された慈悲と恐怖だと示す。戻れば主は完全になるが、旅をした人格は残らない。"
+          "line": "{anchor_name}は、主から切り離された感情だった。元に戻れば、旅をした人格は消えてしまう。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "town_high",
           "anchor_present": true, "motif_state": "accepted",
-          "line": "{anchor_name}は半分でも過ごした時間は全部自分のものだと言う。主へ戻るか、永遠に切り離すか、結末を本人へ任せるかを選ぶ。"
+          "line": "{anchor_name}は今の自分も本物だと言う。主へ戻すか、つながりを断つか、本人に任せるか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "whole",
-          "line": "城の主は{anchor_name}を欠陥と呼び、戻れば苦しみは終わると誘う。{motif}には一行と歩いた姿だけが、主とは別に映り続ける。"
+          "line": "主は戻れば苦しみは終わると誘う。{motif}には、一行と旅をした{anchor_name}だけが映る。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "witnessed",
-          "line": "統合、分離、本人の選択。どの形でも、一行は{anchor_name}が確かに一人として旅をした証人になる。"
+          "line": "どの結末を選んでも、一行は{anchor_name}が一人の仲間として旅をしたことを証言する。"
         }
       ],
       "choices": [

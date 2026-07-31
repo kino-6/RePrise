@@ -120,12 +120,12 @@ static func build_elite(
 ## HP や攻撃力を盛る手もあるが、それは「硬いだけの壁」になる。
 ## **動く回数で釣り合わせる**ほうが、CTB の土俵の上で戦いになる。
 ## 主ごとの差（重い機械は遅い、託宣は速い）は割合として残る。
-const BOSS_COST_PERCENT := 59
+const BOSS_COST_PERCENT := 56
 
 ## 主の能力の倍率と、速さの下限。**数字はすべて実測で決める**
 ## （`tests/balance.gd -- --boss=200` が主戦だけを取り出して測る）。
-const BOSS_STAT_PERCENT := 122
-const BOSS_AGI_FLOOR := 27
+const BOSS_STAT_PERCENT := 125
+const BOSS_AGI_FLOOR := 28
 
 
 static func build_boss(rng: DetRng, floor_number: int, first_id: int = 100) -> Array[Battler]:
