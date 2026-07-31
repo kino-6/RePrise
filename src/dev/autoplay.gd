@@ -32,6 +32,11 @@ var _shot_timer := 0.0
 var _input_timer := 0.0
 var _shot_index := 0
 
+## この実行のコマを置く場所と、撮った順の一覧（P-2）。
+## **実行ごとに分ける。** 混ざると、過去のランを今回の結果と読み違える。
+var _run_dir := ""
+var _manifest: Array[String] = []
+
 ## いま押しているキー。次のフレームで離す。
 var _held := ""
 
@@ -73,11 +78,33 @@ var _shop_categories := {}
 var _best_gear_due := true
 
 
+## その場所の png と一覧を消す。**ここで作ったものだけ**を対象にする
+## （ユーザーの保存や別実行の証跡は消さない ―― 実行ごとに場所が分かれている）。
+static func _clear_dir(path: String) -> void:
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while name != "":
+		if not dir.current_is_dir() and (name.ends_with(".png") or name.ends_with(".txt")):
+			dir.remove(name)
+		name = dir.get_next()
+	dir.list_dir_end()
+
+
 func start(main_node: Node, seconds: float, seed_value: int = 12345) -> void:
 	_main = main_node
 	_limit = seconds
 	_rng = DetRng.new(seed_value)
-	DirAccess.make_dir_recursive_absolute(SHOT_DIR)
+	# **実行ごとに別の場所へ保存する**（P-2）。
+	#
+	# 以前は毎回 `000_<MODE>.png` から書いていて、既存を区別しなかった。
+	# 再プレイ後に `000_TITLE.png` と `000_EXPLORE.png` が同居し、
+	# **過去のランの画面を今回の結果と誤認した**（実際に起きた）。
+	_run_dir = "%s/run_%d" % [SHOT_DIR, seed_value]
+	DirAccess.make_dir_recursive_absolute(_run_dir)
+	_clear_dir(_run_dir)   # 同じ種で撮り直したら、前回のぶんは置き換える
 	# 自動プレイは人の 10 倍の速さで決定キーを叩くので、鳴らすと騒音にしかならない。
 	AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
 	if _main.has_method("dev_reset_facility_metrics"):
@@ -489,7 +516,9 @@ func _capture() -> void:
 	# 描き終わったフレームを撮る。await の中で撮ると 1 フレーム古い絵になる。
 	await RenderingServer.frame_post_draw
 	var image := get_viewport().get_texture().get_image()
-	image.save_png("%s/%03d_%s.png" % [SHOT_DIR, _shot_index, _mode()])
+	var shot_name := "%03d_%s.png" % [_shot_index, _mode()]
+	image.save_png("%s/%s" % [_run_dir, shot_name])
+	_manifest.append(shot_name)
 	_shot_index += 1
 
 
@@ -544,4 +573,11 @@ func _report() -> void:
 	print("ランの終了 : %d 回" % _runs)
 	print("装備      : 最大 %d 個" % _equipped)
 	print("メニューを閉じた: %d 回（とじるを試した %d 回）" % [_close_ok, _close_tries])
-	print("コマ: %s に %d 枚" % [SHOT_DIR, _shot_index])
+	# **一覧を残す**（P-2）。どれが今回のぶんかを機械で選べるようにする。
+	# これが無いと「最新 N 枚を時刻で選ぶ」に戻り、過去のランと混ざる。
+	var listing := FileAccess.open("%s/manifest.txt" % _run_dir, FileAccess.WRITE)
+	if listing != null:
+		for shot in _manifest:
+			listing.store_line(String(shot))
+		listing.close()
+	print("コマ: %s に %d 枚（manifest.txt に一覧）" % [_run_dir, _shot_index])

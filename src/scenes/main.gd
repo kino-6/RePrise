@@ -295,6 +295,8 @@ func _handle_debug_args() -> bool:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--dev-save="):
 			_dev_save_name = arg.trim_prefix("--dev-save=")
+		if arg.begins_with("--seed="):
+			_play_seed = int(arg.trim_prefix("--seed="))
 
 	for arg in OS.get_cmdline_user_args():
 		# 開発用。「この世界のこの場面」を保存／読み込みする。
@@ -311,20 +313,26 @@ func _handle_debug_args() -> bool:
 			_capture(arg.trim_prefix("--shot="))
 			return true
 		if arg.begins_with("--play="):
-			_start_autoplay(float(arg.trim_prefix("--play=")))
+			# **種を渡せるようにする**（P-2）。実行ごとにコマの置き場が分かれるので、
+			# 別の種で 2 回走らせれば、それぞれの成果物を混ぜずに比べられる。
+			_start_autoplay(float(arg.trim_prefix("--play=")), _play_seed)
 			return true
 	return _loaded_from_dev
 
 
 ## 開発用。人と同じ入力だけを流し込んで通しを確認する（src/dev/autoplay.gd）。
-func _start_autoplay(seconds: float) -> void:
+## 自動プレイの種（`--seed=`）。実行ごとにコマの置き場が変わる。
+var _play_seed := 12345
+
+
+func _start_autoplay(seconds: float, seed_value: int = 12345) -> void:
 	# 名前付き保存からの再開でなければ、人と同じくタイトルから始める。
 	# ここを省くと初期 Mode.EXPLORE のまま地図なし画面へ入力してしまう。
 	if not _loaded_from_dev:
 		_enter_title()
 	var driver := AutoPlay.new()
 	add_child(driver)
-	driver.start(self, maxf(seconds, 5.0))
+	driver.start(self, maxf(seconds, 5.0), seed_value)
 
 
 ## 自動プレイが「いまどの画面か」を知るための窓口。開発用。
