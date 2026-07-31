@@ -37,6 +37,7 @@ func _initialize() -> void:
 	_test_eight_stage_mastery()
 	_test_signature_abilities()
 	_test_inherit_signs()
+	_test_turn_plates_stay_unique()
 	_test_arc_endings_in_chronicle()
 	_test_data_integrity()
 	_test_save_migration()
@@ -392,6 +393,39 @@ func _test_arc_endings_in_chronicle() -> void:
 	# 戦記が載せる口を持っているか。
 	var text := FileAccess.get_file_as_string("res://src/game/chronicle.gd")
 	_check("戦記が結末を受け取る", text.contains("cross_world_endings"))
+
+
+## 行動順の札で、同種の敵を最後まで見分けられる（P-1）。
+##
+## `Encounter` は同種の敵の**末尾**へ Ａ〜Ｆ を付ける。札が先頭 2 文字を取ると
+## **その識別子が必ず消える** ―― 「され／され」のように、どれがどれか
+## 分からない札が並ぶ。CTB の核は「次に動く個体を先に狙う」判断なので、
+## ここで個体が見分けられないと行動順の帯そのものが読めない。
+func _test_turn_plates_stay_unique() -> void:
+	var bar := TurnOrderBar.new()
+	# 同種を 2 体以上含む編成を、固定の種から出す。
+	var foes := Encounter.build(DetRng.new(8).fork("x"), 6, 100, "")
+	_check("同種を含む編成が出る", foes.size() >= 4, "(%d 体)" % foes.size())
+	var plates := {}
+	var collided: Array[String] = []
+	var suffixed := 0
+	for b in foes:
+		var short := bar.dev_short_name(b)
+		if String(b.name).substr(String(b.name).length() - 1) in Encounter.SUFFIX:
+			suffixed += 1
+		if plates.has(short):
+			collided.append("%s / %s" % [plates[short], b.name])
+		plates[short] = b.name
+	_check("同種が 2 体以上いる", suffixed >= 2, "(%d 体)" % suffixed)
+	_check("札が一意", collided.is_empty(), str(collided))
+	# **識別子が残っていること**（先頭 2 文字だと消える）。
+	var kept := 0
+	for b in foes:
+		var tail := String(b.name).substr(String(b.name).length() - 1)
+		if tail in Encounter.SUFFIX and bar.dev_short_name(b).ends_with(tail):
+			kept += 1
+	_equal("識別子が札に残る", kept, suffixed)
+	bar.free()
 
 
 ## 継承印（E-2）。**★6 で開き、装着制で、常時発動ではない。**

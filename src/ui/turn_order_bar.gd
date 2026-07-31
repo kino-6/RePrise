@@ -82,4 +82,24 @@ func _draw() -> void:
 ## 29px の札に収まるよう名前を詰める。
 func _short_name(b: Battler) -> String:
 	var n := b.name
-	return n if n.length() <= 2 else n.substr(0, 2)
+	if n.length() <= PLATE_CHARS:
+		return n
+	# **識別子を落とさない**（P-1）。同種の敵には `Encounter` が末尾へ
+	# Ａ〜Ｆ を付けるが、先頭から 2 文字を取ると**それが必ず消える**。
+	# 「まど／から／され／てい」のように、どれがどれか分からない札が並ぶ。
+	# CTB の核は「次に動く個体を先に狙う」判断なので、ここで個体が
+	# 見分けられないと、行動順の帯そのものが読めなくなる。
+	var tail := n.substr(n.length() - 1)
+	if tail in Encounter.SUFFIX:
+		# 頭 1 文字 ＋ 識別子。2 文字の枠で「種類」と「どれか」を両方出す。
+		return n.substr(0, PLATE_CHARS - 1) + tail
+	return n.substr(0, PLATE_CHARS)
+
+
+## 開発用。札の文字をテストから確かめるための窓口。
+func dev_short_name(b: Battler) -> String:
+	return _short_name(b)
+
+
+## 札に入る文字数。42px の札に 14px の字が 2 つ入る。
+const PLATE_CHARS := 2
