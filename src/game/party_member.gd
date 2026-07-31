@@ -29,6 +29,13 @@ var mp: int = 0
 var job_exp: Dictionary = {}  # job_id -> 熟練度ポイント
 var learned: Array[String] = []  # 習得済みアビリティ（転職しても消えない）
 
+## 過去職から持ち込む技（F-4）。**2 枠まで。**
+## 空文字は「選んでいない」。空欄のまま出撃してよい。
+var inherited: Array[String] = ["", ""]
+
+## 持ち込める枠の数。
+const INHERIT_SLOTS := 2
+
 ## 装備（slot -> equipment.json の ID）。ゴールドと同じくラン内資源で、
 ## 全滅すると失う。恒久強化が能力値に触れないという不変条件を守るため、
 ## ここを持ち帰らせてはいけない。
@@ -147,13 +154,80 @@ func cost_scale() -> int:
 	return maxi(int(Database.job(job_id).get("cost_scale", 100)) + gear_bonus("cost_scale"), 30)
 
 
+## 戦闘で押せる技（F-4）。
+##
+## **現職で覚えた技はすべて使える。過去職の技は 2 つだけ持ち込む。**
+##
+## それまでは `learned` を全部並べていた。転職を重ねるほど一覧が伸び、
+## 15 職ぶん覚えたキャラは全職の技を常時持つことになる ―― 現職の個性が消え、
+## 「どの職で行くか」が見た目の違いだけになる。
+##
+## `こうげき` と `ぼうぎょ` は常設（`BASE_ABILITIES`）。空欄のまま出撃してよい。
 func available_abilities() -> Array[String]:
 	var result: Array[String] = []
 	result.append_array(BASE_ABILITIES)
-	for a in learned:
+	for a in job_abilities():
 		if a not in result:
 			result.append(a)
+	for a in inherited:
+		# **持っていない技は入れない。** 転職で無効になった枠は
+		# 勝手に詰めず、空のままにする（選び直させる）。
+		if a != "" and a in learned and a not in result:
+			result.append(a)
 	return result
+
+
+## 現職で覚えた技（`mastery` の表に載っていて、実際に覚えているもの）。
+func job_abilities() -> Array[String]:
+	var result: Array[String] = []
+	for entry in Database.job(job_id).get("mastery", []):
+		var id := String((entry as Dictionary).get("ability", ""))
+		if id != "" and id in learned:
+			result.append(id)
+	return result
+
+
+## 過去職から持ち込める技（現職の技と常設を除いた、覚えている技）。
+func inheritable_abilities() -> Array[String]:
+	var mine := job_abilities()
+	var result: Array[String] = []
+	for a in learned:
+		if a in mine or a in BASE_ABILITIES:
+			continue
+		result.append(a)
+	return result
+
+
+## 継承枠を選び直す。**未習得・重複・3 枠目は拒む。**
+##
+## 受け取れたら true。呼ぶ側は false のときだけ「選べない」と出せばよい。
+func set_inherited(slot: int, ability_id: String) -> bool:
+	if slot < 0 or slot >= INHERIT_SLOTS:
+		return false
+	if ability_id == "":
+		inherited[slot] = ""
+		return true
+	if ability_id not in inheritable_abilities():
+		return false
+	if ability_id in inherited:
+		return false
+	inherited[slot] = ability_id
+	return true
+
+
+## 転職で無効になった枠を空ける。**詰めない。**
+##
+## 技 id 順に勝手に詰めると、選んだ覚えのない技が入る。空にして、
+## 選び直させる（理由は呼ぶ側が出す）。**戻り値は空けた枠の数。**
+func drop_invalid_inherited() -> int:
+	var usable := inheritable_abilities()
+	var dropped := 0
+	for i in inherited.size():
+		var id := String(inherited[i])
+		if id != "" and id not in usable:
+			inherited[i] = ""
+			dropped += 1
+	return dropped
 
 
 # --------------------------------------------------------------------------
@@ -354,6 +428,7 @@ func to_dict() -> Dictionary:
 		"job_id": job_id,
 		"job_exp": job_exp,
 		"learned": learned,
+		"inherited": inherited,
 	}
 
 
@@ -389,5 +464,9 @@ static func from_dict(d: Dictionary) -> PartyMember:
 	m.job_exp = d.get("job_exp", {})
 	var raw: Array = d.get("learned", [])
 	m.learned.assign(raw)
+	# 古いセーブには継承枠が無い。**空 2 枠で始める**（技は失われない）。
+	var slots: Array = d.get("inherited", [])
+	for i in m.inherited.size():
+		m.inherited[i] = String(slots[i]) if i < slots.size() else ""
 	m.reset_for_run()
 	return m

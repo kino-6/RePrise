@@ -2504,7 +2504,10 @@ func _test_mastery_persists() -> void:
 
 	# 転職しても覚えた技は消えない（DQ6 / FF5 の肝）
 	m.job_id = "mage"
-	_check("転職後も技が残る", "power_slash" in m.available_abilities())
+	# **技は失われない**（永久資産）。ただし戦闘で押せるのは
+	# 現職の技＋継承 2 枠なので、残っているかは `learned` で見る（F-4）。
+	_check("転職後も技が残る", "power_slash" in m.learned)
+	_check("過去職の技は継承の候補になる", "power_slash" in m.inheritable_abilities())
 	_equal("転職先のランクは別勘定", m.mastery_rank(), 0)
 
 	# レベルは失うが熟練度は残る、というランの境界
@@ -2580,7 +2583,7 @@ func _test_job_change() -> void:
 	_check("能力値が転職先のものになる", m.max_hp() != hp_before)
 	_equal("転職直後は満タン", m.hp, m.max_hp())
 	_equal("前職の熟練度は残る", m.mastery_points("soldier"), 30)
-	_check("前職で覚えた技も残る", "power_slash" in m.available_abilities())
+	_check("前職で覚えた技も残る", "power_slash" in m.learned)
 	_equal("転職先の熟練度は 0 から", m.mastery_points("mage"), 0)
 
 	# 貯めた熟練度は戻ってきたときにそのまま効く（ダーマ神殿の往復）
@@ -2588,5 +2591,16 @@ func _test_job_change() -> void:
 	_equal("転職先でも熟練が貯まる", m.mastery_rank("mage"), 1)
 	_check("元の職業に戻せる", m.change_job("soldier"))
 	_equal("戻ると前職のランクが復活する", m.mastery_rank(), 1)
-	_check("両方の技を持ったまま", m.available_abilities().has("fire")
-		and m.available_abilities().has("power_slash"))
+	_check("両方の技を持ったまま", m.learned.has("fire") and m.learned.has("power_slash"))
+	# **押せるのは現職の技＋継承 2 枠**（F-4）。持っていることと押せることは別。
+	_check("現職の技は押せる", m.available_abilities().has("power_slash"))
+	_check("過去職の技は選ばないと押せない", not m.available_abilities().has("fire"))
+	_check("継承枠に入れれば押せる", m.set_inherited(0, "fire"))
+	_check("入れたら押せる", m.available_abilities().has("fire"))
+	_check("同じ技を 2 枠には入れない", not m.set_inherited(1, "fire"))
+	_check("覚えていない技は入らない", not m.set_inherited(1, "meteor"))
+	_check("3 枠目は無い", not m.set_inherited(2, "power_slash"))
+	# 転職で無効になった枠は**詰めずに空ける**。
+	m.change_job("mage")
+	_equal("現職の技になった枠は空く", m.drop_invalid_inherited(), 1)
+	_equal("空いた枠は空文字", String(m.inherited[0]), "")
