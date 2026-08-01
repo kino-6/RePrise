@@ -37,9 +37,9 @@ static var LABELS := {
 ## 戦闘中の隅に長い説明を置くと、読まないのに場所を取るだけになる
 ## （「わけのわからない文言」と言われた）。呼び名で足りる。
 static var DESCRIPTIONS := {
-	Mode.OFF: Vocabulary.word("auto", "off_desc", "自分で えらぶ"),
-	Mode.SAFE: Vocabulary.word("auto", "safe_desc", "回復を さきに、MP を のこして 攻める"),
-	Mode.AGGRESSIVE: Vocabulary.word("auto", "aggressive_desc", "弱点と 範囲を ねらって 攻める"),
+	Mode.OFF: Vocabulary.word("auto", "off_desc", "自分で選ぶ"),
+	Mode.SAFE: Vocabulary.word("auto", "safe_desc", "回復を優先し、MPを残して攻める"),
+	Mode.AGGRESSIVE: Vocabulary.word("auto", "aggressive_desc", "弱点と範囲を狙って攻める"),
 }
 
 ## この割合を下回った味方がいれば回復に回る（いのちだいじに）。
@@ -73,8 +73,11 @@ static func next_mode(mode: Mode) -> Mode:
 			return Mode.OFF
 
 
-## この手番に取る行動。{"ability": String, "target": Battler} を返す。
-static func decide(system: BattleSystem, actor: Battler, mode: Mode) -> Dictionary:
+## この手番に取る行動。技なら `ability`、救命用の消耗品なら `item` を返す。
+## `items` を空で渡せば従来どおり道具を一切考えない。
+static func decide(
+	system: BattleSystem, actor: Battler, mode: Mode, items: Dictionary = {}
+) -> Dictionary:
 	var ultimate := _ultimate_plan(system, actor, mode)
 	if not ultimate.is_empty():
 		return ultimate
@@ -82,7 +85,14 @@ static func decide(system: BattleSystem, actor: Battler, mode: Mode) -> Dictiona
 		var safe := _safe_plan(system, actor)
 		if not safe.is_empty():
 			return safe
+		var rescue := _item_plan(system, mode, items)
+		if not rescue.is_empty():
+			return rescue
 	elif mode == Mode.AGGRESSIVE:
+		# 攻撃重視でも、倒れた仲間と瀕死は放置しない。許可された道具だけを使う。
+		var rescue := _item_plan(system, mode, items)
+		if not rescue.is_empty():
+			return rescue
 		var strike := _weakness_plan(system, actor)
 		if not strike.is_empty():
 			return strike
@@ -94,6 +104,102 @@ static func decide(system: BattleSystem, actor: Battler, mode: Mode) -> Dictiona
 
 	var target := _best_target(system, actor, attack_id)
 	return {"ability": attack_id, "target": target}
+
+
+## 許可されたときだけ使う、救命用の消耗品。
+##
+## 攻撃びん・加速薬・MP回復は、いつ切るかがラン全体の判断になるので自動消費しない。
+## 蘇生、瀕死回復、守備重視の状態回復に絞り、「許可したら在庫を使い切る」を防ぐ。
+static func _item_plan(system: BattleSystem, mode: Mode, items: Dictionary) -> Dictionary:
+	if items.is_empty():
+		return {}
+
+	for friend in system.allies:
+		if friend.is_alive():
+			continue
+		var revive := _first_item_with_effect(items, ["revive"])
+		if revive != "":
+			return {"item": revive, "target": friend}
+		break
+
+	var emergency_ratio := 30 if mode == Mode.SAFE else 20
+	var hurt := _most_hurt_below(system, emergency_ratio)
+	if hurt != null:
+		var healing := _best_healing_item(items, hurt.max_hp - hurt.hp)
+		if healing != "":
+			return {"item": healing, "target": hurt}
+
+	if mode == Mode.SAFE:
+		for friend in system.living_allies():
+			if not friend.has_status():
+				continue
+			var cure := _first_item_with_effect(items, ["cleanse", "heal_cleanse"])
+			if cure != "":
+				return {"item": cure, "target": friend}
+			break
+	return {}
+
+
+static func _owned_item_ids(items: Dictionary) -> Array[String]:
+	var ids: Array[String] = []
+	for raw_id in items:
+		var id := String(raw_id)
+		if int(items.get(raw_id, 0)) > 0 and not Database.item(id).is_empty():
+			ids.append(id)
+	ids.sort()
+	return ids
+
+
+## 同じ役割なら安い品を先に使う。価格も同じなら id 順で決定的にする。
+static func _first_item_with_effect(items: Dictionary, effects: Array[String]) -> String:
+	var best := ""
+	var best_price := 1 << 30
+	for id in _owned_item_ids(items):
+		var item := Database.item(id)
+		if String(item.get("effect", "")) not in effects:
+			continue
+		var price := int(item.get("price", 0))
+		if price < best_price or (price == best_price and (best == "" or id < best)):
+			best = id
+			best_price = price
+	return best
+
+
+## 必要量を満たす最小の回復品を選ぶ。不足する品を連打したり、軽傷へ全快薬を切らない。
+static func _best_healing_item(items: Dictionary, missing_hp: int) -> String:
+	var best := ""
+	var best_score := 1 << 60
+	for id in _owned_item_ids(items):
+		var item := Database.item(id)
+		var effect := String(item.get("effect", ""))
+		if effect not in ["heal_hp", "heal_cleanse"]:
+			continue
+		var power := maxi(int(item.get("power", 0)), 0)
+		if power <= 0:
+			continue
+		var shortfall := maxi(missing_hp - power, 0)
+		var waste := maxi(power - missing_hp, 0)
+		# まず回復不足を避け、次に過剰回復と複合薬の温存、最後に価格を見る。
+		var score := (
+			shortfall * 100000
+			+ waste * 100
+			+ (10000 if effect == "heal_cleanse" else 0)
+			+ int(item.get("price", 0))
+		)
+		if score < best_score or (score == best_score and (best == "" or id < best)):
+			best = id
+			best_score = score
+	return best
+
+
+static func _most_hurt_below(system: BattleSystem, ratio: int) -> Battler:
+	var worst: Battler = null
+	for friend in system.living_allies():
+		if friend.hp * 100 / maxi(friend.max_hp, 1) > ratio:
+			continue
+		if worst == null or friend.hp * worst.max_hp < worst.hp * friend.max_hp:
+			worst = friend
+	return worst
 
 
 ## 1戦1回の奥義は、単純な「威力÷CTB」へ混ぜない。

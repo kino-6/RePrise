@@ -1,6 +1,8 @@
 class_name EventView
 extends Node2D
 
+const EventOperationScript := preload("res://src/quest/event_operation.gd")
+
 ## 任意イベントの選択画面。
 ##
 ## 出すのは 3 つだけ ―― 何が起きているか、選べる手、その手で何を払い何を得るか。
@@ -20,15 +22,20 @@ const HEAD_RECT := Rect2(8, 8, 496, 92)
 const LIST_RECT := Rect2(8, 106, 496, 122)
 const DETAIL_RECT := Rect2(8, 234, 496, 78)
 const OUTCOME_RECT := Rect2(8, 8, 496, 220)
+const TALK_RECT := Rect2(8, 154, 496, 108)
 
 const INPUT_LOCK := 0.16
+const OUTCOME_LINES_PER_PAGE := 8
 
 var event: Dictionary = {}
 var danger := 1
 
 var _index := 0
 var _input_lock := 0.0
-var _blocked: Array[String] = []
+## 選択肢の添字 -> 払えない理由。選べる手が一つあるからといって、別の
+## 払えない手まで通さない。
+var _blocked: Dictionary = {}
+var _outcome_page := 0
 
 
 ## 物語の拍を開く。
@@ -36,23 +43,26 @@ var _blocked: Array[String] = []
 ## イベントと同じ窓を使う。**語り用にもう 1 枚作らない** ―― 出すものは同じ
 ## （何が起きているか / 選べる手 / その手で何が変わるか）で、違うのは
 ## 「変わるもの」が数値かどうかだけ。窓を 2 つにすると読み方も 2 つになる。
-func open_story(beat: Dictionary, story: Dictionary, danger_here: int) -> void:
+func open_story(beat: Dictionary, story: Dictionary, danger_here: int) -> bool:
+	# 導入や反転を「次へ」だけで読ませない。物語窓は、後続プレイへ効く
+	# 三択がある一拍に限る。それ以外は StoryOperation が地図上の目的にする。
+	if String(beat.get("phase", "")) != "choice":
+		push_error("選択の無い物語拍を EventView で開こうとした")
+		return false
 	var choices: Array = []
-	if String(beat.get("phase", "")) == "choice":
-		for c in story.get("choices", []):
-			choices.append({
-				"id": String(c.get("id", "")),
-				"label": String(c.get("label", "")),
-				# 物語の選択は数値ではなく、何を守り何を手放すかで示す。
-				"keeps": String(c.get("preserves", "")),
-				"loses": String(c.get("sacrifices", "")),
-				"pays": String(c.get("immediate_cost", "")),
-			})
+	for c in story.get("choices", []):
+		choices.append({
+			"id": String(c.get("id", "")),
+			"label": String(c.get("label", "")),
+			"keeps": String(c.get("preserves", "")),
+			"loses": String(c.get("sacrifices", "")),
+			"pays": String(c.get("immediate_cost", "")),
+			# 物語上の結末だけでなく、主戦や移動へ届く実効果も選ぶ前に見せる。
+			"runtime_effects": c.get("runtime_effects", []).duplicate(),
+		})
 	if choices.is_empty():
-		choices = [{
-			"id": "", "label": Terms.EVENT_CONTINUE_CHOICE,
-			"keeps": "", "loses": "", "pays": "",
-		}]
+		push_error("物語の選択肢が無い")
+		return false
 	open({
 		"story": true,
 		"skin": {
@@ -65,6 +75,7 @@ func open_story(beat: Dictionary, story: Dictionary, danger_here: int) -> void:
 		},
 		"choices": choices,
 	}, danger_here)
+	return true
 
 
 ## 選んだあとの結果を、同じ窓で読ませる。
@@ -78,7 +89,10 @@ func open_outcome(title: String, lines: Array[String], danger_here: int) -> void
 		body.append(Terms.EVENT_UNRESOLVED)
 	open({
 		"outcome": true,
-		"skin": {"title": title, "actor": "", "cause": "　".join(body), "flavor": ""},
+		# 結果は文章へ連結しない。1件ずつの境界を保たないと、折り返しで
+		# 「得／た」のように語の途中が別行へ送られる。
+		"outcome_lines": body,
+		"skin": {"title": title, "actor": "", "cause": "", "flavor": ""},
 		"choices": [{
 			"label": Terms.EVENT_CLOSE_CHOICE,
 			"costs": [],
@@ -88,10 +102,28 @@ func open_outcome(title: String, lines: Array[String], danger_here: int) -> void
 	}, danger_here)
 
 
+## 町の人・仕事場の短い説明。流れて消えるtoastではなく、読み終えるまで残す。
+## 世界イベントより軽い窓にして、誰と話しているかと実際の効き目を同時に見せる。
+func open_talk(speaker: String, lines: Array[String], danger_here: int) -> void:
+	var body := lines.duplicate()
+	if body.is_empty():
+		body.append(Terms.EVENT_UNRESOLVED)
+	open({
+		"talk": true,
+		"talk_lines": body,
+		"skin": {"title": speaker, "actor": "", "cause": "", "flavor": ""},
+		"choices": [{"label": Terms.EVENT_CLOSE_CHOICE}],
+	}, danger_here)
+func is_talk() -> bool:
+	return bool(event.get("talk", false))
+
+
 func open(instance: Dictionary, danger_here: int) -> void:
 	event = instance
 	danger = danger_here
 	_index = 0
+	_blocked = {}
+	_outcome_page = 0
 	_input_lock = INPUT_LOCK
 	set_process(true)
 	set_process_unhandled_input(true)
@@ -127,15 +159,34 @@ func _unhandled_input(e: InputEvent) -> void:
 		Sound.play("cursor")
 		queue_redraw()
 	elif e.is_action_pressed("confirm"):
+		if bool(event.get("outcome", false)) and _outcome_page + 1 < _outcome_pages():
+			_outcome_page += 1
+			Sound.play("confirm")
+			queue_redraw()
+			return
 		var picked: Dictionary = _choices()[_index]
 		# 払えない手は選ばせない。理由をその場に出す。
-		if not _blocked.is_empty():
+		if not _current_blocked().is_empty():
 			Sound.play("cancel")
 			return
 		Sound.play("confirm")
 		close()
 		chosen.emit(picked)
 	elif e.is_action_pressed("cancel"):
+		# 結果が複数頁なら、取消でも未読分を飛ばさず次へ送る。
+		if bool(event.get("outcome", false)) and _outcome_page + 1 < _outcome_pages():
+			_outcome_page += 1
+			Sound.play("confirm")
+			queue_redraw()
+			return
+		if bool(event.get("elite_reward", false)):
+			Sound.play("cancel")
+			return
+		# 物語で唯一開くのは、後続プレイを変える三択。取消で既定値へ落としたり
+		# 閉じたままにせず、どの結果を引き受けるか選ぶまで残す。
+		if bool(event.get("story", false)):
+			Sound.play("cancel")
+			return
 		# 見送るのも一手。**必ず立ち去れること。**
 		Sound.play("cancel")
 		close()
@@ -148,6 +199,9 @@ func _skin(key: String) -> String:
 
 func _draw() -> void:
 	PixelUI.ui_frame()
+	if is_talk():
+		_draw_talk()
+		return
 	# 下の画面を暗く沈ませる。イベントは場面の上に開く窓。
 	draw_rect(Rect2(Vector2.ZERO, Vector2(PixelUI.SCREEN)), Color(0, 0, 0.02, 0.55), true)
 	if bool(event.get("outcome", false)):
@@ -156,6 +210,21 @@ func _draw() -> void:
 	_draw_head()
 	_draw_list()
 	_draw_detail()
+
+
+func _draw_talk() -> void:
+	# 地図と話者を見失わない程度にだけ暗くし、会話窓は下HUDの直上へ置く。
+	draw_rect(Rect2(Vector2.ZERO, Vector2(PixelUI.SCREEN.x, TALK_RECT.position.y)),
+		Color(0, 0, 0.02, 0.18), true)
+	var panel := UiPanel.begin(self, TALK_RECT, WINDOW_TEX, _skin("title"), 7.0)
+	panel.skip(3.0)
+	var lines: Array = event.get("talk_lines", [])
+	for i in mini(lines.size(), 2):
+		panel.line(String(lines[i]), PixelUI.C_TEXT if i == 0 else PixelUI.C_ACTIVE)
+	UiPanel.inside(self, Rect2(
+		TALK_RECT.position + Vector2(12, TALK_RECT.size.y - 23),
+		Vector2(TALK_RECT.size.x - 24, PixelUI.LINE)
+	)).line(Terms.TOWN_TALK_CLOSE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 
 ## 結果は選択肢と同じ92pxの見出しへ押し込まない。
@@ -168,10 +237,25 @@ func _draw_outcome() -> void:
 	var panel := UiPanel.inside(self, PixelUI.content(OUTCOME_RECT).grow(-6.0))
 	panel.line(_skin("title"), PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	panel.skip(6.0)
-	panel.paragraph(_skin("cause"))
+	var lines := _outcome_lines()
+	var first := _outcome_page * OUTCOME_LINES_PER_PAGE
+	var last := mini(first + OUTCOME_LINES_PER_PAGE, lines.size())
+	for i in range(first, last):
+		# 1 結果ずつ改行する。通常は1行、長い外部文だけ安全に折り返す。
+		panel.paragraph(String(lines[i]))
 	PixelUI.draw_window(self, DETAIL_RECT, WINDOW_TEX)
 	UiPanel.inside(self, PixelUI.content(DETAIL_RECT).grow(-4.0)).line(
-		Terms.EVENT_CLOSE, PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+		Terms.EVENT_CONTINUE if _outcome_page + 1 < _outcome_pages() else Terms.EVENT_CLOSE,
+		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
+
+
+func _outcome_lines() -> Array:
+	var lines: Array = event.get("outcome_lines", [])
+	return lines if not lines.is_empty() else [Terms.EVENT_UNRESOLVED]
+
+
+func _outcome_pages() -> int:
+	return maxi(1, ceili(float(_outcome_lines().size()) / OUTCOME_LINES_PER_PAGE))
 
 
 func _draw_head() -> void:
@@ -215,13 +299,17 @@ func _summary(choice: Dictionary) -> String:
 		return ""
 	if bool(choice.get("defer", false)):
 		return Terms.EVENT_DEFER_SUMMARY
-	# 物語の手は数値を持たない。守るものだけを添える。
+	# 物語の手も実ゲームへ効く。結末の説明だけで済ませず、直近の効き目を添える。
 	if bool(event.get("story", false)):
-		var keeps := String(choice.get("keeps", ""))
+		var effects: Array = choice.get("runtime_effects", [])
+		var effect := (
+			EventEffects.label(String(effects[0]), "reward")
+			if not effects.is_empty() else ""
+		)
 		return (
-			"" if keeps == ""
+			"" if effect == ""
 			else PixelUI.clip(
-				"%s: %s" % [Terms.EVENT_STORY_KEEP, keeps],
+				"%s: %s" % [Terms.EVENT_GAIN, effect],
 				286.0,
 				PixelUI.SIZE_TEXT
 			)
@@ -326,17 +414,33 @@ func _draw_detail() -> void:
 		PixelUI.C_TEXT
 	)
 	# 払えないときは、その理由を最優先で出す。
-	if not _blocked.is_empty():
+	var blocked := _current_blocked()
+	if not blocked.is_empty():
 		_detail(origin, 38).line(
-			"%s: %s" % [Terms.EVENT_MISSING, "・".join(_blocked)],
+			"%s: %s" % [Terms.EVENT_MISSING, "・".join(blocked)],
 			PixelUI.C_HP_LOW,
 			PixelUI.SIZE_TEXT
 		)
 		return
-	_detail(origin, 38).line(Terms.EVENT_CONFIRM_HINT, PixelUI.C_TEXT_DIM)
+	var final_hint := Terms.ELITE_REWARD_CONFIRM
+	if not bool(event.get("elite_reward", false)):
+		# 「決定したら数値が増えて終了」ではない。選択後に必要な実行工程を
+		# 決める前から見せ、報酬を受け取る条件として読めるようにする。
+		final_hint = EventOperationScript.preview(event, c)
+	_detail(origin, 38).line(final_hint, PixelUI.C_TEXT_DIM)
+func _current_blocked() -> Array[String]:
+	var reasons: Array[String] = []
+	reasons.assign(_blocked.get(_index, []))
+	return reasons
 
 
 ## 払えない理由を外から入れる（GameState を知らないので自分では調べない）。
-func set_blocked(reasons: Array[String]) -> void:
-	_blocked = reasons
+## Dictionary は選択肢ごと、旧呼出しの配列は全選択肢共通として受ける。
+func set_blocked(reasons: Variant) -> void:
+	_blocked = {}
+	if reasons is Dictionary:
+		_blocked = reasons.duplicate(true)
+	elif reasons is Array and not reasons.is_empty():
+		for i in _choices().size():
+			_blocked[i] = reasons.duplicate()
 	queue_redraw()

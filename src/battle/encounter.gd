@@ -103,23 +103,23 @@ static func build(
 ## 倍率は**控えめ**にする ―― ルールが効くのであって、数値で殴るのではない。
 const ELITE_KINDS := [
 	{
-		"id": "vanguard", "name": "せんぽう",
+		"id": "vanguard", "name": "先陣",
 		"rule": "先に動く。開幕の一手を取られる。",
 	},
 	{
-		"id": "warden", "name": "まもりて",
+		"id": "warden", "name": "守護役",
 		"rule": "仲間をかばう。先に本体を崩さないと通らない。",
 	},
 	{
-		"id": "mirror", "name": "うつしみ",
+		"id": "mirror", "name": "反撃役",
 		"rule": "受けた傷を返す。大技ほど返ってくる。",
 	},
 	{
-		"id": "herald", "name": "つげしらせ",
+		"id": "herald", "name": "詠唱役",
 		"rule": "大技を溜める。雷で中断できる。",
 	},
 	{
-		"id": "siphon", "name": "すいとり",
+		"id": "siphon", "name": "吸収役",
 		"rule": "魔力を吸う。長引くほど技が撃てなくなる。",
 	},
 ]
@@ -129,14 +129,17 @@ const ELITE_STAT_PERCENT := 112
 
 
 static func build_elite(
-	rng: DetRng, floor_number: int, first_id: int = 100, biome: String = ""
+	rng: DetRng, floor_number: int, first_id: int = 100, biome: String = "",
+	elite_kind_id: String = ""
 ) -> Array[Battler]:
 	var result := build(rng, floor_number, first_id, biome)
 	if result.is_empty():
 		return result
 	# 型は**その戦いに 1 つ**。群れ全部が別のルールを持つと、何が起きているか
 	# 読めなくなる（読めない強さは、強いのではなく理不尽になる）。
-	var kind: Dictionary = ELITE_KINDS[rng.range_i(0, ELITE_KINDS.size() - 1)]
+	var kind := elite_kind(elite_kind_id)
+	if kind.is_empty():
+		kind = ELITE_KINDS[rng.range_i(0, ELITE_KINDS.size() - 1)]
 	var leader := result[0]
 	leader.name = "%s %s" % [String(kind["name"]), leader.name]
 	leader.elite_rule = String(kind["id"])
@@ -148,6 +151,15 @@ static func build_elite(
 		foe.defense = maxi(foe.defense * ELITE_STAT_PERCENT / 100, 1)
 	_apply_elite_rule(leader, result)
 	return result
+
+
+## id から型を引く。世界上で先に予告した型を、実戦でも同じにするための窓口。
+static func elite_kind(kind_id: String) -> Dictionary:
+	for raw in ELITE_KINDS:
+		var kind: Dictionary = raw
+		if String(kind.get("id", "")) == kind_id:
+			return kind
+	return {}
 
 
 ## 型ごとのルールを 1 つだけ効かせる。**能力値では作らない。**

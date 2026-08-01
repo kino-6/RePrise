@@ -5,6 +5,9 @@ extends SceneTree
 ##   godot --headless --script res://tests/test_world_events.gd
 
 const WEC = preload("res://src/quest/world_event_catalog.gd")
+const EO = preload("res://src/quest/event_operation.gd")
+const SAG = preload("res://src/quest/story_arc_generator.gd")
+const SO = preload("res://src/quest/story_operation.gd")
 
 var _passed := 0
 var _failed := 0
@@ -16,6 +19,8 @@ func _initialize() -> void:
 	print("=== 世界イベント生成テスト ===")
 	_test_catalog()
 	_test_effect_gate()
+	_test_operation_gate()
+	_test_story_operation_gate()
 	_test_selection()
 	_test_instantiation()
 	_test_ai_boundary()
@@ -27,6 +32,25 @@ func _initialize() -> void:
 ## 完了Gateの偽陰性確認用。意図的に壊した入力なら終了コード1にする。
 ##   godot --headless --script res://tests/test_world_events.gd -- --fixture=inert
 func _run_invalid_fixture() -> bool:
+	if "--fixture=instant" in OS.get_cmdline_user_args():
+		var source := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+		var at := source.find("func _on_event_choice")
+		var broken := source.insert(at + 24, "\n\tEventEffects.grant(GameState, [], 1, null)\n")
+		var errors := _operation_source_errors(broken)
+		print("=== 世界イベント即時完了 壊したfixture ===")
+		print("\n".join(errors))
+		quit(1 if not errors.is_empty() else 0)
+		return true
+	if "--fixture=paper_story" in OS.get_cmdline_user_args():
+		var broken_story := SAG.load_catalog().duplicate(true)
+		broken_story["arcs"][0]["beats"][0]["operation"] = {
+			"kind": "dialogue", "objective": "話を聞く", "result": "話を聞いた",
+		}
+		var story_errors := SAG.validate_catalog(broken_story)
+		print("=== 物語イベント品質 壊しfixture ===")
+		print("\n".join(story_errors))
+		quit(1 if not story_errors.is_empty() else 0)
+		return true
 	if "--fixture=inert" not in OS.get_cmdline_user_args():
 		return false
 	var broken := WEC.load_catalog().duplicate(true)
@@ -239,6 +263,182 @@ func _test_effect_gate() -> void:
 		empty_risk.active_party()[0].hp < hp_before and fallback_lines.size() == 2
 	)
 
+	# 結果は全角空白で1文へ潰さず、1件ずつ描画する。装備確認と後続戦闘も
+	# 同じ継続関数で直列化し、deferred call が戦闘を上書きしない。
+	var event_view_source := FileAccess.get_file_as_string("res://src/scenes/event_view.gd")
+	var main_source := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	_check("イベント結果は配列のまま保持する",
+		event_view_source.contains("\"outcome_lines\": body")
+		and not event_view_source.contains("\"cause\": \"　\".join(body)"))
+	_check("イベント後処理は一つの直列フローを通る",
+		main_source.contains("func _continue_pending_flow")
+		and main_source.contains("gear_offer.open(next_gear")
+		and main_source.contains("_continue_pending_flow()"))
+	_check("格上の戦利品は勝利後の三択へ接続される",
+		main_source.contains("func _elite_reward_choices")
+		and main_source.contains("if _pending_elite_reward")
+		and main_source.contains("_open_elite_reward()")
+		and main_source.contains("battle.was_escaped()"))
+
+
+## D-1で抜けたGate。「効果がある」だけでなく、選択後にプレイヤーが行う工程を
+## 全選択肢へ割り当て、報酬配布がその完了点にしか無いことを検査する。
+func _test_operation_gate() -> void:
+	var catalog := WEC.load_catalog()
+	var covered := 0
+	var missing: Array[String] = []
+	for event in catalog.get("events", []):
+		for choice in event.get("choices", []):
+			if bool(choice.get("defer", false)):
+				continue
+			var task := EO.build(event, choice, [], Vector2i(4, 5), 3)
+			if not EO.valid(task) or EO.objective(task) == "" or EO.preview(event, choice) == "":
+				missing.append("%s/%s" % [event.get("id", ""), choice.get("id", "")])
+			covered += 1
+	_check("保留を除く全%d選択肢に実行工程がある" % covered,
+		missing.is_empty(), str(missing.slice(0, 8)))
+
+	var road := WEC.event_by_id("broken_bridge")
+	var town := WEC.event_by_id("tainted_well")
+	var cave := WEC.event_by_id("twin_altar")
+	_check("街道の非戦闘手は実移動になる",
+		EO.kind_for(road, road.choices[0]) == EO.TRAVEL)
+	_check("町の非戦闘手は人物接触になる",
+		EO.kind_for(town, town.choices[0]) == EO.TOWN_CONTACT)
+	_check("洞の非戦闘手は現地探索になる",
+		EO.kind_for(cave, cave.choices[0]) == EO.CAVE_SEARCH)
+	_check("戦闘を払う手は勝利が完了条件になる",
+		EO.kind_for(road, road.choices[2]) == EO.FIGHT)
+
+	var main_source := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	var source_errors := _operation_source_errors(main_source)
+	_check("選択時には報酬を配らない",
+		not ("選択時に報酬を配っている" in source_errors), str(source_errors))
+	_check("報酬配布は実行工程の完了点にある",
+		not ("実行工程の完了点に報酬が無い" in source_errors), str(source_errors))
+	var event_view_source := FileAccess.get_file_as_string("res://src/scenes/event_view.gd")
+	_check("支払不能は選択肢ごとに止める",
+		event_view_source.contains("_blocked.get(_index")
+		and event_view_source.contains("not _current_blocked().is_empty()"))
+	_check("実行中の目的を別イベントで上書きしない",
+		main_source.contains("and GameState.event_task.is_empty()")
+		and main_source.contains("if not GameState.event_task.is_empty():"))
+
+
+func _operation_source_errors(source: String) -> Array[String]:
+	var errors: Array[String] = []
+	var choice_start := source.find("func _on_event_choice")
+	var choice_end := source.find("const RISK_ODDS", choice_start)
+	var complete_start := source.find("func _complete_event_task")
+	var complete_end := source.find("func _advance_event_task_travel", complete_start)
+	if choice_start < 0 or choice_end < 0:
+		errors.append("選択処理が無い")
+	elif source.substr(choice_start, choice_end - choice_start).contains("EventEffects.grant"):
+		errors.append("選択時に報酬を配っている")
+	if complete_start < 0 or complete_end < 0:
+		errors.append("実行工程の完了処理が無い")
+	elif not source.substr(
+		complete_start, complete_end - complete_start
+	).contains("EventEffects.grant"):
+		errors.append("実行工程の完了点に報酬が無い")
+	return errors
+
+
+## 「文章を読み、次へを押して終了」を再導入できないようにするGate。
+## 一世界物語は全拍に実操作、三択にはラン状態へ届く効果を要求する。
+func _test_story_operation_gate() -> void:
+	var catalog := SAG.load_catalog()
+	var errors := SAG.validate_catalog(catalog)
+	_check("一世界物語カタログは実操作Gateを通る", errors.is_empty(), str(errors.slice(0, 8)))
+
+	var beat_count := 0
+	var choice_count := 0
+	var operation_errors: Array[String] = []
+	for arc in catalog.get("arcs", []):
+		for beat in arc.get("beats", []):
+			beat_count += 1
+			for error in SO.definition_errors(beat):
+				operation_errors.append("%s/%s" % [arc.get("id", ""), error])
+		for choice in arc.get("choices", []):
+			choice_count += 1
+			for error in SO.choice_errors(choice):
+				operation_errors.append("%s/%s" % [arc.get("id", ""), error])
+	_check("全%d拍が町・洞・主戦・戦記の工程を持つ" % beat_count,
+		beat_count == 36 and operation_errors.is_empty(), str(operation_errors.slice(0, 8)))
+	_check("全%d択が後続プレイを変える" % choice_count,
+		choice_count == 18 and operation_errors.is_empty())
+
+	var state = _effect_state()
+	var story: Dictionary = state.world.story
+	var town_task := SO.build(story, story.beats[0], {}, Vector2i(4, 5))
+	var before := _effect_fingerprint(state)
+	EventEffects.grant(
+		state, town_task.get("runtime_effects", []), state.floor_number, DetRng.new(811)
+	)
+	_check("非選択拍の実操作もラン状態を変える",
+		SO.valid(town_task) and before != _effect_fingerprint(state))
+	state.story_task = town_task
+	_check("実行中の物語目的は中断データへ残る",
+		state.to_suspend().get("story_task", {}) == town_task)
+
+	var choice_beat: Dictionary = story.beats[3]
+	var choice: Dictionary = story.choices[0]
+	var choice_task := SO.build(story, choice_beat, choice, Vector2i(7, 8))
+	var choice_before := _effect_fingerprint(state)
+	EventEffects.grant(
+		state, choice_task.get("runtime_effects", []), state.floor_number, DetRng.new(812)
+	)
+	_check("物語の三択は主戦または道へ実際に効く",
+		SO.valid(choice_task) and choice_before != _effect_fingerprint(state))
+
+	var view = load("res://src/scenes/event_view.gd").new()
+	var opened: bool = view.open_story(choice_beat, story, state.floor_number)
+	var rendered_choices: Array = view.event.get("choices", [])
+	_check("選択拍は三択とゲーム内効果を同じ画面へ出す",
+		opened and rendered_choices.size() == 3
+		and not rendered_choices[0].get("runtime_effects", []).is_empty())
+	view.free()
+
+	var paper := catalog.duplicate(true)
+	paper["arcs"][0]["beats"][0]["operation"]["kind"] = "continue"
+	var paper_errors := SAG.validate_catalog(paper)
+	_check("会話送り／紙芝居fixtureは落ちる",
+		_has_error(paper_errors, "紙芝居なので禁止"), str(paper_errors.slice(0, 4)))
+	var inert_choice := catalog.duplicate(true)
+	inert_choice["arcs"][0]["choices"][0].erase("runtime_effects")
+	var choice_errors := SAG.validate_catalog(inert_choice)
+	_check("結末文だけで実効果の無い選択fixtureは落ちる",
+		_has_error(choice_errors, "ゲーム内効果が無い"), str(choice_errors.slice(0, 4)))
+
+	var event_view_source := FileAccess.get_file_as_string("res://src/scenes/event_view.gd")
+	var main_source := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	var battle_view_source := FileAccess.get_file_as_string("res://src/scenes/battle_view.gd")
+	var choice_start := main_source.find("func _on_story_choice")
+	var choice_end := main_source.find("func _begin_story_operation", choice_start)
+	var complete_start := main_source.find("func _complete_story_task")
+	var complete_end := main_source.find("func _show_story_task_objective", complete_start)
+	var cross_start := main_source.find("func _show_cross_world_beat")
+	var cross_end := main_source.find("func _town_placement", cross_start)
+	_check("選択の無い『話を続ける』行を生成しない",
+		not event_view_source.contains("EVENT_CONTINUE_CHOICE")
+		and event_view_source.contains("phase\", \"\")) != \"choice\""))
+	_check("物語の選択時には拍も報酬も進めない",
+		choice_start >= 0 and choice_end > choice_start
+		and not main_source.substr(choice_start, choice_end - choice_start).contains("advance_story")
+		and not main_source.substr(choice_start, choice_end - choice_start).contains("EventEffects.grant"))
+	_check("実操作の完了点だけが効果を渡して拍を進める",
+		complete_start >= 0 and complete_end > complete_start
+		and main_source.substr(complete_start, complete_end - complete_start).contains("EventEffects.grant")
+		and main_source.substr(complete_start, complete_end - complete_start).contains("advance_story"))
+	_check("またぐ物語の中間拍も文章一枚で入力を止めない",
+		cross_start >= 0 and cross_end > cross_start
+		and not main_source.substr(cross_start, cross_end - cross_start).contains("open_outcome"))
+	_check("決戦の物語は別窓でなく実際の開戦文へ入る",
+		main_source.contains("_battle_opening_context.append")
+		and main_source.contains("String(task.get(\"cue\", \"\"))")
+		and battle_view_source.contains("_opening_lines = context_lines.duplicate()")
+		and battle_view_source.contains("append_array(BattleOpeningGate.lines(system))"))
+
 
 func _effect_state():
 	var state = load("res://src/game/game_state.gd").new()
@@ -411,6 +611,16 @@ func _test_ai_boundary() -> void:
 	_check("AIへID・選択肢・数値効果を渡さない", clean, facts_json)
 	_check("AI入力には四つのfallbackと文字数上限がある",
 		WEC.facts_for_ai(fallback).slots.size() == 4)
+
+	var awkward := WEC.apply_ai_skin(fallback, {"skin": {
+		"title": "水辺の鳥",
+		"flavor": "水場で鳴く鳥のさえずりは静かにしている",
+	}})
+	_check("主語と述語が噛み合わないAI情景だけfallbackへ戻す",
+		awkward.skin.title == "水辺の鳥"
+		and awkward.skin.flavor == fallback.skin.flavor
+		and awkward.rejected.size() == 1
+		and String(awkward.rejected[0].get("reason", "")) == "predicate_mismatch")
 
 
 func _ids(events: Array[Dictionary]) -> Array[String]:

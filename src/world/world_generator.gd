@@ -131,6 +131,90 @@ static func _place_events(map: WorldMap, rng: DetRng) -> void:
 			continue
 		map.events[at] = WorldEventCatalog.instantiate(picked[0], rng, context)
 
+	# 格上の敵は本街道の**横**へ1件だけ置く。街道を進めば避けられるが、
+	# 赤い印へ寄れば、戦う前に型と報酬を読んで挑める。
+	_place_visible_elite(map, rng)
+
+
+static func _place_visible_elite(map: WorldMap, rng: DetRng) -> void:
+	var road_cells := {}
+	for at in map.main_road:
+		road_cells[at] = true
+	var candidates: Array[Vector2i] = []
+	@warning_ignore("integer_division")
+	var lo := map.main_road.size() / 4
+	@warning_ignore("integer_division")
+	var hi := map.main_road.size() * 3 / 4
+	for i in range(lo, hi + 1):
+		var road: Vector2i = map.main_road[i]
+		for step in FieldMap.NEIGHBORS:
+			var middle := road + step
+			var at := road + step * 2
+			if (
+				map.in_bounds(at.x, at.y)
+				and map.in_bounds(middle.x, middle.y)
+				and map.is_walkable(at.x, at.y)
+				and map.is_walkable(middle.x, middle.y)
+				and not road_cells.has(at)
+				and not road_cells.has(middle)
+				and not map.sites.has(at)
+				and not map.sites.has(middle)
+				and not map.events.has(at)
+				and at not in candidates
+			):
+				candidates.append(at)
+	if candidates.is_empty():
+		return
+	var at: Vector2i = candidates[rng.range_i(0, candidates.size() - 1)]
+	# 本街道から二マスの短い枝道を絵にも刻む。格上を避ける本線と、
+	# 寄って挑む枝線が地形だけで分かれる。
+	for step in FieldMap.NEIGHBORS:
+		var middle := at + step
+		var road := at + step * 2
+		if road in map.main_road:
+			map.set_tile(middle.x, middle.y, WorldMap.T_ROAD)
+			map.set_tile(at.x, at.y, WorldMap.T_ROAD)
+			break
+	var kind: Dictionary = Encounter.ELITE_KINDS[
+		rng.range_i(0, Encounter.ELITE_KINDS.size() - 1)
+	]
+	var context := {
+		"site_kind": "world",
+		"danger": map.danger_at(at.x, at.y),
+		"biome": map.biome_id_at(at.x, at.y),
+	}
+	map.events[at] = {
+		"event_id": "visible_elite:%s" % String(kind.get("id", "")),
+		"category": "elite",
+		"site_kind": "world",
+		"danger": [context["danger"], context["danger"]],
+		"tags": ["challenge", "elite"],
+		"premise": "街道の脇に、型の分かる格上の敵がいる。",
+		"trigger": "赤い印へ踏み込む。",
+		"visible_elite": true,
+		"elite_rule_id": String(kind.get("id", "")),
+		"skin": {
+			"title": Terms.ELITE_EVENT_TITLE % String(kind.get("name", "")),
+			"actor": Terms.ELITE_EVENT_ACTOR,
+			"cause": Terms.ELITE_EVENT_RULE % [
+				String(kind.get("name", "")), String(kind.get("rule", ""))
+			],
+			"flavor": Terms.ELITE_EVENT_FLAVOR,
+		},
+		"choices": [
+			{
+				"id": "fight", "label": Terms.ELITE_EVENT_FIGHT,
+				"costs": ["elite_fight"], "risks": [], "rewards": ["elite_loot"],
+			},
+			{
+				"id": "leave", "label": Terms.ELITE_EVENT_LEAVE,
+				"costs": ["none"], "risks": [], "rewards": ["none"], "defer": true,
+			},
+		],
+		"context": context,
+		"rejected": [],
+	}
+
 
 # --------------------------------------------------------------------------
 # 検算
@@ -228,14 +312,31 @@ static func verify(map: WorldMap) -> Array[String]:
 
 	# 5. 置いたイベントに歩いて行けること。
 	#    届かないイベントは、置いた手間がそのまま無駄になる。
+	var visible_elites := 0
 	for pos in map.events:
 		var at: Vector2i = pos
+		var instance: Dictionary = map.events[pos]
 		if not reachable.call(at):
-			problems.append("イベント（%s）に歩けない" % String(map.events[pos].get("event_id", "?")))
-		if String(map.events[pos].get("event_id", "")) == "":
+			problems.append("イベント（%s）に歩けない" % String(instance.get("event_id", "?")))
+		if String(instance.get("event_id", "")) == "":
 			problems.append("イベントに id が無い")
-		if not map.sites.has(at) and map.get_tile(at.x, at.y) != WorldMap.T_ROAD:
+		if bool(instance.get("visible_elite", false)):
+			visible_elites += 1
+			if at in map.main_road:
+				problems.append("格上の敵が本街道を塞いでいる")
+			var near_road := false
+			for road in map.main_road:
+				if _grid_distance(at, road) <= 2:
+					near_road = true
+					break
+			if not near_road:
+				problems.append("格上の敵が街道から見える短い枝道にいない")
+			if Encounter.elite_kind(String(instance.get("elite_rule_id", ""))).is_empty():
+				problems.append("格上の敵の型が実装に無い")
+		elif not map.sites.has(at) and map.get_tile(at.x, at.y) != WorldMap.T_ROAD:
 			problems.append("街道イベントが街道の外にある")
+	if visible_elites != 1:
+		problems.append("避けられる格上の敵が %d 件（1件であるべき）" % visible_elites)
 
 	# 6. 物語が成立していること。**筋が通らない世界は出さない。**
 	#    六拍のどれかが土地に結べていないと、そのランは途中で話が切れる。

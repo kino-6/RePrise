@@ -13,6 +13,7 @@ var members: Array[PartyMember] = []
 ## 危険度だけだと、同じ数字が世界の上にも洞の中にもあって混乱する。
 ## 居場所を先に書くと「深いところに居るから危ない」が読める。
 var place_label := Terms.DANGER_AT % 1
+var objective_label := ""
 
 var _toast := ""
 var _toast_timer := 0.0
@@ -23,10 +24,12 @@ func _ready() -> void:
 
 
 func refresh(
-	party: Array[PartyMember], floor_no: int, place: String = ""
+	party: Array[PartyMember], floor_no: int, place: String = "",
+	objective: String = ""
 ) -> void:
 	members = party
 	place_label = place if place != "" else Terms.DANGER_AT % floor_no
+	objective_label = objective
 	queue_redraw()
 
 
@@ -58,6 +61,14 @@ func _draw() -> void:
 	# 高さが本文1行を下回り、UiPanel が現在地を丸ごと捨ててしまう。
 	UiPanel.inside(self, PixelUI.content(head)).line(
 		place_label, PixelUI.C_TEXT)
+
+	# 任意イベントを引き受けている間だけ、次にする実行工程を残す。
+	# 右上は地図上の入口や人物が隠れるため使わず、下HUDの直上へ一段だけ出す。
+	if objective_label != "":
+		var objective := Rect2(8, 234, 496, 32)
+		PixelUI.draw_window(self, objective, WINDOW_TEX)
+		UiPanel.inside(self, PixelUI.content(objective)).line(
+			objective_label, PixelUI.C_ACTIVE, PixelUI.SIZE_TEXT)
 
 	# パーティの体力（探索中も常に見えていないと引き際が判断できない）
 	var status := Rect2(8, 268, 496, 44)

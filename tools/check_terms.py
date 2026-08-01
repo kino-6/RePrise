@@ -63,7 +63,83 @@ def coined_words() -> set[str]:
     return out
 
 # 語の置き場そのもの。ここに日本語が在るのが正しい。
-HOMES = {"terms.gd", "vocabulary.gd", "lore.gd"}
+HOMES = {"terms.gd", "vocabulary.gd", "lore.gd", "battle_text.gd"}
+
+## **外部化が済んだファイル**（S-6）。ここは「語彙に載っている語」ではなく、
+## **画面に出る日本語の文が 1 つも残っていない**ことを見る。
+##
+## 一度出したものが少しずつ戻るのを防ぐための関門。1052 件を一度に動かすと
+## 差分が読めないので、済んだファイルから 1 つずつここへ足していく
+## （S-6a 戦闘ログ → S-6b イベントと物語 → S-6c 通知と検算）。
+##
+## 開発者しか読まないもの（`push_error` / `push_warning` / `print`）は残してよい。
+## 分ける線は「画面に出るか、開発者だけが読むか」の 1 本だけ。
+EXTERNALIZED = {
+    "src/battle/battle_system.gd": "S-6a 戦闘ログは battle_text.gd へ出した",
+}
+
+DEV_ONLY = ("push_error", "push_warning", "print(")
+
+## `Vocabulary.word("節", "鍵", "既定値")` の呼び出し。
+##
+## **同じ文が 2 か所にある**（コードの既定値と `data/vocabulary.json`）。
+## `Vocabulary.word` は JSON を優先するので、**既定値だけを書き換えても
+## 画面は 1 文字も変わらない。** 直したつもりで直っていない、という
+## 気づきようのない事故になる（S-7 で実際に 101 件たまっていた）。
+##
+## 既定値を消して JSON だけにする手もあるが、「語彙が読めないだけで
+## ゲームが止まってはいけない」という決めごとがあるので受け皿は残す。
+## 代わりに**食い違ったら落とす**。片方を直したらもう片方も直る。
+VOCAB_CALL = re.compile(
+    r'Vocabulary\.word\(\s*"([a-z_0-9]+)"\s*,\s*"([a-z_0-9]+)"\s*,\s*"((?:[^"\\]|\\.)*)"\s*\)',
+    re.S,
+)
+
+
+def scan_vocabulary_drift(root) -> list[str]:
+    """コードの既定値と JSON の値が食い違っている語。"""
+    import json
+    path = root / "data" / "vocabulary.json"
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    drift: list[str] = []
+    for source in sorted(root.glob("src/**/*.gd")):
+        text = source.read_text(encoding="utf-8")
+        for match in VOCAB_CALL.finditer(text):
+            section, key, default = match.group(1), match.group(2), match.group(3)
+            value = data.get(section, {}).get(key)
+            if value is None or value == default.replace('\\"', '"'):
+                continue
+            drift.append(
+                "%s の %s.%s が食い違う（コード %r / JSON %r）"
+                % (source.name, section, key, default[:20], value[:20])
+            )
+    return drift
+
+
+def scan_externalized(root) -> list[str]:
+    """外部化済みのファイルへ戻ってきた直書きを探す。"""
+    problems: list[str] = []
+    for rel, why in sorted(EXTERNALIZED.items()):
+        path = root / rel
+        if not path.exists():
+            problems.append("%s が無い（%s）" % (rel, why))
+            continue
+        hits: list[str] = []
+        for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            code = line.split("#")[0]
+            if any(key in code for key in DEV_ONLY):
+                continue
+            for match in LITERAL.finditer(code):
+                if JAPANESE.search(match.group(1)):
+                    hits.append("%d 行目 %r" % (number, match.group(1)[:24]))
+        if hits:
+            problems.append(
+                "%s に画面向けの直書きが %d 件戻っている（例: %s）"
+                % (rel, len(hits), hits[0])
+            )
+    return problems
 
 # 残していい直書きと、その理由。**理由の無い許可は許可ではない。**
 ALLOWED: dict[str, str] = {
@@ -135,11 +211,51 @@ def _selftest() -> int:
     ok = not quiet
     bad += 0 if ok else 1
     print("  %s  記号と数字だけは拾わない" % ("OK" if ok else "NG"))
+
+    # **外部化の関門も試す。** 正常系だけ見ても、戻りを見逃す関門は見つからない。
+    import tempfile
+    with tempfile.TemporaryDirectory() as work:
+        root = Path(work)
+        rel = next(iter(EXTERNALIZED))
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(
+            'push_error("未定義の技: %s" % id)\nvar a := "attack"\n', encoding="utf-8"
+        )
+        clean = not scan_externalized(root)
+        bad += 0 if clean else 1
+        print("  %s  外部化済みなら通す" % ("OK" if clean else "NG"))
+        (root / rel).write_text('lines.append("%sの こうげき！")\n', encoding="utf-8")
+        caught = bool(scan_externalized(root))
+        bad += 0 if caught else 1
+        print("  %s  直書きが戻ったら落とす" % ("OK" if caught else "NG"))
+        (root / rel).unlink()
+        missing = bool(scan_externalized(root))
+        bad += 0 if missing else 1
+        print("  %s  ファイルごと消えたら落とす" % ("OK" if missing else "NG"))
+
+        # **語の二重化も試す。** 片方だけ直しても画面が変わらない事故を見張る。
+        (root / "data").mkdir(parents=True, exist_ok=True)
+        (root / "src" / "ui").mkdir(parents=True, exist_ok=True)
+        gd = root / "src" / "ui" / "t.gd"
+        gd.write_text(
+            'static var A := Vocabulary.word("terms", "a", "ぬけがら")\n',
+            encoding="utf-8",
+        )
+        (root / "data" / "vocabulary.json").write_text(
+            '{"terms": {"a": "ぬけがら"}}', encoding="utf-8")
+        same = not scan_vocabulary_drift(root)
+        bad += 0 if same else 1
+        print("  %s  2 か所が同じなら通す" % ("OK" if same else "NG"))
+        (root / "data" / "vocabulary.json").write_text(
+            '{"terms": {"a": "抜け殻"}}', encoding="utf-8")
+        caught_drift = bool(scan_vocabulary_drift(root))
+        bad += 0 if caught_drift else 1
+        print("  %s  片方だけ直したら落とす" % ("OK" if caught_drift else "NG"))
     print("---")
     if bad:
         print("検査器が壊れている（%d 件）" % bad)
         return 1
-    print("検査器は期待どおり動く（%d 件）" % (len(cases) + 1))
+    print("検査器は期待どおり動く（%d 件）" % (len(cases) + 6))
     return 0
 
 
@@ -171,6 +287,15 @@ def main(argv: list[str]) -> int:
         print("  %-24s %3d 種%s" % (name, len(found[name]), mark))
     print("---")
     problems = judge(found, ALLOWED)
+    external = scan_externalized(ROOT)
+    for rel in sorted(EXTERNALIZED):
+        print("  外部化済み %-32s %s" % (rel, "戻りなし" if not any(
+            rel in note for note in external) else "**戻っている**"))
+    problems.extend(external)
+    drift = scan_vocabulary_drift(ROOT)
+    print("  語の二重化      %s" % (
+        "食い違いなし" if not drift else "**%d 件が食い違う**" % len(drift)))
+    problems.extend(drift[:5])
     if problems:
         for note in problems:
             print("  - %s" % note)

@@ -292,7 +292,13 @@ static func draw_text(
 	canvas: CanvasItem, top_left: Vector2, text: String,
 	color: Color = C_TEXT, size: int = SIZE_TEXT
 ) -> void:
+	# **漢字が来たら 14px へ上げる**（S-8）。詰めるより先に決める ――
+	# 寸法が変われば入る幅も変わるので、順番を逆にすると 12px の幅で詰めてから
+	# 14px で描くことになり、また溢れる。
+	size = readable_size(text, size)
 	text = _fit(top_left, text, size)
+	# 上げたあとに漢字が残っていたら、`readable_size` が効いていない。
+	# **黙って小さく描かない**ための保険として控えは残す。
 	if size < SIZE_TEXT and has_kanji(text):
 		var note := "「%s」を %dpx で描いた" % [text.substr(0, 18), size]
 		if note not in _small_kanji:
@@ -331,8 +337,28 @@ static func draw_text_center(
 	)
 
 
+## 実際に描かれる寸法（S-8）。**漢字は 12px では描かない。**
+##
+## `SIZE_SUB`(12) は かな・数字専用と決めてある（MS ゴシックの 12px で
+## 銀・響・深・階 が団子になるのを並べて撮って決めた）。だが呼び名を漢字へ
+## 寄せた回に、かなだった語（`こうげき` `じゅくれんど`）が漢字になり、
+## **小さい札に漢字が載る場所が 21 画面・79 件**できた。
+##
+## 呼ぶ側 79 か所へ「ここは 14px」と書いて回る手もあるが、それは
+## **次に語を漢字へ寄せた人がまた同じ穴に落ちる**形でしかない。
+## 寸法の判断は窓の側でやる ―― 漢字が来たら 14px へ上げ、幅は
+## 既にある詰め（`_fit`）が吸収する。
+##
+## **測る側と描く側で同じ関数を通す。** 片方だけ上げると、12px で測って
+## 14px で描くことになり、右寄せと中央寄せがずれる。
+static func readable_size(text: String, size: int) -> int:
+	return SIZE_TEXT if size < SIZE_TEXT and has_kanji(text) else size
+
+
 static func text_width(text: String, size: int = SIZE_TEXT) -> float:
-	return font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	return font().get_string_size(
+		text, HORIZONTAL_ALIGNMENT_LEFT, -1, readable_size(text, size)
+	).x
 
 
 static func text_height(size: int = SIZE_TEXT) -> float:
@@ -484,16 +510,31 @@ static func draw_window(
 ##
 ## 拠点・出店・探索メニュー・探索 HUD で同じ形の窓を 4 回書いていたので集約した。
 ## 幅は文字に合わせて伸ばす。中央寄せの箱は、幅を固定すると必ずどこかで溢れる。
+##
+## **改行を含む一言は縦に伸ばす。** 横へ繋ぐと箱が画面から溢れるので、
+## 「取った物」と「これ以上は呼ぶ」のように**別の用の 2 行**は行で分ける
+## （繋いだ結果、片方が読めなくなるのがいちばん困る）。
 static func draw_notice(
 	canvas: CanvasItem, texture: Texture2D, text: String, y: float,
 	color: Color = C_TEXT
 ) -> void:
 	if text == "":
 		return
-	var width := text_width(text) + 36.0
-	var box := Rect2((SCREEN.x - width) * 0.5, y, width, 36)
+	var lines := text.split("\n", false)
+	if lines.is_empty():
+		return
+	var width := 0.0
+	for line in lines:
+		width = maxf(width, text_width(line) + 36.0)
+	# **伸びるのは上へ。** 下は探索の体力窓が待っているので、下へ伸ばすと
+	# 一言が出ている間だけ体力が読めなくなる（引き際の判断が消える）。
+	var extra := LINE * float(lines.size() - 1)
+	var box := Rect2((SCREEN.x - width) * 0.5, y - extra, width, 36.0 + extra)
 	draw_window(canvas, box, texture)
-	draw_text(canvas, content(box).position + Vector2(8, 1), text, color)
+	var at := content(box).position + Vector2(8, 1)
+	for line in lines:
+		draw_text(canvas, at, line, color)
+		at.y += LINE
 
 
 ## HP / MP のゲージ。数値だけより残量が一目で分かる。

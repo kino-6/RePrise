@@ -1,6 +1,11 @@
 class_name BattleSystem
 extends RefCounted
 
+## 画面に出る文は `src/ui/battle_text.gd` にある（S-6a）。
+## **ここに文を書き戻さない** ―― 言い回しを直すたびに、決定性とバランスの
+## 中心である戦闘ロジックを触ることになる。`check_terms.py` が戻りを見張る。
+const BattleText := preload("res://src/ui/battle_text.gd")
+
 ## CTB 戦闘のロジック本体。
 ##
 ## 描画も入力も持たない。UI は「今だれの手番か」を訊き、「この技をこの相手に」と
@@ -133,6 +138,7 @@ func start(
 		b.reload_turns = 0
 	scheduler = CtbScheduler.new()
 	_ultimate_uses.clear()
+	_tool_uses.clear()
 	_last_magic.clear()
 	_in_ultimate = false
 	_open_battle_signs()
@@ -185,9 +191,9 @@ func begin_turn_effects(actor: Battler) -> Dictionary:
 		actor.poison_turns -= 1
 		var dmg := maxi(actor.max_hp * POISON_RATE / 100, 1)
 		actor.apply_damage(dmg)
-		lines.append("%sは　どくで %d の ダメージ！" % [actor.name, dmg])
+		lines.append(BattleText.BEGIN_TURN_EFFECTS_1 % [actor.name, dmg])
 		if not actor.is_alive():
-			lines.append("%sは　たおれた…" % actor.name)
+			lines.append(BattleText.BEGIN_TURN_EFFECTS_2 % actor.name)
 			_check_finished()
 			return {"lines": lines, "skipped": true}
 
@@ -198,11 +204,11 @@ func begin_turn_effects(actor: Battler) -> Dictionary:
 		actor.rune_turns -= 1
 		if actor.rune_turns <= 0:
 			actor.attack_element = ""
-			lines.append("%sの　刃から 色が 抜けた" % actor.name)
+			lines.append(BattleText.BEGIN_TURN_EFFECTS_3 % actor.name)
 
 	if actor.sleep_turns > 0:
 		actor.sleep_turns -= 1
-		lines.append("%sは　ねむっている…" % actor.name)
+		lines.append(BattleText.BEGIN_TURN_EFFECTS_4 % actor.name)
 		skipped = true
 		# 眠っているぶん、次の手番も後ろへ回る。
 		scheduler.consume(actor, CtbScheduler.STANDARD_COST)
@@ -212,7 +218,7 @@ func begin_turn_effects(actor: Battler) -> Dictionary:
 	if actor.reload_turns > 0:
 		actor.reload_turns -= 1
 		if actor.reload_turns == 0:
-			lines.append("%sは　装填を おえた" % actor.name)
+			lines.append(BattleText.BEGIN_TURN_EFFECTS_5 % actor.name)
 
 	return {"lines": lines, "skipped": skipped}
 
@@ -229,8 +235,8 @@ func _open_battle_signs() -> void:
 			if weakest != "":
 				break
 		sign_notes.append(
-			"みとおしの印: %s が 通る" % weakest if weakest != ""
-			else "みとおしの印: 目立った弱点は 無い"
+			BattleText.OPEN_BATTLE_SIGNS_1 % weakest if weakest != ""
+			else BattleText.OPEN_BATTLE_SIGNS_2
 		)
 	if "ranger" in signs and not enemies.is_empty():
 		# えものの印。狙う 1 体の残りと次の手が読める。
@@ -238,9 +244,9 @@ func _open_battle_signs() -> void:
 		for foe in enemies:
 			if foe.hp > prey.hp:
 				prey = foe
-		sign_notes.append("えものの印: %s は 残り %d／次は %s" % [
+		sign_notes.append(BattleText.OPEN_BATTLE_SIGNS_3 % [
 			prey.name, prey.hp,
-			Database.ability(prey.planned_ability).get("name", "まだ 読めない"),
+			Database.ability(prey.planned_ability).get("name", BattleText.OPEN_BATTLE_SIGNS_4),
 		])
 	if "gunner" in signs:
 		# しょだんの印。初弾に性質が乗る（装填と同じ扱い）。
@@ -248,7 +254,7 @@ func _open_battle_signs() -> void:
 			if ally.is_alive():
 				ally.charged = true
 				break
-		sign_notes.append("しょだんの印: 初弾に 弾を こめた")
+		sign_notes.append(BattleText.OPEN_BATTLE_SIGNS_5)
 
 
 ## 瀕死の獣をなだめる（E-2b / まじゅうつかい「なだめの印」）。
@@ -308,11 +314,11 @@ func echo_ability_sign(actor: Battler, target: Battler = null) -> Array[String]:
 	if not sign_ready("sage") or last_ally_ability == "":
 		return []
 	if int(Database.ability(last_ally_ability).get("uses_per_battle", 0)) > 0:
-		return ["%sは　奥義を 再演できない" % actor.name]
+		return [BattleText.ECHO_ABILITY_SIGN_1 % actor.name]
 	spend_sign("sage")
 	var cost := int(Database.ability(last_ally_ability).get("mp", 0)) * ECHO_MP_RATE / 100
 	actor.mp = maxi(actor.mp - cost, 0)
-	var lines: Array[String] = ["%sの さいえんの印！" % actor.name]
+	var lines: Array[String] = [BattleText.ECHO_ABILITY_SIGN_2 % actor.name]
 	lines.append_array(perform(actor, last_ally_ability, target))
 	return lines
 
@@ -464,7 +470,7 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 		return []
 	var unavailable := ability_unavailable_reason(actor, ability_id, target)
 	if unavailable != "":
-		return ["%sは　%sを 使えない（%s）" % [
+		return [BattleText.PERFORM_1 % [
 			actor.name, ab.get("name", ability_id), unavailable
 		]]
 
@@ -477,10 +483,10 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 	var limit := int(ab.get("uses_per_battle", 0))
 	if limit > 0:
 		if _in_ultimate:
-			return ["%sは　続けて 奥義を 出せない" % actor.name]
+			return [BattleText.PERFORM_2 % actor.name]
 		var used := int(_ultimate_uses.get([actor.id, ability_id], 0))
 		if used >= limit:
-			return ["%sは　もう %s を 出せない" % [actor.name, ab.get("name", ability_id)]]
+			return [BattleText.PERFORM_3 % [actor.name, ab.get("name", ability_id)]]
 		_ultimate_uses[[actor.id, ability_id]] = used + 1
 		_in_ultimate = true
 
@@ -491,7 +497,7 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 	last_hit_amount.clear()
 	var lines: Array[String] = []
 	actor.mp = maxi(actor.mp - int(ab.get("mp", 0)), 0)
-	lines.append("%sの　%s！" % [actor.name, ab.get("name", ability_id)])
+	lines.append(BattleText.PERFORM_4 % [actor.name, ab.get("name", ability_id)])
 
 	var targets := _resolve_targets(actor, ab, target)
 	var kind := String(ab.get("kind", "physical"))
@@ -523,19 +529,19 @@ func perform(actor: Battler, ability_id: String, target: Battler = null) -> Arra
 				for t in targets:
 					if String(ab.get("target", "")) == "one_ally_dead":
 						if t.is_alive():
-							lines.append("しかし　なにも おこらなかった")
+							lines.append(BattleText.HEAL_1)
 							continue
 						t.hp = maxi(t.max_hp * power / 100, 1)
-						lines.append("%sは　いきを ふきかえした！" % t.name)
+						lines.append(BattleText.HEAL_2 % t.name)
 					elif String(ab.get("effect", "")) == "cleanse":
 						if t.has_status():
 							t.clear_status()
-							lines.append("%sの　ぐあいが よくなった" % t.name)
+							lines.append(BattleText.HEAL_3 % t.name)
 						else:
-							lines.append("しかし　なにも おこらなかった")
+							lines.append(BattleText.HEAL_1)
 					else:
 						var healed := t.heal(power + actor.mag / 2)
-						lines.append("%sの　きずが %d かいふくした" % [t.name, healed])
+						lines.append(BattleText.HEAL_4 % [t.name, healed])
 			"buff", "debuff", "special":
 				lines.append_array(_apply_effect(actor, ab, targets))
 
@@ -578,7 +584,7 @@ func _strike(
 		var receiver := t
 		if t.protected_by != null and t.protected_by.is_alive() and t.protected_by != actor:
 			receiver = t.protected_by
-			lines.append("%sが　%sを かばった！" % [receiver.name, t.name])
+			lines.append(BattleText.STRIKE_1 % [receiver.name, t.name])
 
 		var total := 0
 		var tag := ""
@@ -600,7 +606,7 @@ func _strike(
 				if alive.is_empty():
 					break
 				receiver = alive[0]
-				lines.append("%sへ 打ち直す" % receiver.name)
+				lines.append(BattleText.STRIKE_2 % receiver.name)
 			var dmg := _damage(
 				actor, receiver, shot_power * spread / 100, magical, element, shot_pierce)
 			# **みきりの印**（E-2b / にんじゃ）。予告された単体攻撃を 1 度だけ避ける。
@@ -610,18 +616,18 @@ func _strike(
 				and actor.planned_ability != "" and sign_ready("ninja")
 			):
 				spend_sign("ninja")
-				lines.append("%sは　みきりの印で かわした！" % receiver.name)
+				lines.append(BattleText.STRIKE_3 % receiver.name)
 				continue
 			# **みがわりの印**（E-2b / せいきし）。致死傷を 1 度だけ 1 で耐える。
 			var endured := _endure_sign(receiver, dmg)
 			if endured != dmg:
 				dmg = endured
-				lines.append("%sは　みがわりの印で こらえた！" % receiver.name)
+				lines.append(BattleText.STRIKE_4 % receiver.name)
 			var decoys_before := receiver.decoy_hits
 			var dealt := receiver.apply_damage(dmg)
 			total += dealt
 			if decoys_before > receiver.decoy_hits:
-				lines.append("%sの　影が 攻撃を 受けた" % receiver.name)
+				lines.append(BattleText.STRIKE_5 % receiver.name)
 			elif dealt > 0:
 				if receiver.id not in last_hit_ids:
 					last_hit_ids.append(receiver.id)
@@ -632,24 +638,24 @@ func _strike(
 				var back := dealt * COUNTER_RATE / 100
 				if back > 0:
 					actor.apply_damage(back)
-					lines.append("%sが　むかえうった！ %s に %d" % [
+					lines.append(BattleText.STRIKE_6 % [
 						receiver.name, actor.name, back])
 		actor.charged = false
 		tag = _element_tag(receiver, element)
 		if hits > 1:
-			lines.append("%sに　%d の ダメージ！（%d 回）%s" % [receiver.name, total, hits, tag])
+			lines.append(BattleText.STRIKE_7 % [receiver.name, total, hits, tag])
 		else:
-			lines.append("%sに　%d の ダメージ！%s" % [receiver.name, total, tag])
+			lines.append(BattleText.STRIKE_8 % [receiver.name, total, tag])
 
 		# 眠りは物理で起きる（FF の作法。眠らせて殴るだけの解にしない）。
 		if receiver.sleep_turns > 0 and not magical:
 			receiver.sleep_turns = 0
-			lines.append("%sは　目をさました！" % receiver.name)
+			lines.append(BattleText.STRIKE_9 % receiver.name)
 
 		if String(ab.get("effect", "")) == "poison" and receiver.is_alive():
 			if receiver.poison_turns <= 0 and rng.chance(60):
 				receiver.poison_turns = POISON_TURNS
-				lines.append("%sは　どくに おかされた！" % receiver.name)
+				lines.append(BattleText.STRIKE_10 % receiver.name)
 
 		# **三つの理**（まほうつかい「みつのことわり」）。炎・氷・雷を同時に通す。
 		if receiver.is_alive() and total > 0 				and String(ab.get("effect", "")) == "triune":
@@ -662,13 +668,13 @@ func _strike(
 			lines.append_array(_element_effect(actor, receiver, element, total))
 
 		if not receiver.is_alive():
-			lines.append("%sを　たおした！" % receiver.name)
+			lines.append(BattleText.STRIKE_11 % receiver.name)
 			# **残影**（にんじゃ「ざんえい」）。倒しきればすぐ次が動ける。
 			# 倒せなかったときは何も起きない ―― 決めきる技であって、
 			# 押すだけで速くなる技ではない。
 			if String(ab.get("effect", "")) == "afterimage":
 				actor.next_at = maxi(actor.next_at - AFTERIMAGE_GAIN, 0)
-				lines.append("%sは　影を のこして next へ" % actor.name)
+				lines.append(BattleText.STRIKE_12 % actor.name)
 
 	# 攻めながら味方も癒す技（賢者の一撃）。攻撃と回復を 1 手で兼ねるので、
 	# 手番の価値がいちばん高い。そのぶんコストと MP は重くしてある。
@@ -677,7 +683,7 @@ func _strike(
 		for friend in (living_allies() if actor.is_ally else living_enemies()):
 			var healed := friend.heal(mend)
 			if healed > 0:
-				lines.append("%sの　きずが %d かいふくした" % [friend.name, healed])
+				lines.append(BattleText.HEAL_4 % [friend.name, healed])
 	return lines
 
 
@@ -706,24 +712,24 @@ func _element_effect(
 				if other == target:
 					continue
 				other.apply_damage(splash)
-				lines.append("%sにも 火が うつった（%d）" % [other.name, splash])
+				lines.append(BattleText.FIRE_1 % [other.name, splash])
 				if not other.is_alive():
-					lines.append("%sを　たおした！" % other.name)
+					lines.append(BattleText.STRIKE_11 % other.name)
 		"ice":
 			# 次の手番を遅らせる。**倒しきれない相手に対する答え**になる。
 			target.next_at += CtbScheduler.wait_for(target.effective_agi(), ICE_DELAY)
-			lines.append("%sの　動きが にぶった" % target.name)
+			lines.append(BattleText.ICE_1 % target.name)
 		"bolt":
 			# 溜めている行動を打ち消す。予告技を見てから当てる技。
 			if target.planned_ability != "":
 				target.planned_ability = ""
-				lines.append("%sの　構えが くずれた！" % target.name)
+				lines.append(BattleText.BOLT_1 % target.name)
 		"dark":
 			# 傷を自分の力へ移す。**削るだけでなく、続ける力に変える。**
 			var drained := dealt * DARK_DRAIN / 100
 			if drained > 0 and actor.mp < actor.max_mp:
 				actor.mp = mini(actor.mp + drained, actor.max_mp)
-				lines.append("%sは 力を すいとった（MP+%d）" % [actor.name, drained])
+				lines.append(BattleText.DARK_1 % [actor.name, drained])
 	return lines
 
 
@@ -737,9 +743,9 @@ func _element_tag(target: Battler, element: String) -> String:
 	if element == "":
 		return ""
 	if element in target.weak:
-		return "　弱点！"
+		return BattleText.ELEMENT_TAG_1
 	if element in target.resist:
-		return "　効きが わるい"
+		return BattleText.ELEMENT_TAG_2
 	return ""
 
 
@@ -820,7 +826,7 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 	# ぼうぎょ（effect 指定なしの self 技）
 	if effect == "" and String(ab.get("target", "")) == "self":
 		actor.guarding = true
-		lines.append("%sは　みをまもっている" % actor.name)
+		lines.append(BattleText.APPLY_EFFECT_1 % actor.name)
 		return lines
 
 	# **「鈍らせる」に何が付いてくるか**（F-2）。相手への効果は下の輪で、
@@ -840,13 +846,13 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 			"haste":
 				t.agi_scale = 150
 				t.agi_scale_turns = BUFF_TURNS
-				lines.append("%sの　すばやさが あがった！" % t.name)
+				lines.append(BattleText.HASTE_1 % t.name)
 			"slow":
 				t.agi_scale = 70
 				t.agi_scale_turns = BUFF_TURNS
 				# 素早さが落ちた効果を行動順にも即座に反映させる
 				t.next_at += CtbScheduler.wait_for(t.effective_agi(), 40)
-				lines.append("%sの　すばやさが さがった！" % t.name)
+				lines.append(BattleText.SLOW_1 % t.name)
 			"slow_and_haste_self", "slow_and_flee":
 				# **同じ「鈍らせる」でも、付いてくるものが違う**（F-2）。
 				# 前は両方とも素の `slow` で、名前と説明だけが違っていた
@@ -855,24 +861,24 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				t.agi_scale = 70
 				t.agi_scale_turns = BUFF_TURNS
 				t.next_at += CtbScheduler.wait_for(t.effective_agi(), 40)
-				lines.append("%sの　すばやさが さがった！" % t.name)
+				lines.append(BattleText.SLOW_1 % t.name)
 			"sleep":
 				# ボスには効きにくい。ここが効きすぎると戦闘が「眠らせて殴る」だけになる。
 				var odds := 35 if _is_boss(t) else 70
 				if rng.chance(odds):
 					t.sleep_turns = SLEEP_TURNS
-					lines.append("%sは　ねむってしまった！" % t.name)
+					lines.append(BattleText.SLEEP_1 % t.name)
 				else:
-					lines.append("%sには きかなかった" % t.name)
+					lines.append(BattleText.SLEEP_2 % t.name)
 			"defend_up":
 				# 自分は自分をかばえない。全体版（まもりのかまえ）で自分が
 				# 対象に入ったときは、素直に身構えるだけにする。
 				if t == actor:
 					actor.guarding = true
-					lines.append("%sは　みをまもっている" % actor.name)
+					lines.append(BattleText.APPLY_EFFECT_1 % actor.name)
 				else:
 					t.protected_by = actor
-					lines.append("%sが　%sを かばう たいせいに はいった" % [actor.name, t.name])
+					lines.append(BattleText.DEFEND_UP_1 % [actor.name, t.name])
 			"steal":
 				lines.append_array(_steal_from(actor, t))
 			"random":
@@ -885,7 +891,7 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 					var second := rng.range_i(0, 5)
 					var better := (
 						first if WHIM_SCORE[first] >= WHIM_SCORE[second] else second)
-					lines.append("%sは えらびのばくち印で 目を選んだ" % actor.name)
+					lines.append(BattleText.RANDOM_1 % actor.name)
 					lines.append_array(_play_around(actor, t, better))
 				else:
 					lines.append_array(_play_around(actor, t))
@@ -893,7 +899,7 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				# **行動回数を変える**（奥義の型 1）。この者がもう一度すぐ動く。
 				# 再演は禁じてあるので、奥義から奥義へは繋がらない。
 				actor.next_at = maxi(actor.next_at - ULTIMATE_TURN_GAIN, 0)
-				lines.append("%sは　もう一度 動ける！" % actor.name)
+				lines.append(BattleText.EXTRA_TURN_1 % actor.name)
 			"reorder":
 				# **行動表を変える**（型 3）。敵の手番を後ろへ、味方を前へ。
 				for b in scheduler.living():
@@ -901,33 +907,33 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 						b.next_at = maxi(b.next_at - REORDER_SHIFT, 0)
 					else:
 						b.next_at += REORDER_SHIFT
-				lines.append("%sが　流れを 書き換えた" % actor.name)
+				lines.append(BattleText.REORDER_1 % actor.name)
 			"convert":
 				# **資源を変える**（型 4）。体力を削って魔力へ、または逆へ。
 				if actor.mp * 100 / maxi(actor.max_mp, 1) < 50:
 					var paid := maxi(actor.hp * CONVERT_RATE / 100, 1)
 					actor.apply_damage(mini(paid, maxi(actor.hp - 1, 0)))
 					actor.mp = mini(actor.mp + paid, actor.max_mp)
-					lines.append("%sは　命を 力へ 変えた（MP+%d）" % [actor.name, paid])
+					lines.append(BattleText.CONVERT_1 % [actor.name, paid])
 				else:
 					var spent := maxi(actor.mp * CONVERT_RATE / 100, 1)
 					actor.mp = maxi(actor.mp - spent, 0)
 					actor.heal(spent * 2)
-					lines.append("%sは　力を 命へ 変えた（HP+%d）" % [actor.name, spent * 2])
+					lines.append(BattleText.CONVERT_2 % [actor.name, spent * 2])
 			"banish":
 				# **撃破以外の決着**（型 5）。倒さずに場から外す。
 				# `てなずけ` より確実だが、1 戦に 1 度きり。
 				if _is_boss(t):
-					lines.append("%sには　通じない" % t.name)
+					lines.append(BattleText.BANISH_1 % t.name)
 				else:
 					t.tamed = true
-					lines.append("%sは　この場から 消えた" % t.name)
+					lines.append(BattleText.BANISH_2 % t.name)
 					_check_finished()
 			"counter":
 				# 構えて待つ。受けた傷をそのまま返す（せんし）。
 				actor.guarding = true
 				actor.counter_turns = SIGNATURE_TURNS
-				lines.append("%sは　むかえうちの かまえ" % actor.name)
+				lines.append(BattleText.COUNTER_1 % actor.name)
 			"chain":
 				# 全員を癒し、いちばん深い傷の者を速める（そうりょ）。
 				var worst: Battler = null
@@ -937,30 +943,30 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				if worst != null:
 					worst.agi_scale = 150
 					worst.agi_scale_turns = BUFF_TURNS
-					lines.append("%sの　いのりが %s に とどいた" % [actor.name, worst.name])
+					lines.append(BattleText.CHAIN_1 % [actor.name, worst.name])
 			"cover_all":
 				# 全員を自分の背へ置く（せいきし）。
 				for friend in (living_allies() if actor.is_ally else living_enemies()):
 					if friend != actor:
 						friend.protected_by = actor
-				lines.append("%sが　みんなを 背にした" % actor.name)
+				lines.append(BattleText.COVER_ALL_1 % actor.name)
 			"rune_edge":
 				# 刃に属性を移す。しばらく通常攻撃に乗る（まけんし）。
 				actor.attack_element = RUNE_ELEMENTS[
 					rng.range_i(0, RUNE_ELEMENTS.size() - 1)]
 				actor.rune_turns = SIGNATURE_TURNS
-				lines.append("%sの　刃が 色を おびた" % actor.name)
+				lines.append(BattleText.RUNE_EDGE_1 % actor.name)
 			"reload":
 				# 弾を込める。次の一撃が守りを抜いて重くなる（じゅうし）。
 				actor.charged = true
-				lines.append("%sは　弾を こめた" % actor.name)
+				lines.append(BattleText.RELOAD_1 % actor.name)
 			"stillness":
 				# 構えを解かせ、動きを止める（けんじゃ）。
 				t.planned_ability = ""
 				t.agi_scale = 70
 				t.agi_scale_turns = BUFF_TURNS
 				t.next_at += CtbScheduler.wait_for(t.effective_agi(), 40)
-				lines.append("%sは　動きを 止められた" % t.name)
+				lines.append(BattleText.STILLNESS_1 % t.name)
 			"pull_turn":
 				# 味方ひとりの手番を今へ引き寄せる（じじゅつし）。
 				# **いちばん早い者より前に置く。** 絶対時刻を持たないので、
@@ -969,24 +975,24 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				for b in scheduler.living():
 					soonest = mini(soonest, b.next_at)
 				t.next_at = maxi(soonest - 1, 0)
-				lines.append("%sの　手番が すぐ来る！" % t.name)
+				lines.append(BattleText.PULL_TURN_1 % t.name)
 			"tame":
 				# **倒さずに戦いから降ろす**（まじゅうつかい）。弱った相手ほど応じる。
 				# 撃破ではないので経験値も戦利品も出ない ―― 速さと引き換えの決着。
 				var ratio := t.hp * 100 / maxi(t.max_hp, 1)
 				if _is_boss(t):
-					lines.append("%sには　通じない" % t.name)
+					lines.append(BattleText.BANISH_1 % t.name)
 				elif rng.range_i(0, 99) < TAME_BASE - ratio:
 					t.tamed = true
-					lines.append("%sは　戦いから おりた" % t.name)
+					lines.append(BattleText.TAME_1 % t.name)
 					_check_finished()
 				else:
-					lines.append("%sは　応じない" % t.name)
+					lines.append(BattleText.TAME_2 % t.name)
 			"steal_and_haste":
 				lines.append_array(_steal_from(actor, t))
 				actor.agi_scale = 150
 				actor.agi_scale_turns = BUFF_TURNS
-				lines.append("%sは　そのまま 先へ 回った" % actor.name)
+				lines.append(BattleText.STEAL_AND_HASTE_1 % actor.name)
 			"all_or_nothing":
 				# **全部の出目をまとめて通す**（あそびにん）。良いも悪いも全部くる。
 				for roll in 6:
@@ -997,7 +1003,7 @@ func _apply_effect(actor: Battler, ab: Dictionary, targets: Array[Battler]) -> A
 				# 同じ表を単体／範囲で分けただけだと、操作としては同じ技になる。
 				lines.append_array(_pick_best_whim(actor, t))
 			_:
-				lines.append("しかし　なにも おこらなかった")
+				lines.append(BattleText.HEAL_1)
 	return lines
 
 
@@ -1050,7 +1056,7 @@ func _ultimate_strike(
 ) -> Array[String]:
 	var foe := _first_foe(actor, chosen)
 	if foe == null:
-		return ["しかし　対象が いない"]
+		return [BattleText.ULTIMATE_STRIKE_1]
 	var strike_data := {
 		"target": "one_enemy",
 		"power": power,
@@ -1118,9 +1124,9 @@ func _attack_spells(actor: Battler) -> Array[String]:
 func _replay_magic(actor: Battler, ability_id: String, chosen: Battler) -> Array[String]:
 	var spell := Database.ability(ability_id)
 	if spell.is_empty() or String(spell.get("kind", "")) != "magical":
-		return ["再演できる術式が なかった"]
+		return [BattleText.REPLAY_MAGIC_1]
 	var targets := _resolve_targets(actor, spell, chosen)
-	var lines: Array[String] = ["%sを 再演！" % spell.get("name", ability_id)]
+	var lines: Array[String] = [BattleText.REPLAY_MAGIC_2 % spell.get("name", ability_id)]
 	lines.append_array(_strike(
 		actor, spell, targets, int(spell.get("power", 0)), true
 	))
@@ -1144,21 +1150,21 @@ func _play_fate_card(actor: Battler, target: Battler, card: int) -> Array[String
 	var lines: Array[String] = []
 	match card:
 		0:
-			lines.append("剣の札を 選んだ")
+			lines.append(BattleText.PLAY_FATE_CARD_1)
 			lines.append_array(_ultimate_strike(actor, target, 205))
 		1:
 			var hurt := _most_hurt_friend(actor)
 			if hurt != null:
 				var healed := hurt.heal(actor.mag + 55)
-				lines.append("杯の札！ %sの 傷が %d 回復" % [hurt.name, healed])
+				lines.append(BattleText.PLAY_FATE_CARD_2 % [hurt.name, healed])
 		2:
 			if target != null:
 				target.planned_ability = ""
 				target.next_at += CtbScheduler.wait_for(target.effective_agi(), 80)
-				lines.append("鎖の札！ %sの 構えが ほどけた" % target.name)
+				lines.append(BattleText.PLAY_FATE_CARD_3 % target.name)
 		_:
 			actor.next_at = maxi(actor.next_at - ULTIMATE_TURN_GAIN, 0)
-			lines.append("翼の札！ %sの 手番が 近づいた" % actor.name)
+			lines.append(BattleText.PLAY_FATE_CARD_4 % actor.name)
 	return lines
 
 
@@ -1173,7 +1179,7 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 			for friend in _friends_of(actor):
 				if friend != actor:
 					friend.protected_by = actor
-			lines.append("%sは 全員を背に置き、反撃に備えた" % actor.name)
+			lines.append(BattleText.COUNTER_PHALANX_1 % actor.name)
 		"veteran_barrage":
 			lines.append_array(_ultimate_strike(actor, target, 55, false, 8, "", true))
 			actor.next_at = maxi(actor.next_at - 70, 0)
@@ -1181,25 +1187,25 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 			for friend in _friends_of(actor):
 				var healed := friend.heal(52 + actor.mag / 2)
 				friend.clear_status()
-				lines.append("%sの 傷と異常が癒えた（%d）" % [friend.name, healed])
+				lines.append(BattleText.SANCTUARY_1 % [friend.name, healed])
 		"returning_bell":
 			var party := allies if actor.is_ally else enemies
 			for friend in party:
 				if friend.is_alive():
 					friend.endure_hits = maxi(friend.endure_hits, 1)
-					lines.append("%sは 一度だけ踏みとどまれる" % friend.name)
+					lines.append(BattleText.RETURNING_BELL_1 % friend.name)
 				else:
 					friend.tamed = false
 					friend.hp = maxi(friend.max_hp * 35 / 100, 1)
-					lines.append("%sは いきを ふきかえした！" % friend.name)
+					lines.append(BattleText.RETURNING_BELL_2 % friend.name)
 		"phase_reveal":
 			if target != null:
-				var weak_text := "なし" if target.weak.is_empty() else "・".join(target.weak)
-				var resist_text := "なし" if target.resist.is_empty() else "・".join(target.resist)
-				lines.append("%s　弱点:%s　耐性:%s" % [target.name, weak_text, resist_text])
+				var weak_text := BattleText.PHASE_REVEAL_1 if target.weak.is_empty() else BattleText.PHASE_REVEAL_2.join(target.weak)
+				var resist_text := BattleText.PHASE_REVEAL_1 if target.resist.is_empty() else BattleText.PHASE_REVEAL_2.join(target.resist)
+				lines.append(BattleText.PHASE_REVEAL_3 % [target.name, weak_text, resist_text])
 				target.next_at += CtbScheduler.wait_for(target.effective_agi(), 35)
 			actor.pierce_casts = 1
-			lines.append("%sの 次の魔法は耐性を抜く" % actor.name)
+			lines.append(BattleText.PHASE_REVEAL_4 % actor.name)
 		"fourfold_collapse":
 			for element in ["fire", "ice", "bolt", "dark"]:
 				lines.append_array(_ultimate_strike(
@@ -1215,13 +1221,13 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 				lines.append_array(_ultimate_strike(actor, target, 145))
 				if had_stolen:
 					actor.next_at = maxi(actor.next_at - ULTIMATE_TURN_GAIN, 0)
-					lines.append("%sは 空いた手で 次へ回った" % actor.name)
+					lines.append(BattleText.SHADE_PILFER_1 % actor.name)
 		"time_pilfer":
 			var receiver := _slowest_friend(actor)
 			if target != null and receiver != null:
 				target.next_at += CtbScheduler.wait_for(target.effective_agi(), ULTIMATE_DELAY)
 				receiver.next_at = maxi(receiver.next_at - ULTIMATE_DELAY, 0)
-				lines.append("%sの時間を %sへ渡した" % [target.name, receiver.name])
+				lines.append(BattleText.TIME_PILFER_1 % [target.name, receiver.name])
 		"unyielding_line":
 			actor.guarding = true
 			actor.counter_turns = 3
@@ -1229,25 +1235,25 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 			for friend in _friends_of(actor):
 				if friend != actor:
 					friend.protected_by = actor
-			lines.append("%sは 崩れない守りを敷いた" % actor.name)
+			lines.append(BattleText.UNYIELDING_LINE_1 % actor.name)
 		"vow_of_life":
 			for friend in _friends_of(actor):
 				friend.endure_hits = maxi(friend.endure_hits, 1)
 			actor.next_at += ULTIMATE_DELAY
-			lines.append("味方全員が 一度だけ致死傷に耐える")
+			lines.append(BattleText.VOW_OF_LIFE_1)
 		"shadow_double":
 			actor.decoy_hits = 2
 			actor.next_at = maxi(actor.next_at - 45, 0)
-			lines.append("%sの前に 二つの影が立った" % actor.name)
+			lines.append(BattleText.SHADOW_DOUBLE_1 % actor.name)
 		"thousand_shadow_break":
 			lines.append_array(_ultimate_strike(actor, target, 62, false, 6, "", true))
 		"hunter_mark":
 			if target != null:
 				target.exposed_hits = 3
 				var plan := target.planned_ability
-				lines.append("%sを狩標にした　次:%s" % [
+				lines.append(BattleText.HUNTER_MARK_1 % [
 					target.name,
-					"構えなし" if plan == "" else Database.ability(plan).get("name", plan),
+					BattleText.HUNTER_MARK_2 if plan == "" else Database.ability(plan).get("name", plan),
 				])
 		"sky_arrow_rain":
 			lines.append_array(_ultimate_strike(actor, target, 48, false, 8, "", true))
@@ -1263,7 +1269,7 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 						if candidate not in target.resist:
 							element = candidate
 							break
-				lines.append("最も通る %s の刃を選んだ" % element)
+				lines.append(BattleText.OPPOSITION_EDGE_1 % element)
 				lines.append_array(_ultimate_strike(actor, target, 215, false, 1, element))
 		"fourfold_edge":
 			for element in ["fire", "ice", "bolt", "dark"]:
@@ -1278,30 +1284,30 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 			if hurt != null and hurt.hp * 100 / maxi(hurt.max_hp, 1) <= 55:
 				for friend in _friends_of(actor):
 					var healed := friend.heal(42 + actor.mag / 2)
-					lines.append("%sを 守護獣が癒した（%d）" % [friend.name, healed])
+					lines.append(BattleText.GUARDIAN_PACT_1 % [friend.name, healed])
 			else:
 				for friend in _friends_of(actor):
 					friend.guarding = true
 					friend.agi_scale = 150
 					friend.agi_scale_turns = 2
-				lines.append("守護獣が 守りと速さを授けた")
+				lines.append(BattleText.GUARDIAN_PACT_2)
 		"astral_beast_array":
 			lines.append_array(_ultimate_strike_all(actor, 72, true, "bolt"))
 			for friend in _friends_of(actor):
 				friend.heal(35 + actor.mag / 2)
 			for foe in _foes_of(actor):
 				foe.next_at += CtbScheduler.wait_for(foe.effective_agi(), 55)
-			lines.append("星獣が 治療と足止めを重ねた")
+			lines.append(BattleText.ASTRAL_BEAST_ARRAY_1)
 		"lockbreaker_round":
 			lines.append_array(_ultimate_strike(actor, target, 220, false, 1, "", false, true))
 			if target != null and target.is_alive():
 				target.planned_ability = ""
 				target.next_at += CtbScheduler.wait_for(target.effective_agi(), 90)
-				lines.append("%sの 構えを撃ち抜いた" % target.name)
+				lines.append(BattleText.LOCKBREAKER_ROUND_1 % target.name)
 		"full_barrage":
 			lines.append_array(_ultimate_strike(actor, target, 70, false, 6, "", true, true))
 			actor.reload_turns = 3
-			lines.append("%sは 弾倉を空にした" % actor.name)
+			lines.append(BattleText.FULL_BARRAGE_1 % actor.name)
 		"chain_compound":
 			lines.append_array(_ultimate_strike_all(actor, 64, true))
 			for foe in _foes_of(actor):
@@ -1310,14 +1316,14 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 			var hurt := _most_hurt_friend(actor)
 			if hurt != null:
 				var healed := hurt.heal(55 + actor.mag)
-				lines.append("%sへ薬を回した（%d）" % [hurt.name, healed])
+				lines.append(BattleText.CHAIN_COMPOUND_1 % [hurt.name, healed])
 		"wise_furnace":
 			var fuel := actor.mp
 			actor.mp = 0
 			lines.append_array(_ultimate_strike_all(actor, 90 + fuel * 2, true, "fire"))
 			for friend in _friends_of(actor):
 				friend.heal(fuel + actor.mag)
-			lines.append("満ちた力を 攻撃と治療へ転化した")
+			lines.append(BattleText.WISE_FURNACE_1)
 		"formula_reprise":
 			lines.append_array(_replay_magic(
 				actor, String(_last_magic.get(actor.is_ally, "")), target
@@ -1335,7 +1341,7 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 				var held := receiver.next_at
 				receiver.next_at = target.next_at
 				target.next_at = held
-				lines.append("%sと %sの手番を交換した" % [receiver.name, target.name])
+				lines.append(BattleText.TIME_EXCHANGE_1 % [receiver.name, target.name])
 		"zero_time_field":
 			var living := scheduler.living()
 			var first := actor.next_at
@@ -1347,11 +1353,11 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 				friend.next_at = first
 			actor.mp = 0
 			actor.next_at = last + ULTIMATE_DELAY
-			lines.append("味方の時を揃え、%sは最後尾へ退いた" % actor.name)
+			lines.append(BattleText.ZERO_TIME_FIELD_1 % actor.name)
 		"pacify":
 			if target != null:
 				target.tamed = true
-				lines.append("%sは 戦いをやめた" % target.name)
+				lines.append(BattleText.PACIFY_1 % target.name)
 				_check_finished()
 		"beast_procession":
 			if _foes_of(actor).size() >= 2:
@@ -1361,18 +1367,18 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 			var hurt := _most_hurt_friend(actor)
 			if hurt != null:
 				hurt.heal(35 + actor.mag)
-				lines.append("癒しの獣が %sへ寄り添った" % hurt.name)
+				lines.append(BattleText.BEAST_PROCESSION_1 % hurt.name)
 			var stopped := false
 			for foe in _foes_of(actor):
 				if foe.planned_ability != "":
 					foe.planned_ability = ""
 					foe.next_at += CtbScheduler.wait_for(foe.effective_agi(), 55)
-					lines.append("牙の獣が %sの構えを崩した" % foe.name)
+					lines.append(BattleText.BEAST_PROCESSION_2 % foe.name)
 					stopped = true
 					break
 			if not stopped:
 				actor.next_at = maxi(actor.next_at - 55, 0)
-				lines.append("風の獣が %sを先へ運んだ" % actor.name)
+				lines.append(BattleText.BEAST_PROCESSION_3 % actor.name)
 		"fate_cards":
 			var first_card := rng.range_i(0, 3)
 			var second_card := rng.range_i(0, 3)
@@ -1382,7 +1388,7 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 					>= _fate_score(actor, target, second_card)
 				else second_card
 			)
-			lines.append("二枚の札から よい流れを選んだ")
+			lines.append(BattleText.FATE_CARDS_1)
 			lines.append_array(_play_fate_card(actor, target, picked))
 		"curtain_return":
 			var party := allies if actor.is_ally else enemies
@@ -1394,13 +1400,13 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 				for friend in fallen:
 					friend.tamed = false
 					friend.hp = maxi(friend.max_hp * 30 / 100, 1)
-				lines.append("倒れた味方を 舞台へ戻した")
+				lines.append(BattleText.CURTAIN_RETURN_1)
 			else:
 				var hurt := _most_hurt_friend(actor)
 				if hurt != null and hurt.hp * 100 / maxi(hurt.max_hp, 1) <= 45:
 					for friend in _friends_of(actor):
 						friend.heal(48 + actor.mag / 2)
-					lines.append("崩れかけた味方を 立て直した")
+					lines.append(BattleText.CURTAIN_RETURN_2)
 				else:
 					var casting: Battler = null
 					for foe in _foes_of(actor):
@@ -1411,11 +1417,11 @@ func _perform_ultimate(actor: Battler, ab: Dictionary, chosen: Battler) -> Array
 						casting.planned_ability = ""
 						casting.next_at += CtbScheduler.wait_for(
 							casting.effective_agi(), 90)
-						lines.append("%sの見せ場を 奪った" % casting.name)
+						lines.append(BattleText.CURTAIN_RETURN_3 % casting.name)
 					else:
 						lines.append_array(_ultimate_strike_all(actor, 105, true))
 		_:
-			lines.append("しかし　奥義は 形にならなかった")
+			lines.append(BattleText.PERFORM_ULTIMATE_1)
 	return lines
 
 
@@ -1431,6 +1437,9 @@ const ULTIMATE_DELAY := 150
 ##
 ## **1 戦のあいだだけ持つ。** `start()` で作り直すので、次の戦いへ持ち越さない。
 var _ultimate_uses: Dictionary = {}
+## なくならない戦具と装備使用の、この戦闘での使用回数。
+## 道具は一行で共有し、装備は使い手ごとに分けた key を呼び側から渡す。
+var _tool_uses: Dictionary = {}
 var _in_ultimate := false
 ## 陣営ごとの、直前に成立した通常魔法。奥義は記録せず、再演の連鎖を断つ。
 var _last_magic: Dictionary = {}
@@ -1477,12 +1486,12 @@ func _execute_blow(actor: Battler, target: Battler, ab: Dictionary) -> Array[Str
 	target.apply_damage(dmg)
 	var lines: Array[String] = []
 	if ratio <= EXECUTE_LOW_HP:
-		lines.append("%sの ひっさつ！ 急所に 入った！" % actor.name)
+		lines.append(BattleText.EXECUTE_BLOW_1 % actor.name)
 	else:
-		lines.append("%sの ひっさつ！" % actor.name)
-	lines.append("%sに %d の ダメージ！" % [target.name, dmg])
+		lines.append(BattleText.EXECUTE_BLOW_2 % actor.name)
+	lines.append(BattleText.EXECUTE_BLOW_3 % [target.name, dmg])
 	if not target.is_alive():
-		lines.append("%sを　たおした！" % target.name)
+		lines.append(BattleText.STRIKE_11 % target.name)
 	return lines
 
 
@@ -1502,25 +1511,25 @@ func _play_around(actor: Battler, target: Battler, roll: int = -1) -> Array[Stri
 	var lines: Array[String] = []
 	match (rng.range_i(0, 5) if roll < 0 else roll):
 		0, 1:
-			lines.append("%sは おどけてみせた。なにも おこらない" % actor.name)
+			lines.append(BattleText.PLAY_AROUND_1 % actor.name)
 		2:
 			var dmg := _damage(actor, target, 180, false, "")
 			target.apply_damage(dmg)
-			lines.append("%sの ふいうち！ %sに %d の ダメージ！" % [actor.name, target.name, dmg])
+			lines.append(BattleText.PLAY_AROUND_2 % [actor.name, target.name, dmg])
 			if not target.is_alive():
-				lines.append("%sを　たおした！" % target.name)
+				lines.append(BattleText.STRIKE_11 % target.name)
 		3:
 			target.agi_scale = 70
 			target.agi_scale_turns = BUFF_TURNS
 			target.next_at += CtbScheduler.wait_for(target.effective_agi(), 40)
-			lines.append("%sは つられて笑った。すばやさが さがった！" % target.name)
+			lines.append(BattleText.PLAY_AROUND_3 % target.name)
 		4:
 			var healed := actor.heal(actor.max_hp / 4)
-			lines.append("%sは 大笑いして %d 元気になった" % [actor.name, healed])
+			lines.append(BattleText.PLAY_AROUND_4 % [actor.name, healed])
 		_:
 			actor.agi_scale = 150
 			actor.agi_scale_turns = BUFF_TURNS
-			lines.append("%sは 調子に乗った！ すばやさが あがった！" % actor.name)
+			lines.append(BattleText.PLAY_AROUND_5 % actor.name)
 	return lines
 
 
@@ -1534,7 +1543,7 @@ func _is_boss(b: Battler) -> bool:
 func _steal_from(actor: Battler, target: Battler) -> Array[String]:
 	var lines: Array[String] = []
 	if stolen_targets.has(target.id):
-		lines.append("%sは　もう なにも もっていない" % target.name)
+		lines.append(BattleText.STEAL_FROM_1 % target.name)
 		return lines
 
 	var table: Dictionary = Database.monster(target.source_id).get("steal", {})
@@ -1546,7 +1555,7 @@ func _steal_from(actor: Battler, target: Battler) -> Array[String]:
 	if rare_id != "" and rng.chance(rare_odds):
 		stolen_items.append(rare_id)
 		stolen_targets[target.id] = true
-		lines.append("%sから　%s を ぬすんだ！" % [
+		lines.append(BattleText.STEAL_FROM_2 % [
 			target.name, Database.item(rare_id).get("name", rare_id)
 		])
 		return lines
@@ -1557,7 +1566,7 @@ func _steal_from(actor: Battler, target: Battler) -> Array[String]:
 		for _i in count:
 			stolen_items.append(common_id)
 		stolen_targets[target.id] = true
-		lines.append("%sから　%sを %dこ ぬすんだ！" % [
+		lines.append(BattleText.STEAL_FROM_3 % [
 			target.name, Database.item(common_id).get("name", common_id), count
 		])
 		return lines
@@ -1566,7 +1575,7 @@ func _steal_from(actor: Battler, target: Battler) -> Array[String]:
 	var loot := rng.range_i(8 + floor_number * 3, 16 + floor_number * 6)
 	stolen_gold += loot
 	stolen_targets[target.id] = true
-	lines.append("%sから　%d %sを ぬすんだ！" % [target.name, loot, Terms.GOLD])
+	lines.append(BattleText.STEAL_FROM_4 % [target.name, loot, Terms.GOLD])
 	return lines
 
 
@@ -1586,60 +1595,111 @@ func use_item(actor: Battler, item_id: String, target: Battler) -> Array[String]
 	if it.is_empty():
 		push_error("未定義の道具: %s" % item_id)
 		return []
+	return _use_tool(actor, "item:%s" % item_id, it, target)
+
+
+## 装備中の武器・防具から力を引き出す。装備確認は表示側が担い、ここは効果だけ解く。
+func use_gear(actor: Battler, gear_id: String, target: Battler) -> Array[String]:
+	var gear := Database.gear(gear_id)
+	var use_data: Variant = gear.get("battle_use", {})
+	if gear.is_empty() or typeof(use_data) != TYPE_DICTIONARY or use_data.is_empty():
+		push_error("戦闘使用できない装備: %s" % gear_id)
+		return []
+	var tool: Dictionary = use_data.duplicate(true)
+	tool["name"] = String(gear.get("name", gear_id))
+	return _use_tool(actor, "gear:%d:%s" % [actor.id, gear_id], tool, target)
+
+
+## 残り使用回数。0回制限は「何度でも」なので -1 を返す。
+func tool_uses_left(actor: Battler, key: String, data: Dictionary) -> int:
+	var limit := int(data.get("uses_per_battle", 0))
+	if limit <= 0:
+		return -1
+	var resolved := key
+	if key.begins_with("gear:") and actor != null:
+		var actor_prefix := "gear:%d:" % actor.id
+		if not key.begins_with(actor_prefix):
+			resolved = "%s%s" % [actor_prefix, key.trim_prefix("gear:")]
+	return maxi(limit - int(_tool_uses.get(resolved, 0)), 0)
+
+
+## 選ぶ前に出す不成立理由。使い切った戦具で対象選択へ進ませない。
+func tool_unavailable_reason(actor: Battler, key: String, data: Dictionary) -> String:
+	return Terms.ITEM_USED_UP if tool_uses_left(actor, key, data) == 0 else ""
+
+
+func _use_tool(
+	actor: Battler, use_key: String, it: Dictionary, target: Battler
+) -> Array[String]:
+	last_action_consumed = false
+	if tool_unavailable_reason(actor, use_key, it) != "":
+		return [Terms.ITEM_USED_UP]
+	var limit := int(it.get("uses_per_battle", 0))
+	if limit > 0:
+		_tool_uses[use_key] = int(_tool_uses.get(use_key, 0)) + 1
 
 	var lines: Array[String] = []
 	var who := target if target != null else actor
-	lines.append("%sは %s を つかった！" % [actor.name, it.get("name", item_id)])
+	lines.append(BattleText.USE_TOOL_1 % [actor.name, it.get("name", Terms.ITEM_TOOL_FALLBACK)])
+	last_hit_ids.clear()
+	last_hit_amount.clear()
+	last_ability_id = ""
 
 	var power := int(it.get("power", 0))
 	match String(it.get("effect", "")):
 		"heal_hp":
 			if not who.is_alive():
-				lines.append("しかし　なにも おこらなかった")
+				lines.append(BattleText.HEAL_1)
 			else:
-				lines.append("%sの きずが %d かいふくした" % [who.name, who.heal(power)])
+				lines.append(BattleText.HEAL_HP_1 % [who.name, who.heal(power)])
 		"heal_mp":
 			var before := who.mp
 			who.mp = mini(who.mp + power, who.max_mp)
-			lines.append("%sの まりょくが %d もどった" % [who.name, who.mp - before])
+			lines.append(BattleText.HEAL_MP_1 % [who.name, who.mp - before])
 		"revive":
 			if who.is_alive():
-				lines.append("しかし　なにも おこらなかった")
+				lines.append(BattleText.HEAL_1)
 			else:
 				who.hp = maxi(who.max_hp * power / 100, 1)
-				lines.append("%sは いきを ふきかえした！" % who.name)
+				lines.append(BattleText.RETURNING_BELL_2 % who.name)
 		"cleanse":
 			if who.has_status():
 				who.clear_status()
-				lines.append("%sの ぐあいが よくなった" % who.name)
+				lines.append(BattleText.CLEANSE_1 % who.name)
 			else:
-				lines.append("しかし　なにも おこらなかった")
+				lines.append(BattleText.HEAL_1)
 		"heal_cleanse":
 			if not who.is_alive():
-				lines.append("しかし　なにも おこらなかった")
+				lines.append(BattleText.HEAL_1)
 			else:
 				var healed := who.heal(power)
 				var cured := who.has_status()
 				who.clear_status()
 				if healed > 0:
-					lines.append("%sの きずが %d かいふくした" % [who.name, healed])
+					lines.append(BattleText.HEAL_HP_1 % [who.name, healed])
 				if cured:
-					lines.append("%sの ぐあいが よくなった" % who.name)
+					lines.append(BattleText.CLEANSE_1 % who.name)
 				if healed <= 0 and not cured:
-					lines.append("しかし　なにも おこらなかった")
+					lines.append(BattleText.HEAL_1)
+		"heal_all":
+			for friend in living_allies():
+				lines.append(BattleText.HEAL_HP_1 % [
+					friend.name, friend.heal(power)
+				])
 		"item_damage":
 			lines.append_array(_use_damage_item(actor, who, it))
 		"haste":
 			if not who.is_alive():
-				lines.append("しかし　なにも おこらなかった")
+				lines.append(BattleText.HEAL_1)
 			else:
 				who.agi_scale = 150
 				who.agi_scale_turns = BUFF_TURNS
-				lines.append("%sの　すばやさが あがった！" % who.name)
+				lines.append(BattleText.HASTE_1 % who.name)
 		_:
-			lines.append("しかし　なにも おこらなかった")
+			lines.append(BattleText.HEAL_1)
 
 	scheduler.consume(actor, actor.scaled_cost(int(it.get("cost", CtbScheduler.STANDARD_COST))))
+	last_action_consumed = true
 	_check_finished()
 	return lines
 
@@ -1651,7 +1711,7 @@ func use_item(actor: Battler, item_id: String, target: Battler) -> Array[String]
 func _use_damage_item(actor: Battler, target: Battler, item: Dictionary) -> Array[String]:
 	var lines: Array[String] = []
 	if target == null or not target.is_alive():
-		lines.append("しかし　なにも おこらなかった")
+		lines.append(BattleText.HEAL_1)
 		return lines
 
 	var receiver := target
@@ -1661,7 +1721,7 @@ func _use_damage_item(actor: Battler, target: Battler, item: Dictionary) -> Arra
 		and target.protected_by != actor
 	):
 		receiver = target.protected_by
-		lines.append("%sが　%sを かばった！" % [receiver.name, target.name])
+		lines.append(BattleText.STRIKE_1 % [receiver.name, target.name])
 
 	var damage := maxi(int(item.get("power", 0)), 1)
 	var element := String(item.get("element", ""))
@@ -1674,11 +1734,20 @@ func _use_damage_item(actor: Battler, target: Battler, item: Dictionary) -> Arra
 		damage = damage / 2
 	damage = maxi(damage, 1)
 	receiver.apply_damage(damage)
-	lines.append("%sに　%d の ダメージ！%s" % [
+	last_hit_ids.append(receiver.id)
+	last_hit_amount[receiver.id] = damage
+	last_ability_id = (
+		"fire" if element == "fire"
+		else "ice" if element == "ice"
+		else "bolt" if element == "lightning"
+		else "dark" if element == "dark"
+		else "attack"
+	)
+	lines.append(BattleText.STRIKE_8 % [
 		receiver.name, damage, _element_tag(receiver, element)
 	])
 	if not receiver.is_alive():
-		lines.append("%sを　たおした！" % receiver.name)
+		lines.append(BattleText.STRIKE_11 % receiver.name)
 	return lines
 
 

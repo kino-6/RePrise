@@ -298,17 +298,17 @@ func _apply_job() -> void:
 	var job_id := String(_job_ids[_job_index])
 	if job_id == member.job_id:
 		Sound.play("cancel")
-		_notify("すでに %s だ" % _job_name(job_id))
+		_notify("すでに%sです" % _job_name(job_id))
 		return
 	if not member.can_take_job(job_id):
 		Sound.play("cancel")
-		_notify("つくには %s が いる" % "　".join(member.unmet_requirements(job_id)))
+		_notify("転職には%sが必要" % "　".join(member.unmet_requirements(job_id)))
 		return
 	if not GameState.change_job(member, job_id):
 		Sound.play("cancel")
 		return
 	Sound.play("learn")
-	_notify("%sは %s になった" % [member.name, _job_name(job_id)])
+	_notify("%sは%sに転職した" % [member.name, _job_name(job_id)])
 	_state = State.MEMBER
 
 
@@ -328,7 +328,8 @@ func _input_item(event: InputEvent) -> void:
 			return
 		var item := Database.item(String(_items()[_item_index]))
 		if (
-			String(item.get("target", "")) == "one_enemy"
+			bool(item.get("battle_only", false))
+			or String(item.get("target", "")) == "one_enemy"
 			or String(item.get("effect", "")) == "haste"
 		):
 			Sound.play("cancel")
@@ -377,21 +378,21 @@ func _use_item() -> void:
 				return
 			var before := who.hp
 			who.hp = mini(who.hp + power, who.max_hp())
-			_notify("%sの きずが %d かいふくした" % [who.name, who.hp - before])
+			_notify("%sのHPが%d回復した" % [who.name, who.hp - before])
 		"heal_mp":
 			if who.mp >= who.max_mp():
 				Sound.play("cancel")
-				_notify("%sの まりょくは みちている" % who.name)
+				_notify("%sのMPは満タンです" % who.name)
 				return
 			var mp_before := who.mp
 			who.mp = mini(who.mp + power, who.max_mp())
-			_notify("%sの まりょくが %d もどった" % [who.name, who.mp - mp_before])
+			_notify("%sのMPが%d回復した" % [who.name, who.mp - mp_before])
 		"cleanse":
 			if not who.cure_poison():
 				Sound.play("cancel")
-				_notify("%sは なんともない" % who.name)
+				_notify("%sに状態異常はない" % who.name)
 				return
-			_notify("%sの どくが 消えた" % who.name)
+			_notify("%sの毒が消えた" % who.name)
 		"heal_cleanse":
 			if who.hp <= 0:
 				Sound.play("cancel")
@@ -403,27 +404,28 @@ func _use_item() -> void:
 			var healed := who.hp - hp_before
 			if healed <= 0 and not cured:
 				Sound.play("cancel")
-				_notify("%sは なんともない" % who.name)
+				_notify("%sに傷や毒はない" % who.name)
 				return
 			if cured and healed > 0:
-				_notify("%sの 傷とどくが 癒えた" % who.name)
+				_notify("%sの傷と毒が治った" % who.name)
 			elif cured:
-				_notify("%sの どくが 消えた" % who.name)
+				_notify("%sの毒が消えた" % who.name)
 			else:
-				_notify("%sの きずが %d かいふくした" % [who.name, healed])
+				_notify("%sのHPが%d回復した" % [who.name, healed])
 		"revive":
 			if who.hp > 0:
 				Sound.play("cancel")
-				_notify("%sは たおれていない" % who.name)
+				_notify("%sは倒れていない" % who.name)
 				return
 			who.hp = maxi(who.max_hp() * power / 100, 1)
-			_notify("%sは いきを ふきかえした！" % who.name)
+			_notify("%sは息を吹き返した！" % who.name)
 		_:
 			Sound.play("cancel")
 			_notify(Terms.CANNOT_USE_HERE)
 			return
 
-	GameState.consume_item(item_id)
+	if not bool(it.get("reusable", false)):
+		GameState.consume_item(item_id)
 	Sound.play("heal")
 	if _items().is_empty():
 		_state = State.ROOT
@@ -460,7 +462,7 @@ func _apply_best_gear() -> void:
 	var changed := BestGear.apply(GameState, GameState.active_party())
 	if changed > 0:
 		Sound.play("confirm")
-		_notify("%s装備を %d 個 つけかえた" % [Terms.BEST_GEAR, changed])
+		_notify("%sで%d個付け替えた" % [Terms.BEST_GEAR, changed])
 	else:
 		Sound.play("cancel")
 		_notify(Terms.NO_BETTER_GEAR)
@@ -487,7 +489,7 @@ func _apply_gear() -> void:
 	if _gear_index == 0:
 		if GameState.unequip_gear(member, slot):
 			Sound.play("confirm")
-			_notify("%sを はずした" % SLOT_LABELS[slot])
+			_notify("%sを外した" % SLOT_LABELS[slot])
 		else:
 			Sound.play("cancel")
 			_notify(Terms.NOTHING_EQUIPPED)
@@ -498,7 +500,7 @@ func _apply_gear() -> void:
 	var gear_id := list[clampi(_gear_index - 1, 0, list.size() - 1)]
 	if GameState.equip_gear(member, gear_id):
 		Sound.play("confirm")
-		_notify("%sは %s を そうびした" % [member.name, Database.gear(gear_id).get("name", gear_id)])
+		_notify("%sは%sを装備した" % [member.name, Database.gear(gear_id).get("name", gear_id)])
 	else:
 		Sound.play("cancel")
 	_gear_index = 0
@@ -617,8 +619,8 @@ func _draw_job_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
 	_note_head(origin).line(Terms.MENU_JOB, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines := [
-		"いつでも どこでも 職を かえられる。",
-		"レベルも じゅくれんも そのまま のこる。",
+		"いつでもどこでも転職できる。",
+		"レベルと熟練はそのまま残る。",
 	]
 	for i in lines.size():
 		_note_line(origin, i).line(lines[i], PixelUI.C_TEXT_DIM)
@@ -638,9 +640,9 @@ func _draw_jobs() -> void:
 		return
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 2)
 	_note_head(origin).line(
-		"%s を てんしょく" % member.name, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+		"%sを転職" % member.name, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	_note_head(origin + Vector2(0, 24)).line(
-		"Lv%d のまま。おぼえた わざも のこる" % member.level,
+		"Lv%dのまま。覚えた技も残る" % member.level,
 		PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 
 	var rows := int(ceil(_job_ids.size() / float(JOB_COLS)))
@@ -678,9 +680,9 @@ func _draw_suspend_notice() -> void:
 	var origin := PixelUI.content(BODY_RECT).position + Vector2(12, 4)
 	_note_head(origin).line(Terms.MENU_SUSPEND, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines := [
-		"いまの ところで 保存して とじる。",
-		"つぎに ひらくと ここから つづく。",
-		"世界も もちものも そのまま。",
+		"現在地で保存して終了する。",
+		"次回はここから再開する。",
+		"世界と持ち物の状態も保存される。",
 	]
 	for i in lines.size():
 		_note_line(origin, i).line(lines[i], PixelUI.C_TEXT_DIM)
@@ -692,9 +694,9 @@ func _draw_escape_notice() -> void:
 	_note_head(origin).line(Terms.MENU_ESCAPE, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	var lines: Array[String] = []
 	if GameState.can_escape_site():
-		lines = ["ここでの 用は 済んでいる。", "入口へ もどって 世界へ 出る。"]
+		lines = ["この洞の目的は達成済み。", "入口へ戻り、世界へ出る。"]
 	else:
-		lines = ["まだ ここには 用が ある。", "封を やぶるまでは ぬけだせない。"]
+		lines = ["この洞には未達成の目的がある。", "封を破るまでは脱出できない。"]
 	for i in lines.size():
 		_note_line(origin, i).line(lines[i], PixelUI.C_TEXT_DIM)
 
@@ -723,7 +725,11 @@ func _draw_items() -> void:
 		# 個数は右端で守る。品名が長くても数は消えない。
 		panel.row(
 			String(it.get("name", items[i])),
-			"%d こ" % GameState.item_count(String(items[i])),
+			(
+				Terms.ITEM_REUSABLE
+				if bool(it.get("reusable", false))
+				else "%d こ" % GameState.item_count(String(items[i]))
+			),
 			PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM, PixelUI.C_TEXT_DIM
 		)
 	MenuList.draw_position(self, area, _item_index, items.size(), ITEM_ROWS)
@@ -803,7 +809,7 @@ func _draw_equip() -> void:
 	var body := PixelUI.content(BODY_RECT)
 	var width := body.end.x - origin.x - 8.0
 	UiPanel.inside(self, Rect2(origin, Vector2(width, PixelUI.LINE))).line(
-		"%s の そうび" % m.name, PixelUI.C_TEXT)
+		"%sの装備" % m.name, PixelUI.C_TEXT)
 
 	for i in SLOTS.size():
 		var at := origin + Vector2(0, 28 + i * ROW)

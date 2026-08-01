@@ -69,6 +69,7 @@ static func generate(
 	var name_rng := rng.fork("name")
 	var decor_rng := rng.fork("decor")
 	var folk_rng := rng.fork("folk")
+	var supply_rng := rng.fork("supply_chest")
 
 	# **寸法より先にProfileが決まっている。** 間取りは町の意味の出力にする。
 	var w := layout_rng.range_i(SIZE_MIN.x, SIZE_MAX.x)
@@ -104,6 +105,7 @@ static func generate(
 	_clear_arrival_space(map)
 	_repave_reserved(map)
 	_place_folk(map, folk_rng, danger, profile)
+	_place_supply_chest(map, supply_rng)
 
 	var problems := verify(map)
 	if not problems.is_empty():
@@ -404,6 +406,47 @@ static func _place_sign(map: TownMap, door: Vector2i) -> void:
 		return
 
 
+## 町の案内札とは別に、実際に開けられる物資箱を一つ置く。
+##
+## 主街路や施設前へ置くと「開けないと通れない」報酬になるため、広場から少し外れた
+## 空地だけを候補にする。NPCを置いたあとで、箱へ触れられる隣接マスまで確認する。
+static func _place_supply_chest(map: TownMap, rng: DetRng) -> void:
+	map.supply_chest_pos = Vector2i(-1, -1)
+	var candidates: Array[Vector2i] = []
+	# 候補ごとに経路探索すると100町Gateが分単位になる。到達距離は一度だけ測る。
+	var dist := map.distance_field(map.start_pos)
+	for y in range(2, map.height - 2):
+		for x in range(2, map.width - 2):
+			var at := Vector2i(x, y)
+			if map.get_tile(x, y) != TownMap.T_GROUND:
+				continue
+			if _reserved(map, at) or map.folk.has(at):
+				continue
+			var plaza_distance := absi(at.x - map.plaza_pos.x) + absi(at.y - map.plaza_pos.y)
+			if plaza_distance < 4 or plaza_distance > 10:
+				continue
+			if (
+				absi(at.x - map.inn_pos.x) + absi(at.y - map.inn_pos.y) <= 2
+				or absi(at.x - map.shop_pos.x) + absi(at.y - map.shop_pos.y) <= 2
+			):
+				continue
+			var approachable := false
+			for step in FieldMap.NEIGHBORS:
+				var near := at + step
+				if not map.in_bounds(near.x, near.y) or not map.is_walkable(near.x, near.y):
+					continue
+				if dist[near.y * map.width + near.x] >= 0:
+					approachable = true
+					break
+			if approachable:
+				candidates.append(at)
+	if candidates.is_empty():
+		return
+	rng.shuffle(candidates)
+	map.supply_chest_pos = candidates[0]
+	map.set_tile(map.supply_chest_pos.x, map.supply_chest_pos.y, TownMap.T_SUPPLY_CHEST)
+
+
 ## 町人を置く。
 ##
 ## **必ず居る役 → 土地に合う役 → 残りから**の順で選ぶ。
@@ -429,48 +472,96 @@ static func _place_folk(
 			break
 		roles.append(String(r))
 
+	# 役と場所を結び付ける。宿の主人が町外れ、商人が畑の隅に立つ配置では、
+	# 専用画像があっても「色違いの人が散らばっている」ようにしか見えない。
 	var spots: Array[Vector2i] = []
-	for _i in 320:
-		if spots.size() >= roles.size():
-			break
-		var at := Vector2i(rng.range_i(2, map.width - 3), rng.range_i(2, map.height - 3))
-		if map.get_tile(at.x, at.y) not in [TownMap.T_GROUND, TownMap.T_GROUND_ALT]:
-			continue
-		if at == map.start_pos or at == map.exit_pos or _reserved(map, at):
-			continue
-		var near := false
-		for other in spots:
-			if absi(other.x - at.x) + absi(other.y - at.y) < 3:
-				near = true
-				break
-		if near:
-			continue
-		# 人は壁と同じく通れない。入口固定で乱数列が変わったとき、宿の前を
-		# 町人が塞ぐ町が実際に一つ出た。置くたびに必須地点への道を再検算する。
-		map.folk[at] = {}
-		var dist := map.distance_field(map.start_pos)
-		var routes_kept := true
-		for goal in [map.inn_pos, map.shop_pos, map.exit_pos]:
-			if dist[goal.y * map.width + goal.x] < 0:
-				routes_kept = false
-				break
-		if not routes_kept:
-			map.folk.erase(at)
+	for role in roles:
+		var at := _find_folk_spot(map, rng, role, profile, spots)
+		if at.x < 0:
 			continue
 		spots.append(at)
-
-	for i in spots.size():
-		var role := String(roles[i % roles.size()])
 		var pool: Array = TownDialogue.role_lines(role)
 		var line := profile.line_for(role)
 		if line == "":
 			line = String(pool[rng.range_i(0, pool.size() - 1)])
-		map.folk[spots[i]] = {
+		map.folk[at] = {
 			"kind": role,
 			"line": line,
 			"danger": danger,
 			"profile": profile.signature(),
+			"station": _role_station(role, profile),
 		}
+
+
+static func _role_station(role: String, profile: TownProfile) -> String:
+	if role == "innkeeper":
+		return "inn"
+	if role == "merchant":
+		return "shop"
+	if role == profile.industry_role:
+		return "work"
+	if role == "elder" or role == profile.ruler_role:
+		return "plaza"
+	if role == profile.problem_role:
+		return "work"
+	return "street"
+
+
+static func _role_anchor(
+	map: TownMap, role: String, profile: TownProfile
+) -> Vector2i:
+	match _role_station(role, profile):
+		"inn":
+			return map.inn_pos
+		"shop":
+			return map.shop_pos
+		"work":
+			return map.landmark_pos
+		_:
+			return map.plaza_pos
+
+
+## 近い順に候補を試しつつ、置いたあとも宿・店・出口への道が残ることを確認する。
+## 同距離の候補だけDetRngで振るので、同じ種なら立ち位置まで一致する。
+static func _find_folk_spot(
+	map: TownMap, rng: DetRng, role: String, profile: TownProfile,
+	occupied: Array[Vector2i]
+) -> Vector2i:
+	var anchor := _role_anchor(map, role, profile)
+	for radius in range(1, map.width + map.height):
+		var candidates: Array[Vector2i] = []
+		for y in range(2, map.height - 2):
+			for x in range(2, map.width - 2):
+				var at := Vector2i(x, y)
+				if absi(at.x - anchor.x) + absi(at.y - anchor.y) != radius:
+					continue
+				if map.get_tile(x, y) not in [TownMap.T_GROUND, TownMap.T_GROUND_ALT]:
+					continue
+				if at == map.start_pos or at == map.exit_pos or _reserved(map, at):
+					continue
+				var too_close := false
+				for other in occupied:
+					if absi(other.x - at.x) + absi(other.y - at.y) < 3:
+						too_close = true
+						break
+				if not too_close:
+					candidates.append(at)
+		if candidates.is_empty():
+			continue
+		rng.shuffle(candidates)
+		for at in candidates:
+			# 人は壁と同じく通れない。置くたびに必須地点への道を再検算する。
+			map.folk[at] = {}
+			var dist := map.distance_field(map.start_pos)
+			var routes_kept := true
+			for goal in [map.inn_pos, map.shop_pos, map.exit_pos]:
+				if dist[goal.y * map.width + goal.x] < 0:
+					routes_kept = false
+					break
+			map.folk.erase(at)
+			if routes_kept:
+				return at
+	return Vector2i(-1, -1)
 
 
 ## 町の生成契約。画面から見えない設定接続もここで疑う。
@@ -539,6 +630,35 @@ static func verify(map: TownMap) -> Array[String]:
 		if not has_sign:
 			problems.append("施設の看板が扉から見えない")
 
+	var work_approachable := false
+	for step in FieldMap.NEIGHBORS:
+		var near := map.landmark_pos + step
+		if (
+			map.in_bounds(near.x, near.y)
+			and map.is_walkable(near.x, near.y)
+			and dist[near.y * map.width + near.x] >= 0
+		):
+			work_approachable = true
+	if not work_approachable:
+		problems.append("町の仕事場へ触れられない")
+
+	if map.supply_chest_pos.x < 0:
+		problems.append("町の物資箱が無い")
+	elif map.get_tile(map.supply_chest_pos.x, map.supply_chest_pos.y) != TownMap.T_SUPPLY_CHEST:
+		problems.append("町の物資箱の位置とタイルが違う")
+	else:
+		var chest_approachable := false
+		for step in FieldMap.NEIGHBORS:
+			var near := map.supply_chest_pos + step
+			if (
+				map.in_bounds(near.x, near.y)
+				and map.is_walkable(near.x, near.y)
+				and dist[near.y * map.width + near.x] >= 0
+			):
+				chest_approachable = true
+		if not chest_approachable:
+			problems.append("町の物資箱へ触れられない")
+
 	var required_roles: Array[String] = ["elder"]
 	if map.profile != null:
 		for role in map.profile.roles():
@@ -564,6 +684,22 @@ static func verify(map: TownMap) -> Array[String]:
 			problems.append("Profileの住人がいない:%s" % role)
 		elif not approachable:
 			problems.append("情報役へ話しかけられない:%s" % role)
+
+	# 人物の役と立ち位置を接続する。到達できても、店番が町外れでは施設が読めない。
+	if map.profile != null:
+		for raw_pos in map.folk:
+			var pos: Vector2i = raw_pos
+			var person: Dictionary = map.folk[pos]
+			var role := String(person.get("kind", ""))
+			var expected_station := _role_station(role, map.profile)
+			if String(person.get("station", "")) != expected_station:
+				problems.append("住人の持ち場が役と違う:%s" % role)
+				continue
+			var anchor := _role_anchor(map, role, map.profile)
+			var distance := absi(pos.x - anchor.x) + absi(pos.y - anchor.y)
+			var limit := 6 if expected_station in ["inn", "shop", "work"] else 8
+			if distance > limit:
+				problems.append("住人が持ち場から遠い:%s=%d" % [role, distance])
 
 	return _unique(problems)
 
@@ -598,6 +734,8 @@ static func internal_fingerprint(map: TownMap) -> String:
 				result += "S"
 			elif at == map.landmark_pos:
 				result += "L"
+			elif at == map.supply_chest_pos:
+				result += "C"
 			elif at in map.main_street:
 				result += "r"
 			elif at in map.facility_paths:

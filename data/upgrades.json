@@ -89,5 +89,14 @@
     "levels": 3,
     "cost": 12,
     "cost_step": 10
+  },
+  "relic_satchel": {
+    "name": "戦具の包み",
+    "desc": "出撃時に持ち込む、なくならない戦具を選べる。段ごとに候補が増える。",
+    "effect": "reusable_loadout",
+    "value": 1,
+    "levels": 3,
+    "cost": 18,
+    "cost_step": 16
   }
 }

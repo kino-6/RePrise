@@ -115,21 +115,29 @@ static func _wrap_with_walls(map: DungeonMap) -> void:
 
 
 static func _place_features(map: DungeonMap, rng: DetRng, floor_number: int) -> void:
+	# 開始位置は従来のまま保ち、その隣に上り階段を置く。開始位置を動かすと全洞の
+	# 経路・宝箱・遭遇列が変わり、戻る機能だけで既存バランスまで動いてしまう。
 	map.start_pos = _center(map.rooms[0])
+	map.upstairs_pos = _visible_feature_near(map, map.start_pos)
+	map.set_tile(map.upstairs_pos.x, map.upstairs_pos.y, DungeonMap.T_UP_STAIRS)
 
 	# 階段は開始地点から最も遠い部屋に置く。フロアを横断させるため。
 	var farthest := map.rooms[0]
 	var best_distance := -1
 	for room in map.rooms:
-		var d: int = absi(_center(room).x - map.start_pos.x) + absi(_center(room).y - map.start_pos.y)
+		var d: int = absi(_center(room).x - map.upstairs_pos.x) + absi(_center(room).y - map.upstairs_pos.y)
 		if d > best_distance:
 			best_distance = d
 			farthest = room
 	map.stairs_pos = _center(farthest)
+	# 生成失敗時の1部屋構成でも、上りと下りを同じマスに重ねない。
+	if map.stairs_pos == map.start_pos or map.stairs_pos == map.upstairs_pos:
+		map.stairs_pos = map.rooms[0].end - Vector2i(2, 2)
 	map.set_tile(
 		map.stairs_pos.x, map.stairs_pos.y,
 		DungeonMap.T_DOOR if map.is_final else DungeonMap.T_STAIRS
 	)
+	map.down_arrival_pos = _arrival_near(map, map.stairs_pos)
 
 	# ひび割れ床（見た目の変化のみ）
 	for y in map.height:
@@ -148,7 +156,7 @@ static func _place_features(map: DungeonMap, rng: DetRng, floor_number: int) -> 
 			rng.range_i(room.position.x, room.end.x - 1),
 			rng.range_i(room.position.y, room.end.y - 1)
 		)
-		if spot == map.start_pos or spot == map.stairs_pos:
+		if spot in [map.start_pos, map.upstairs_pos, map.stairs_pos, map.down_arrival_pos]:
 			continue
 		if not map.is_walkable(spot.x, spot.y):
 			continue
@@ -156,6 +164,30 @@ static func _place_features(map: DungeonMap, rng: DetRng, floor_number: int) -> 
 		map.set_tile(spot.x, spot.y, DungeonMap.T_CHEST)
 
 	_place_shop(map, rng)
+
+
+## 階段を踏んだ直後に同じ階段が再発火しないよう、隣の床へ着地させる。
+## 走査順は固定し、同じ地形なら同じ位置を返す。
+static func _arrival_near(map: DungeonMap, feature: Vector2i) -> Vector2i:
+	# キャラは足元から上へ16pxはみ出す。階段の上側へ立たせれば、下にある階段を
+	# 全部見せたまま正面（初期向きの下）へ一歩で踏める。
+	for step in [Vector2i.UP, Vector2i.DOWN, Vector2i.RIGHT, Vector2i.LEFT]:
+		var at: Vector2i = feature + step
+		var tile := map.get_tile(at.x, at.y)
+		if tile == DungeonMap.T_FLOOR or tile == DungeonMap.T_FLOOR_CRACKED:
+			return at
+	return feature
+
+
+## 開始位置から見える場所へ戻り階段を置く。キャラは足元から上へ伸びるため、
+## 下側を最優先にすると立ち絵に隠れず、初期向きのまま一歩で戻れる。
+static func _visible_feature_near(map: DungeonMap, start: Vector2i) -> Vector2i:
+	for step in [Vector2i.DOWN, Vector2i.RIGHT, Vector2i.LEFT, Vector2i.UP]:
+		var at: Vector2i = start + step
+		var tile := map.get_tile(at.x, at.y)
+		if tile == DungeonMap.T_FLOOR or tile == DungeonMap.T_FLOOR_CRACKED:
+			return at
+	return start
 
 
 ## 出店。毎階あると補給が作業になり、無さすぎるとゴールドが死ぬので、

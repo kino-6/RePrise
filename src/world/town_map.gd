@@ -18,9 +18,10 @@ enum {
 	T_WALL_TOP = 3,
 	T_EXIT = 4,     ## 出口（洞の階段と同じ絵）。踏むと世界へ戻る
 	T_DOOR = 5,     ## 宿の扉
-	T_SIGN = 6,     ## 宝箱の絵を看板として使う
+	T_SIGN = 6,     ## 町専用シート末尾の案内札として描く
 	T_VOID = 7,
 	T_SHOP = 8,
+	T_SUPPLY_CHEST = 9, ## 町ごとに一度だけ開けられる旅人用の物資箱
 }
 
 # 町専用シートの末尾。地図データの種類は増やさず、計画街路と広場の
@@ -28,6 +29,8 @@ enum {
 const ART_ROAD_FIRST := 9
 const ART_PLAZA_FIRST := 13
 const ART_VARIANTS := 4
+const ART_SIGN := 17
+const ART_CHEST := 6
 
 ## 町の人（位置 -> {"kind": ..., "line": String}）。
 ## 話しかける = 隣から押し当てる（洞の宝箱と同じ作法）。
@@ -48,6 +51,7 @@ var town_name: String = ""
 var profile: TownProfile = null
 var plaza_pos: Vector2i = Vector2i(-1, -1)
 var landmark_pos: Vector2i = Vector2i(-1, -1)
+var supply_chest_pos: Vector2i = Vector2i(-1, -1)
 var main_street: Array[Vector2i] = []
 var facility_paths: Array[Vector2i] = []
 var plaza_tiles: Array[Vector2i] = []
@@ -72,6 +76,10 @@ func is_void(x: int, y: int) -> bool:
 ## 洞と同じ描き分け。壁の下が地面なら手前の面、そうでなければ天面。
 func render_tile(x: int, y: int) -> int:
 	var t := get_tile(x, y)
+	if t == T_SIGN:
+		return ART_SIGN
+	if t == T_SUPPLY_CHEST:
+		return ART_CHEST
 	if t == T_GROUND_ALT:
 		var at := Vector2i(x, y)
 		if at in plaza_tiles:
@@ -88,4 +96,13 @@ func render_tile(x: int, y: int) -> int:
 
 func glyphs() -> Dictionary:
 	return { T_GROUND: ".", T_GROUND_ALT: ",", T_WALL: "#", T_WALL_TOP: "#",
-		T_EXIT: ">", T_DOOR: "+", T_SIGN: "$", T_VOID: " ", T_SHOP: "S" }
+		T_EXIT: ">", T_DOOR: "+", T_SIGN: "!", T_VOID: " ", T_SHOP: "S",
+		T_SUPPLY_CHEST: "$" }
+
+
+func clear_supply_chest() -> void:
+	if supply_chest_pos.x < 0:
+		return
+	if get_tile(supply_chest_pos.x, supply_chest_pos.y) == T_SUPPLY_CHEST:
+		set_tile(supply_chest_pos.x, supply_chest_pos.y, T_GROUND)
+	supply_chest_pos = Vector2i(-1, -1)

@@ -2,6 +2,7 @@ class_name StoryArcGenerator
 extends RefCounted
 
 const WritingQuality := preload("res://src/game/writing_quality.gd")
+const StoryOperationScript := preload("res://src/quest/story_operation.gd")
 
 ## 一世界で完結する、感情的な連続シナリオを決定的に生成する。
 ##
@@ -124,6 +125,11 @@ static func generate(
 		beat["biome"] = String(site.get("biome", ""))
 		beat["place"] = String(site.get("place", ""))
 		beat["line_template"] = String(beat.get("line", ""))
+		var operation: Dictionary = beat.get("operation", {}).duplicate(true)
+		operation["objective_template"] = String(operation.get("objective", ""))
+		operation["result_template"] = String(operation.get("result", ""))
+		operation["cue_template"] = String(operation.get("cue", ""))
+		beat["operation"] = operation
 		story.beats.append(beat)
 	for ending_id in story.endings:
 		var ending: Dictionary = story.endings[ending_id]
@@ -266,10 +272,20 @@ static func validate_story(story: Dictionary) -> Array[String]:
 			errors.append("%s has no rendered line" % String(beat.get("id", "")))
 		elif "{" in rendered_line or "}" in rendered_line:
 			errors.append("%s has unresolved placeholder" % String(beat.get("id", "")))
+		errors.append_array(StoryOperationScript.definition_errors(beat))
+		var operation: Dictionary = beat.get("operation", {})
+		for key in ["objective", "result", "cue"]:
+			var rendered := String(operation.get(key, ""))
+			if "{" in rendered or "}" in rendered:
+				errors.append("%s has unresolved operation %s" % [
+					String(beat.get("id", "")), key,
+				])
 	for ending_id in story.get("endings", {}):
 		var ending_line := String(story.endings[ending_id].get("line", ""))
 		if ending_line == "" or "{" in ending_line or "}" in ending_line:
 			errors.append("%s has invalid ending line" % ending_id)
+	for choice in story.get("choices", []):
+		errors.append_array(StoryOperationScript.choice_errors(choice))
 	var resolved := resolve_ending(story, "", FAILURE_IDS)
 	if not bool(resolved.get("reaches_epilogue", false)):
 		errors.append("fallback choice does not reach epilogue")
@@ -327,6 +343,17 @@ static func _render(story: Dictionary) -> void:
 	for beat in story.get("beats", []):
 		values["place"] = String(beat.get("place", "その地"))
 		beat["line"] = String(beat.get("line_template", beat.get("line", ""))).format(values)
+		var operation: Dictionary = beat.get("operation", {})
+		operation["objective"] = String(
+			operation.get("objective_template", operation.get("objective", ""))
+		).format(values)
+		operation["result"] = String(
+			operation.get("result_template", operation.get("result", ""))
+		).format(values)
+		operation["cue"] = String(
+			operation.get("cue_template", operation.get("cue", ""))
+		).format(values)
+		beat["operation"] = operation
 	for ending_id in story.get("endings", {}):
 		var ending: Dictionary = story.endings[ending_id]
 		ending["line"] = String(
@@ -402,6 +429,8 @@ static func _validate_beats(
 		var line := String(beat.get("line", ""))
 		if line == "":
 			errors.append("%s/%s: line が空" % [prefix, beat_id])
+		for error in StoryOperationScript.definition_errors(beat):
+			errors.append("%s/%s" % [prefix, error])
 	for required_index in [0, 2, 4]:
 		var line := String(beats[required_index].get("line", ""))
 		if "{anchor_name}" not in line or "{motif}" not in line:
@@ -434,6 +463,8 @@ static func _validate_choices_and_endings(
 		for key in ["label", "immediate_cost", "preserves", "sacrifices", "ending_id"]:
 			if String(choice.get(key, "")).strip_edges() == "":
 				errors.append("%s/%s: %s が空" % [prefix, choice_id, key])
+		for error in StoryOperationScript.choice_errors(choice):
+			errors.append("%s/%s" % [prefix, error])
 		ending_ids[String(choice.get("ending_id", ""))] = true
 	for ending_id in endings:
 		var ending: Dictionary = endings[ending_id]

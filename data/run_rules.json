@@ -8,7 +8,7 @@
   ],
   "difficulties": {
     "gentle": {
-      "name": "ひかえめ",
+      "name": "控えめ",
       "desc": "敵の生命と力が下がる。持ち帰る資源は 75%。",
       "enemy_hp_pct": 88,
       "enemy_power_pct": 92,
@@ -79,7 +79,7 @@
   ],
   "contracts": {
     "closed_market": {
-      "name": "商人なき旅",
+      "name": "商人不在",
       "desc": "町と洞の店を利用できない。持ち帰る資源に +25%。",
       "reward_bonus": 25
     },

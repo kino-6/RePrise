@@ -1,8 +1,8 @@
 {
   "_comment": "道中の出店で買う消耗品。effect: heal_hp / heal_mp / revive / cleanse / heal_cleanse / item_damage / haste。item_damage は element で弱点を突ける戦闘専用品。target と cost は abilities.json と同じ語彙・同じ意味（cost は CTB の行動コスト）。stock はその出店に並ぶ数。",
   "herb": {
-    "name": "やくそう",
-    "desc": "味方ひとりの傷を そこそこ癒す。",
+    "name": "薬草",
+    "desc": "味方1人の傷を癒す。",
     "effect": "heal_hp",
     "power": 60,
     "target": "one_ally",
@@ -12,8 +12,8 @@
     "floor_min": 1
   },
   "water": {
-    "name": "まほうのみず",
-    "desc": "味方ひとりの魔力を すこし戻す。",
+    "name": "魔力の水",
+    "desc": "味方1人の魔力を少し戻す。",
     "effect": "heal_mp",
     "power": 14,
     "target": "one_ally",
@@ -23,8 +23,8 @@
     "floor_min": 1
   },
   "elixir": {
-    "name": "せんねんの雫",
-    "desc": "味方ひとりを 完全に癒す。",
+    "name": "千年の雫",
+    "desc": "味方1人を完全に癒す。",
     "effect": "heal_hp",
     "power": 999,
     "target": "one_ally",
@@ -34,7 +34,7 @@
     "floor_min": 8
   },
   "feather": {
-    "name": "めざめの羽",
+    "name": "目覚めの羽",
     "desc": "倒れた味方を 起こす。",
     "effect": "revive",
     "power": 50,
@@ -45,7 +45,7 @@
     "floor_min": 3
   },
   "antidote": {
-    "name": "どくけしそう",
+    "name": "毒消し草",
     "desc": "毒を消す。歩いていても使える。",
     "effect": "cleanse",
     "power": 0,
@@ -56,8 +56,8 @@
     "floor_min": 1
   },
   "ether": {
-    "name": "エーテルのしずく",
-    "desc": "味方ひとりの魔力を 大きく戻す。",
+    "name": "エーテルの雫",
+    "desc": "味方1人の魔力を大きく戻す。",
     "effect": "heal_mp",
     "power": 40,
     "target": "one_ally",
@@ -67,8 +67,8 @@
     "floor_min": 5
   },
   "medicine": {
-    "name": "上やくそう",
-    "desc": "味方ひとりの傷を 大きく癒す。",
+    "name": "上質な薬草",
+    "desc": "味方1人の傷を大きく癒す。",
     "effect": "heal_hp",
     "power": 140,
     "target": "one_ally",
@@ -79,7 +79,7 @@
   },
   "remedy": {
     "name": "万能膏",
-    "desc": "傷をすこし癒し、毒も消す。",
+    "desc": "傷を少し癒し、毒も消す。",
     "effect": "heal_cleanse",
     "power": 35,
     "target": "one_ally",
@@ -89,8 +89,8 @@
     "floor_min": 3
   },
   "ember_vial": {
-    "name": "火炎びん",
-    "desc": "敵ひとりへ 炎の固定ダメージ。弱点に有効。",
+    "name": "火炎瓶",
+    "desc": "敵1体へ炎の固定ダメージ。弱点に有効。",
     "effect": "item_damage",
     "element": "fire",
     "power": 60,
@@ -101,8 +101,8 @@
     "floor_min": 2
   },
   "frost_vial": {
-    "name": "氷晶びん",
-    "desc": "敵ひとりへ 氷の固定ダメージ。弱点に有効。",
+    "name": "氷晶瓶",
+    "desc": "敵1体へ氷の固定ダメージ。弱点に有効。",
     "effect": "item_damage",
     "element": "ice",
     "power": 60,
@@ -114,7 +114,7 @@
   },
   "thunder_coil": {
     "name": "雷導コイル",
-    "desc": "敵ひとりへ 雷の固定ダメージ。弱点に有効。",
+    "desc": "敵1体へ雷の固定ダメージ。弱点に有効。",
     "effect": "item_damage",
     "element": "lightning",
     "power": 60,
@@ -125,8 +125,8 @@
     "floor_min": 4
   },
   "quick_tonic": {
-    "name": "はやて薬",
-    "desc": "味方ひとりの すばやさを4手番あげる。",
+    "name": "疾風薬",
+    "desc": "味方1人の素早さを4手番上げる。",
     "effect": "haste",
     "power": 0,
     "target": "one_ally",
@@ -134,5 +134,50 @@
     "price": 78,
     "stock": 2,
     "floor_min": 6
+  },
+  "ember_talon": {
+    "name": "熾火の鉤爪",
+    "desc": "何度でも敵1体へ炎を放つ。",
+    "effect": "item_damage",
+    "element": "fire",
+    "power": 34,
+    "target": "one_enemy",
+    "cost": 85,
+    "price": 220,
+    "stock": 1,
+    "floor_min": 4,
+    "shop": false,
+    "reusable": true,
+    "battle_only": true
+  },
+  "mending_stone": {
+    "name": "命結びの石",
+    "desc": "味方1人を癒す。1戦に1回。",
+    "effect": "heal_hp",
+    "power": 28,
+    "target": "one_ally",
+    "cost": 100,
+    "price": 270,
+    "stock": 1,
+    "floor_min": 6,
+    "shop": false,
+    "reusable": true,
+    "battle_only": true,
+    "uses_per_battle": 1
+  },
+  "pilgrim_chalice": {
+    "name": "巡礼の聖杯",
+    "desc": "仲間全員を少し癒す。1戦に1回。",
+    "effect": "heal_all",
+    "power": 18,
+    "target": "all_allies",
+    "cost": 110,
+    "price": 380,
+    "stock": 1,
+    "floor_min": 8,
+    "shop": false,
+    "reusable": true,
+    "battle_only": true,
+    "uses_per_battle": 1
   }
 }

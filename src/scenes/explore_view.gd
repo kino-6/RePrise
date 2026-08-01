@@ -1,6 +1,8 @@
 class_name ExploreView
 extends Node2D
 
+const TownInteractionScript := preload("res://src/world/town_interaction.gd")
+
 ## 歩く画面。**ワールドでも洞の中でも、これ 1 本を使う。**
 ##
 ## ここが持っているのは歩き・カメラ・描画・遭遇判定だけで、地図の中身には
@@ -12,9 +14,12 @@ extends Node2D
 
 signal encounter_triggered
 signal descended
+signal ascended
 signal boss_reached
 signal shop_entered
-signal chest_opened(amount: int)
+## 宝箱を開けた。`summons_elite` は**この箱が格上を呼ぶか**（R-3）。
+## 判定そのものは `GreedWatch` にあり、ここは踏んだ事実を渡すだけ。
+signal chest_opened(amount: int, summons_elite: bool)
 signal menu_requested
 ## ワールドで任意イベントのマスを踏んだ。開くかは main.gd が決める
 ## （一度きりかどうかを知っているのは向こう側）。
@@ -22,8 +27,11 @@ signal event_reached(pos: Vector2i)
 ## ワールドで拠点地（町・洞・城）を踏んだ。中へ入れるかは main.gd が決める。
 ## `from` は踏み込む直前のマス。町から出たとき、元の街道へ戻すために使う。
 signal site_entered(pos: Vector2i, from: Vector2i)
-## 町の人に話しかけた。
-signal talked(line: String)
+## 町の人に話しかけた。役・町設定・台詞をまとめて外へ渡す。
+signal talked(person: Dictionary)
+## 町の中央にある、その土地固有の仕事場を調べた。
+signal town_facility_used
+signal town_chest_opened
 ## 宿の扉を踏んだ。
 signal inn_entered
 ## 町の出口を踏んだ。
@@ -69,10 +77,6 @@ var player_pos := Vector2i.ZERO
 var facing := FACE_DOWN
 var rng: DetRng = null
 var hero_tex: Texture2D = null
-
-## 物知りが話す内容を外から差し込む口（main.gd が封の手掛かりを入れる）。
-## ExploreView は世界の事情を知らないので、文章はここでは作らない。
-var rumor: Callable = Callable()
 
 var _frame := 0
 var _move_cd := 0.0
@@ -208,13 +212,23 @@ func _try_move_town(target: Vector2i) -> void:
 		facing = _facing_for(target - player_pos)
 		queue_redraw()
 		var who: Dictionary = town.folk[target]
-		# 物知りだけは決まり文句ではなく、そのときの手掛かりを話す。
-		var line := String(who.get("line", ""))
-		if String(who.get("kind", "")) == "elder" and rumor.is_valid():
-			var hint := String(rumor.call())
-			if hint != "":
-				line = hint
-		talked.emit(line)
+		talked.emit(who)
+		return
+
+	# 中央の目印は飾りではなく、その町の生業を使う仕事場。
+	# 通れない物へ押し当てる操作はNPCや宝箱と同じなので、新しいキーを増やさない。
+	if target == town.landmark_pos:
+		facing = _facing_for(target - player_pos)
+		queue_redraw()
+		town_facility_used.emit()
+		return
+
+	# 案内札とは別の、本当に開けられる町の物資箱。
+	if target == town.supply_chest_pos:
+		facing = _facing_for(target - player_pos)
+		town.clear_supply_chest()
+		queue_redraw()
+		town_chest_opened.emit()
 		return
 
 	if not map.is_walkable(target.x, target.y):
@@ -285,10 +299,15 @@ func _try_move_dungeon(target: Vector2i) -> void:
 
 	# 宝箱は「押し当てて開ける」。マスには乗らない。
 	if tile == DungeonMap.T_CHEST:
+		var dungeon: DungeonMap = map
+		# **開ける前の数**で決める。1 つ目を開けた時点で残りの箱に印が出るので、
+		# 「これ以上は呼ぶ」を読んでから手を伸ばすことになる（後出しにしない）。
+		var summons := GreedWatch.summons(dungeon.chests_taken)
+		dungeon.chests_taken += 1
 		map.set_tile(target.x, target.y, DungeonMap.T_FLOOR)
 		map.chests.erase(target)
 		queue_redraw()
-		chest_opened.emit(rng.range_i(8, 30))
+		chest_opened.emit(rng.range_i(8, 30), summons)
 		return
 
 
@@ -305,6 +324,9 @@ func _try_move_dungeon(target: Vector2i) -> void:
 
 	if tile == DungeonMap.T_STAIRS:
 		descended.emit()
+		return
+	if tile == DungeonMap.T_UP_STAIRS:
+		ascended.emit()
 		return
 
 	# 最終階の出口は下りではなく主の間。踏んだ時点でボス戦に入る。
@@ -408,10 +430,42 @@ func _draw() -> void:
 				Rect2(t * TILE, 0, TILE, TILE)
 			)
 
+	# 格上の敵は、踏む前から分かる赤い菱形で示す。地形タイルを上書きしないので、
+	# 「街道の脇にいて避けられる」ことも同時に読める。
+	if map is WorldMap:
+		var world: WorldMap = map
+		for raw_pos in world.events:
+			var event_pos: Vector2i = raw_pos
+			var instance: Dictionary = world.events[event_pos]
+			if not bool(instance.get("visible_elite", false)) or GameState.event_done.has(event_pos):
+				continue
+			_draw_elite_mark(Vector2(event_pos * TILE) + Vector2(TILE, TILE) * 0.5)
+
+	# 欲が呼ぶ格上（R-3）。1 つ目の宝箱を開けたら、**残りの箱に赤い印**が付く。
+	# 世界に置かれた格上と同じ赤い菱形と「!」を使う ―― 呼ぶものが同じなので、
+	# 記号も同じにする。印が出てから手を伸ばすかどうかが選択になる。
+	if map is DungeonMap:
+		var dungeon: DungeonMap = map
+		if GreedWatch.summons(dungeon.chests_taken):
+			for chest_pos in dungeon.chests:
+				_draw_elite_mark(
+					Vector2(chest_pos * TILE) + Vector2(TILE * 0.5, -2.0)
+				)
+
 	# 町の人。主人公と同じ 24x32 のシートを使い、職業の絵を役に割り当てる。
 	# 専用の絵を起こさずに「人が居る」を作る。
 	if map is TownMap:
 		var town: TownMap = map
+		_draw_town_marker(town.inn_pos, Terms.TOWN_INN_MARK, PixelUI.C_MP)
+		_draw_town_marker(town.shop_pos, Terms.TOWN_SHOP_MARK, PixelUI.C_ACTIVE)
+		var town_index := int(GameState.site.get("index", 0))
+		var work_used := GameState.town_actions_done.has(
+			TownInteractionScript.facility_key(town_index, town)
+		)
+		_draw_town_marker(
+			town.landmark_pos, Terms.TOWN_WORK_MARK,
+			PixelUI.C_TEXT_DIM if work_used else PixelUI.C_HP_OK
+		)
 		for pos in town.folk:
 			var who: Vector2i = pos
 			var tex := _folk_texture(String(town.folk[pos].get("kind", "")))
@@ -433,6 +487,38 @@ func _draw() -> void:
 		Rect2(at.x, at.y, CHAR_W, CHAR_H),
 		Rect2(_frame * CHAR_W, facing * CHAR_H, CHAR_W, CHAR_H)
 	)
+
+
+## 格上が居る／呼べる場所を示す赤い菱形と「!」。
+##
+## 世界に置かれた 1 体（R-1）と、欲が呼ぶ格上（R-3）で**同じ記号を使う**。
+## 出てくるものが同じなのに印が違うと、覚え直しが要るだけで何も伝わらない。
+func _draw_elite_mark(center: Vector2) -> void:
+	var outer := PackedVector2Array([
+		center + Vector2(0, -9), center + Vector2(9, 0),
+		center + Vector2(0, 9), center + Vector2(-9, 0),
+	])
+	var inner := PackedVector2Array([
+		center + Vector2(0, -6), center + Vector2(6, 0),
+		center + Vector2(0, 6), center + Vector2(-6, 0),
+	])
+	draw_colored_polygon(outer, PixelUI.C_SHADOW)
+	draw_colored_polygon(inner, PixelUI.C_HP_LOW)
+	PixelUI.draw_text(
+		self, (center + Vector2(-3, -8)).floor(), "!", Color.WHITE, PixelUI.SIZE_TEXT
+	)
+
+
+## 施設タイルの絵だけでは宿・店・仕事場を区別できなかったため、
+## 14pxの短い札を入口へ重ねる。仕事場だけは利用後に色を落とす。
+func _draw_town_marker(at: Vector2i, label: String, color: Color) -> void:
+	if at.x < 0 or label == "":
+		return
+	var width := PixelUI.text_width(label, PixelUI.SIZE_TEXT) + 6.0
+	var pos := Vector2(at * TILE) + Vector2((TILE - width) * 0.5, 0)
+	draw_rect(Rect2(pos, Vector2(width, 16)), Color8(0x08, 0x0A, 0x12), true)
+	draw_rect(Rect2(pos + Vector2(1, 1), Vector2(width - 2, 1)), color.darkened(0.25), true)
+	PixelUI.draw_text(self, pos + Vector2(3, 0), label, color, PixelUI.SIZE_TEXT)
 
 
 ## 地形の細かい模様と人物の足を分離する、共通の接地影。

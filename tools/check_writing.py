@@ -61,6 +61,7 @@ EXPECTED_PROFILES = {
         "dry_well",
     },
 }
+EXPECTED_FACILITIES = EXPECTED_PROFILES["industries"]
 
 # 実画面で「誰がなぜ言ったのか分からない」となった旧文。
 REGRESSION_PHRASES = {
@@ -81,6 +82,47 @@ REGRESSION_PHRASES = {
 
 PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")
 SENTENCE_END = re.compile(r"[。！？]$")
+SOUND_PREDICATE_MISMATCH = re.compile(
+    r"(?:音|声|響き|さえずり|足音|物音|鳴き声)[はが].*静かにしている"
+)
+
+# 低解像度だった時代の表記を、根拠なく現在の14px UIへ持ち込まない。
+# 助詞や一般に開く語は対象にせず、一覧で探す内容語だけを固定する。
+LEGACY_HIRAGANA_UI = {
+    "どうぐ": "道具",
+    "ぶき": "武器",
+    "ぼうぐ": "防具",
+    "かざり": "装飾品",
+    "もちもの": "持ち物",
+    "ちず": "地図",
+    "じゅくれんど": "熟練度",
+    "さいきょう": "最強装備",
+    "そうび": "装備",
+    "てんしょく": "転職",
+    "せってい": "設定",
+    "ちゅうだん": "中断",
+    "ぬけだす": "脱出",
+    "たたかう": "戦う",
+    "じゅもん": "魔法",
+    "とくぎ": "特技",
+    "ぼうぎょ": "防御",
+    "にげる": "逃げる",
+    "こうげき": "攻撃",
+    "しゅび": "守備",
+    "すばやさ": "素早さ",
+    "たいりょく": "体力",
+    "まりょく": "魔力",
+    "しゅうとく": "習得",
+    "げんしょく": "現職",
+    "しきゅうひん": "支給品",
+    "けいしょういん": "継承印",
+    "せんぐ": "戦具",
+    "やくそう": "薬草",
+    "まほうのみず": "魔力の水",
+}
+ALLOWED_HIRAGANA_NAMES = {"されこうべ", "じっくり"}
+HIRAGANA_NAME = re.compile(r"[ぁ-んー]+$")
+STRING_LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
 
 
 def _load(relative: str) -> dict:
@@ -110,8 +152,14 @@ def _regressions(label: str, value) -> list[str]:
 
 def check_town(data: dict) -> list[str]:
     problems: list[str] = []
-    if data.get("version") != 1:
-        problems.append("town: version は1")
+    if data.get("version") != 2:
+        problems.append("town: version は2")
+    role_names = data.get("role_names", {})
+    if set(role_names) != EXPECTED_ROLES:
+        problems.append("town: role_namesのIDが実装と一致しない")
+    for role, name in role_names.items():
+        if not isinstance(name, str) or not name or len(name) > 8:
+            problems.append(f"town/role_names/{role}: 1〜8文字の役名が必要")
     roles = data.get("roles", {})
     if set(roles) != EXPECTED_ROLES:
         problems.append("town: rolesのIDが実装と一致しない")
@@ -159,6 +207,32 @@ def check_town(data: dict) -> list[str]:
                     problems.append(
                         f"town/profiles/{group}/{profile_id}[{index}]: 文末記号が無い"
                     )
+
+    facilities = data.get("facilities", {})
+    if set(facilities) != EXPECTED_FACILITIES:
+        problems.append("town/facilities: 生業8種と一致しない")
+    for facility_id in sorted(EXPECTED_FACILITIES):
+        entry = facilities.get(facility_id, {})
+        if not isinstance(entry, dict) or set(entry) != {"name", "hint", "repeat"}:
+            problems.append(f"town/facilities/{facility_id}: name/hint/repeatが必要")
+            continue
+        name = entry.get("name", "")
+        if not isinstance(name, str) or not name or len(name) > 8:
+            problems.append(f"town/facilities/{facility_id}/name: 1〜8文字")
+        for field in ["hint", "repeat"]:
+            line = entry.get(field, "")
+            if not isinstance(line, str) or not line:
+                problems.append(f"town/facilities/{facility_id}/{field}: 空")
+                continue
+            if len(line) > 34:
+                problems.append(f"town/facilities/{facility_id}/{field}: 34文字超過")
+            if " " in line or "　" in line:
+                problems.append(f"town/facilities/{facility_id}/{field}: 不自然な空白")
+            if not SENTENCE_END.search(line):
+                problems.append(f"town/facilities/{facility_id}/{field}: 文末記号が無い")
+        hint = str(entry.get("hint", ""))
+        if not re.search(r"(?:個|歩|在庫|初動)", hint):
+            problems.append(f"town/facilities/{facility_id}/hint: 効き目が具体的でない")
     problems.extend(_regressions("town", data))
     return problems
 
@@ -238,7 +312,59 @@ def check_vocabulary(data: dict) -> list[str]:
 
 
 def check_events(data: dict) -> list[str]:
-    return _regressions("event", data)
+    problems = _regressions("event", data)
+    for text in _strings(data):
+        if SOUND_PREDICATE_MISMATCH.search(text):
+            problems.append(f"event: 音を人の動作で説明している（{text}）")
+    return problems
+
+
+def check_orthography(vocabulary: dict, named_catalogs: dict[str, dict]) -> list[str]:
+    """読み分けに使う内容語が、根拠なく平仮名へ戻っていないかを見る。"""
+    problems: list[str] = []
+    for text in _strings(vocabulary.get("terms", {})):
+        for old, preferred in LEGACY_HIRAGANA_UI.items():
+            if old in text:
+                problems.append(
+                    f"vocabulary/terms: {old} は {preferred} と表記する（{text}）"
+                )
+
+    for label, data in named_catalogs.items():
+        for entry_id, entry in data.items():
+            if entry_id.startswith("_") or not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name", ""))
+            if not name:
+                continue
+            if HIRAGANA_NAME.fullmatch(name) and name not in ALLOWED_HIRAGANA_NAMES:
+                problems.append(f"{label}/{entry_id}: 名称が平仮名だけ（{name}）")
+            for old, preferred in LEGACY_HIRAGANA_UI.items():
+                if old in name:
+                    problems.append(
+                        f"{label}/{entry_id}: {old} は {preferred} と表記する（{name}）"
+                    )
+
+    # vocabulary.json が壊れたときにも幼い既定値へ戻らないよう、受け皿も同じ判定にする。
+    ui_sources = [
+        "src/ui/terms.gd",
+        "src/ui/battle_text.gd",
+        "src/scenes/title_view.gd",
+        "src/scenes/settings_view.gd",
+        "src/scenes/stronghold_view.gd",
+        "src/scenes/shop_view.gd",
+        "src/scenes/field_menu.gd",
+        "src/scenes/battle_view.gd",
+        "src/scenes/gear_offer_view.gd",
+    ]
+    for relative in ui_sources:
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        for literal in STRING_LITERAL.findall(source):
+            for old, preferred in LEGACY_HIRAGANA_UI.items():
+                if old in literal:
+                    problems.append(
+                        f"source/{relative}: {old} は {preferred} と表記する（{literal}）"
+                    )
+    return problems
 
 
 def check_sources() -> list[str]:
@@ -249,6 +375,9 @@ def check_sources() -> list[str]:
         problems.append("source: 町NPC台詞がtown_dialogue.json経由ではない")
     if "TownDialogue.profile_lines" not in profile:
         problems.append("source: 町設定台詞がtown_dialogue.json経由ではない")
+    interaction = (ROOT / "src/world/town_interaction.gd").read_text(encoding="utf-8")
+    if "TownDialogue.facility" not in interaction:
+        problems.append("source: 町の仕事場文がtown_dialogue.json経由ではない")
 
     event_view = (ROOT / "src/scenes/event_view.gd").read_text(encoding="utf-8")
     main = (ROOT / "src/scenes/main.gd").read_text(encoding="utf-8")
@@ -256,6 +385,8 @@ def check_sources() -> list[str]:
         problems.append("source: 一世界の地の文が人物の発話欄へ出る")
     if '"actor": ""' not in main:
         problems.append("source: 世界横断の地の文が人物の発話欄へ出る")
+    if "event_view.open_talk" not in main or "func open_talk" not in event_view:
+        problems.append("source: 町会話が読み終えるまで残る窓へ接続されていない")
     for old_label in ['"はらう"', '"のこす"', '"手ばなす"', '"あぶない"', '"もらう"']:
         if old_label in event_view:
             problems.append(f"source: 旧イベントUI語が直書き（{old_label}）")
@@ -284,19 +415,37 @@ def check_sources() -> list[str]:
 
 def run_checks() -> list[str]:
     problems: list[str] = []
+    vocabulary = _load("data/vocabulary.json")
     problems.extend(check_town(_load("data/town_dialogue.json")))
     problems.extend(check_story(_load("data/story_arcs.json")))
     problems.extend(check_cross_world(_load("data/cross_world_arcs.json")))
     problems.extend(check_events(_load("data/world_events.json")))
-    problems.extend(check_vocabulary(_load("data/vocabulary.json")))
+    problems.extend(check_vocabulary(vocabulary))
+    problems.extend(check_orthography(vocabulary, {
+        "ability": _load("data/abilities.json"),
+        "job": _load("data/jobs.json"),
+        "item": _load("data/items.json"),
+        "equipment": _load("data/equipment.json"),
+        "monster": _load("data/monsters.json"),
+        "run_rule": _load("data/run_rules.json"),
+    }))
     problems.extend(check_sources())
     return problems
 
 
 def _selftest() -> int:
     base = {
-        "version": 1,
+        "version": 2,
+        "role_names": {role: "町の人" for role in EXPECTED_ROLES},
         "roles": {role: ["町の状況を説明する。"] * 3 for role in EXPECTED_ROLES},
+        "facilities": {
+            key: {
+                "name": "仕事場",
+                "hint": "40歩のあいだ旅を助ける。",
+                "repeat": "この仕事場は利用済みだ。",
+            }
+            for key in EXPECTED_FACILITIES
+        },
         "profiles": {
             group: {key: ["町の状況を説明する。"] * 2 for key in keys}
             for group, keys in EXPECTED_PROFILES.items()
@@ -317,6 +466,10 @@ def _selftest() -> int:
     no_period["roles"]["guard"][0] = "門を守っている"
     cases.append(("文末の無い台詞を落とす", no_period, True))
 
+    vague_facility = json.loads(json.dumps(base))
+    vague_facility["facilities"]["farming"]["hint"] = "旅の助けになる。"
+    cases.append(("効き目の分からない仕事場を落とす", vague_facility, True))
+
     bad = 0
     for name, fixture, want_fail in cases:
         got_fail = bool(check_town(fixture))
@@ -336,11 +489,20 @@ def _selftest() -> int:
     ok = bool(check_story(long_story))
     bad += 0 if ok else 1
     print("  %s  差し込み後の画面超過を落とす" % ("OK" if ok else "NG"))
+
+    awkward_event = {"skin": {"flavor": ["水場で鳴く鳥のさえずりは静かにしている"]}}
+    ok = bool(check_events(awkward_event))
+    bad += 0 if ok else 1
+    print("  %s  主語と述語が噛み合わない情景を落とす" % ("OK" if ok else "NG"))
+    bad_ui = {"terms": {"command": "たたかう"}}
+    ok = bool(check_orthography(bad_ui, {}))
+    bad += 0 if ok else 1
+    print("  %s  根拠のない平仮名UIを落とす" % ("OK" if ok else "NG"))
     print("---")
     if bad:
         print("文章Gateの自己検査に失敗（%d件）" % bad)
         return 1
-    print("文章Gateは期待どおり動く（%d件）" % (len(cases) + 1))
+    print("文章Gateは期待どおり動く（%d件）" % (len(cases) + 3))
     return 0
 
 
@@ -354,10 +516,11 @@ def main(argv: list[str]) -> int:
         return 1
 
     print("文章品質Gate")
-    print("  町NPC: 17役 / 町設定: 8生業・4支配・8問題")
+    print("  町NPC: 17役 / 仕事場: 8種 / 町設定: 8生業・4支配・8問題")
     print("  一世界物語: 差し込み後54文字以内")
     print("  世界横断: 決着文が差し込み後54文字以内")
     print("  AI候補: 意味不明・古風・抽象語過多・戦績不一致を拒否")
+    print("  表記: UI内容語と名称を標準的な漢字表記へ統一")
     print("---")
     if problems:
         for problem in problems:

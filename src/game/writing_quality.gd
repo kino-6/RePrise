@@ -61,6 +61,11 @@ const ACTOR_ENDINGS := [
 	"子ども", "少年", "少女", "住民", "老人",
 ]
 
+## 音や声そのものを、人の動作「静かにしている」の主語にしない。
+## 「鳥は静かにしている」は成立するが、「さえずりは静かにしている」は
+## 主語と述語の組み合わせが崩れている。単語の禁止ではなく係り受けの事故を止める。
+const SOUND_SUBJECTS := ["音", "声", "響き", "さえずり", "足音", "物音", "鳴き声"]
+
 
 static func ai_reason(text: String, field: String = "") -> String:
 	var normalized := text.strip_edges()
@@ -88,6 +93,10 @@ static func ai_reason(text: String, field: String = "") -> String:
 		return "actor_not_role"
 	if field == "flavor" and not _contains_any(normalized, OBSERVABLE_WORDS):
 		return "flavor_not_observable"
+	if field == "flavor" and "静かにしている" in normalized:
+		for subject in SOUND_SUBJECTS:
+			if "%sは" % subject in normalized or "%sが" % subject in normalized:
+				return "predicate_mismatch"
 	return ""
 
 

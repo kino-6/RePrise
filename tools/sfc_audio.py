@@ -2,7 +2,8 @@
 SFC 風の音を合成する基盤 — 依存ゼロ（標準ライブラリのみ）
 
 SFC の音が「ファミコンでもなく CD でもない」独特の質感になっていた理由は、
-主に次の 3 つ。ここではその 3 つを明示的に再現する。
+波形の種類ではなく、短い圧縮サンプルを少ない声部で鳴らす仕組みにある。
+ここでは次の制約を明示的に再現する。
 
   1. サンプリング周波数 32kHz。高域が素直に伸びない。
   2. SPC700 のガウス補間。これが強めのローパスとして働き、音の角が丸くなる。
@@ -10,8 +11,11 @@ SFC の音が「ファミコンでもなく CD でもない」独特の質感に
   3. DSP 内蔵エコー。ほぼ全てのタイトルが使っていた、あの残響。
      これが無いと、音色をいくら似せても SFC には聞こえない。
 
-音色そのものは波形合成で作る（実機はサンプル再生だが、ローパスとエコーを
-通した時点で耳の印象は十分に寄る）。
+  4. 音色は短い倍音表を 8-bit 相当へ量子化して反復する。生の発振器を鳴らさない。
+  5. 木管・弦・金管は決定的な息／擦弦アタックを持つ。周期波だけの電子音にしない。
+
+BRR の 4-bit ADPCM そのものをファイルへ書くのではなく、短い量子化サンプル、
+ガウス補間、32kHz 出力を生成時の境界にする。ゲーム側は通常の WAV を再生する。
 """
 
 from __future__ import annotations
@@ -76,6 +80,8 @@ class Instrument:
         detune: float = 0.0,
         gain: float = 1.0,
         partials: tuple[float, ...] | None = None,
+        attack_noise: float = 0.0,
+        sustain_noise: float = 0.0,
     ):
         self.wave_kind = wave_kind
         self.duty = duty
@@ -87,7 +93,10 @@ class Instrument:
         self.vibrato_depth = vibrato_depth
         self.detune = detune
         self.gain = gain
+        self.attack_noise = attack_noise
+        self.sustain_noise = sustain_noise
         self._table: tuple[float, ...] = ()
+        self._gaussian: tuple[tuple[float, ...], ...] = ()
         if wave_kind == "harmonic":
             weights = partials or (1.0,)
             size = 2048
@@ -100,7 +109,22 @@ class Instrument:
                 )
                 values.append(value)
             high = max(abs(value) for value in values)
-            self._table = tuple(value / high for value in values)
+            # 実機は短い BRR サンプルを伸縮再生する。ここでも無限精度の
+            # 発振器にせず、短い波形を 8-bit 相当へ丸めて音色の粒を残す。
+            levels = 127.0
+            self._table = tuple(
+                round((value / high) * levels) / levels for value in values
+            )
+            kernels = []
+            for step in range(256):
+                fraction = step / 256.0
+                weights = [
+                    math.exp(-2.0 * (offset - fraction) ** 2)
+                    for offset in (-1, 0, 1, 2)
+                ]
+                total = sum(weights)
+                kernels.append(tuple(weight / total for weight in weights))
+            self._gaussian = tuple(kernels)
 
     def sample(self, phase: float) -> float:
         p = phase % 1.0
@@ -116,7 +140,19 @@ class Instrument:
         if kind == "sine":
             return math.sin(2.0 * math.pi * p)
         if kind == "harmonic":
-            return self._table[int(p * len(self._table)) % len(self._table)]
+            # S-DSP の 4 点ガウス補間を簡略化した循環補間。nearest 参照は
+            # 高域に角が立ち、量子化しただけの発振器らしさを強めてしまう。
+            position = p * len(self._table)
+            base = int(position)
+            fraction = position - base
+            weights = self._gaussian[min(int(fraction * 256.0), 255)]
+            size = len(self._table)
+            return (
+                self._table[(base - 1) % size] * weights[0]
+                + self._table[base % size] * weights[1]
+                + self._table[(base + 1) % size] * weights[2]
+                + self._table[(base + 2) % size] * weights[3]
+            )
         raise ValueError(f"未知の波形: {kind}")
 
     def envelope(self, t: float, duration: float) -> float:
@@ -138,47 +174,55 @@ class Instrument:
 # 木管・弦・金管・撥弦の役割が聞き分けられる編成にする。
 LEAD = Instrument("harmonic", attack=0.032, decay=0.13, sustain=0.68,
                   release=0.20, vibrato_hz=5.0, vibrato_depth=0.004,
-                  gain=0.48, partials=(1.0, 0.30, 0.13, 0.06))
+                  gain=0.48, partials=(1.0, 0.30, 0.13, 0.06),
+                  attack_noise=0.035, sustain_noise=0.006)
 BRASS = Instrument("harmonic", attack=0.045, decay=0.15, sustain=0.64,
                    release=0.22, vibrato_hz=4.2, vibrato_depth=0.0025,
                    detune=0.003, gain=0.43,
-                   partials=(1.0, 0.52, 0.28, 0.17, 0.09, 0.04))
+                   partials=(1.0, 0.52, 0.28, 0.17, 0.09, 0.04),
+                   attack_noise=0.085, sustain_noise=0.010)
 STRINGS = Instrument("harmonic", attack=0.16, decay=0.22, sustain=0.58,
                      release=0.42, vibrato_hz=3.7, vibrato_depth=0.0045,
                      detune=0.007, gain=0.31,
-                     partials=(1.0, 0.36, 0.23, 0.14, 0.09, 0.05))
+                     partials=(1.0, 0.36, 0.23, 0.14, 0.09, 0.05),
+                     attack_noise=0.065, sustain_noise=0.022)
 BASS = Instrument("harmonic", attack=0.010, decay=0.14, sustain=0.54,
                   release=0.13, gain=0.66,
-                  partials=(1.0, 0.28, 0.12, 0.05))
+                  partials=(1.0, 0.28, 0.12, 0.05), attack_noise=0.022)
 BELL = Instrument("harmonic", attack=0.002, decay=0.48, sustain=0.04,
                   release=0.34, gain=0.55,
-                  partials=(1.0, 0.04, 0.32, 0.02, 0.15, 0.01, 0.07))
+                  partials=(1.0, 0.04, 0.32, 0.02, 0.15, 0.01, 0.07),
+                  attack_noise=0.025)
 FLUTE = Instrument("harmonic", attack=0.065, decay=0.12, sustain=0.72,
                    release=0.24, vibrato_hz=5.1, vibrato_depth=0.0055,
-                   gain=0.43, partials=(1.0, 0.12, 0.035))
+                   gain=0.43, partials=(1.0, 0.12, 0.035),
+                   attack_noise=0.055, sustain_noise=0.016)
 
 # 後期 SFC の室内楽的な差。差し色ではなく、倍音・立ち上がり・余韻で
 # パートの役割を分ける。
 OBOE = Instrument("harmonic", attack=0.038, decay=0.14, sustain=0.65,
                   release=0.22, vibrato_hz=5.2, vibrato_depth=0.0045,
-                  gain=0.42, partials=(1.0, 0.48, 0.21, 0.11, 0.05))
+                  gain=0.42, partials=(1.0, 0.48, 0.21, 0.11, 0.05),
+                  attack_noise=0.070, sustain_noise=0.010)
 HARP = Instrument("harmonic", attack=0.002, decay=0.30, sustain=0.07,
                   release=0.32, gain=0.56,
-                  partials=(1.0, 0.33, 0.16, 0.08, 0.035))
+                  partials=(1.0, 0.33, 0.16, 0.08, 0.035), attack_noise=0.030)
 CHOIR = Instrument("harmonic", attack=0.25, decay=0.28, sustain=0.61,
                    release=0.52, vibrato_hz=3.1, vibrato_depth=0.0035,
                    detune=0.006, gain=0.34,
-                   partials=(1.0, 0.16, 0.27, 0.08, 0.12))
+                   partials=(1.0, 0.16, 0.27, 0.08, 0.12),
+                   attack_noise=0.040, sustain_noise=0.018)
 LOW_BRASS = Instrument("harmonic", attack=0.035, decay=0.14, sustain=0.66,
                        release=0.21, vibrato_hz=3.6, vibrato_depth=0.002,
                        detune=0.002, gain=0.48,
-                       partials=(1.0, 0.58, 0.31, 0.16, 0.07))
+                       partials=(1.0, 0.58, 0.31, 0.16, 0.07),
+                       attack_noise=0.080, sustain_noise=0.008)
 PIANO = Instrument("harmonic", attack=0.002, decay=0.34, sustain=0.20,
                    release=0.34, gain=0.53,
-                   partials=(1.0, 0.44, 0.20, 0.10, 0.045))
+                   partials=(1.0, 0.44, 0.20, 0.10, 0.045), attack_noise=0.045)
 PIZZ = Instrument("harmonic", attack=0.002, decay=0.20, sustain=0.08,
                   release=0.18, gain=0.61,
-                  partials=(1.0, 0.30, 0.13, 0.055))
+                  partials=(1.0, 0.30, 0.13, 0.055), attack_noise=0.028)
 
 # SE は短い波形の動き自体が識別記号になっている。BGM の音色刷新で既存の
 # 操作感まで変えないよう、従来音色を専用名で保持する。
@@ -231,6 +275,12 @@ class Track:
         phase = 0.0
         phase2 = 0.0
         gain = amp * instrument.gain
+        # シーケンサ側のベロシティ差。時刻と音高だけから決まるので再生成しても同じ。
+        variation_key = (begin ^ int(f * 100.0)) & 0xFF
+        gain *= 0.97 + (variation_key / 255.0) * 0.06
+        noise_state = 0x45D9F3B ^ begin ^ int(f * 32.0)
+        noise_value = 0.0
+        noise_smooth = 0.0
         for i in range(count):
             index = begin + i
             if index >= len(self.data):
@@ -250,6 +300,16 @@ class Track:
             if instrument.detune > 0.0:
                 phase2 += step * (1.0 + instrument.detune)
                 value = (value + instrument.sample(phase2)) * 0.5
+            if instrument.attack_noise > 0.0 or instrument.sustain_noise > 0.0:
+                if i % 3 == 0:
+                    noise_state = (noise_state * 1103515245 + 12345) & 0x7FFFFFFF
+                    noise_value = noise_state / 0x3FFFFFFF - 1.0
+                noise_smooth += 0.18 * (noise_value - noise_smooth)
+                noise_amount = (
+                    instrument.sustain_noise
+                    + instrument.attack_noise * math.exp(-t / 0.045)
+                )
+                value += noise_smooth * noise_amount
             self.data[index] += value * env * gain
 
     def add_noise(self, start: float, duration: float, amp: float = 0.5,

@@ -44,10 +44,18 @@ const SUPPLY_SETS: Array[Dictionary] = [
 
 ## 店の重点（商いの伝手）。**どの棚を厚くするか。**
 const SHOP_FOCUS: Array[Dictionary] = [
-	{"id": "item", "name": "どうぐ", "desc": "消耗品が多く並ぶ。"},
-	{"id": "weapon", "name": "ぶき", "desc": "武器が多く並ぶ。"},
-	{"id": "armor", "name": "ぼうぐ", "desc": "防具が多く並ぶ。"},
-	{"id": "accessory", "name": "かざり", "desc": "装飾が多く並ぶ。"},
+	{"id": "item", "name": "道具", "desc": "消耗品が多く並ぶ。"},
+	{"id": "weapon", "name": "武器", "desc": "武器が多く並ぶ。"},
+	{"id": "armor", "name": "防具", "desc": "防具が多く並ぶ。"},
+	{"id": "accessory", "name": "装飾品", "desc": "装飾品が多く並ぶ。"},
+]
+
+## 戦具の包み。強化段ごとに、出撃へ持ち込める候補が1つずつ増える。
+## 実際に持つのは1個だけなので、全解放しても「全部載せ」にはならない。
+const REUSABLE_LOADOUTS: Array[Dictionary] = [
+	{"id": "ember_talon", "name": "熾火の鉤爪", "desc": "何度でも炎を放つ。"},
+	{"id": "mending_stone", "name": "命結びの石", "desc": "1戦に1回、味方を癒す。"},
+	{"id": "pilgrim_chalice", "name": "巡礼の聖杯", "desc": "1戦に1回、仲間全員を癒す。"},
 ]
 
 
@@ -65,6 +73,11 @@ static func shop_focus(level: int) -> Array[Dictionary]:
 	return SHOP_FOCUS.slice(0, clampi(level + 1, 1, SHOP_FOCUS.size()))
 
 
+## 0段では持ち込みなし。1段ごとに候補が1つ増える。
+static func reusable_loadouts(level: int) -> Array[Dictionary]:
+	return REUSABLE_LOADOUTS.slice(0, clampi(level, 0, REUSABLE_LOADOUTS.size()))
+
+
 ## 選べる選択肢の総数。**関門はここを見る。**
 ##
 ## 段を上げたのに増えなければ、その段は「数値が増えただけ」ということ。
@@ -72,6 +85,7 @@ static func count_at(level_of: Callable) -> int:
 	var total := 0
 	total += supply_sets(int(level_of.call("provisions"))).size()
 	total += shop_focus(int(level_of.call("connections"))).size()
+	total += reusable_loadouts(int(level_of.call("relic_satchel"))).size()
 	# 封の言い伝えは段ごとに 1 つずつ開示が増える（位置 → 番人 → 代償）。
 	total += clampi(int(level_of.call("seal_lore")), 0, 3)
 	# 命の綱は「使うか、そこで終えるか」を選べるようになる。
@@ -87,3 +101,11 @@ static func supply_set(id: String) -> Dictionary:
 		if String(row["id"]) == id:
 			return row
 	return SUPPLY_SETS[0]
+
+
+## 選んだ戦具。空文字は「持ち込まない」という有効な選択。
+static func reusable_loadout(id: String) -> Dictionary:
+	for row in REUSABLE_LOADOUTS:
+		if String(row["id"]) == id:
+			return row
+	return {}

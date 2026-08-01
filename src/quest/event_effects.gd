@@ -165,7 +165,7 @@ static func unpayable(state: GameState, tokens: Array, danger: int) -> Array[Str
 				if state.gold < GOLD_PER_DANGER * danger:
 					missing.append("ゴールドが %d" % (GOLD_PER_DANGER * danger))
 			"item":
-				if state.inventory.is_empty():
+				if state.consumable_inventory_ids().is_empty():
 					missing.append("どうぐ")
 			"equipment":
 				if state.gear_stock.is_empty():
@@ -202,7 +202,7 @@ static func pay(state: GameState, tokens: Array, danger: int) -> Array[String]:
 					m.mp = maxi(m.mp - spent, 0)
 				log_lines.append("ちからを %d 使った" % spent)
 			"item":
-				var ids := state.inventory_ids()
+				var ids := state.consumable_inventory_ids()
 				if ids.is_empty():
 					_hurt_party(state, maxi(HP_PER_DANGER * danger / 2, 1))
 					log_lines.append(Terms.EVENT_ITEM_MISSING)

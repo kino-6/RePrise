@@ -137,6 +137,41 @@ func _test_kanji_below_14px() -> void:
 	_check("漢字を見つけられる", _has_kanji("危険度"))
 	_check("かなと数字は見逃す", not _has_kanji("あぶなさ 12"))
 
+	# **寸法の判断は窓の側でやる**（S-8）。
+	#
+	# 呼ぶ側 79 か所へ「ここは 14px」と書いて回る形にすると、次に語を
+	# 漢字へ寄せた人がまた同じ穴に落ちる。12px を頼まれても漢字なら上げる。
+	_equal_int(
+		"12px を頼まれても漢字なら上げる",
+		PixelUI.readable_size("熟練度 12/15", PixelUI.SIZE_SUB), PixelUI.SIZE_TEXT
+	)
+	_equal_int(
+		"かなと数字は 12px のまま",
+		PixelUI.readable_size("のこり 640", PixelUI.SIZE_SUB), PixelUI.SIZE_SUB
+	)
+	_equal_int(
+		"もともと大きい寸法は下げない",
+		PixelUI.readable_size("銀の砦", PixelUI.SIZE_HEAD), PixelUI.SIZE_HEAD
+	)
+	# **測る側と描く側で同じ寸法を通す。** 片方だけ上げると、12px で測って
+	# 14px で描くことになり、右寄せと中央寄せが必ずずれる。
+	_check(
+		"幅も上げたあとの寸法で測る",
+		is_equal_approx(
+			PixelUI.text_width("熟練度", PixelUI.SIZE_SUB),
+			PixelUI.text_width("熟練度", PixelUI.SIZE_TEXT)
+		)
+	)
+	_check(
+		"かなの幅は 12px のまま",
+		PixelUI.text_width("じゅくれん", PixelUI.SIZE_SUB)
+		< PixelUI.text_width("じゅくれん", PixelUI.SIZE_TEXT)
+	)
+
+
+func _equal_int(label: String, actual: int, expected: int) -> void:
+	_check(label, actual == expected, "(実際: %d / 期待: %d)" % [actual, expected])
+
 
 ## 漢字（CJK 統合漢字）を含むか。
 static func _has_kanji(text: String) -> bool:

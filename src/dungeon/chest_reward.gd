@@ -6,6 +6,9 @@ extends RefCounted
 ## ただし抽選は DetRng だけを使い、同じシードなら同じ中身になる。
 
 const MAX_GEAR_CHANCE := 60
+## 装備抽選を外した箱のうち、戦具になる割合。全箱ではおよそ 7〜12%。
+## 通常物資へ混ぜると深層の「直近品」が戦具だけになりやすいため、別枠にする。
+const REUSABLE_CHANCE := 20
 
 
 static func roll(rng: DetRng, floor_number: int, base_gold: int) -> Dictionary:
@@ -23,6 +26,12 @@ static func roll(rng: DetRng, floor_number: int, base_gold: int) -> Dictionary:
 		if not gear_pool.is_empty():
 			reward.gear = String(rng.pick(gear_pool))
 			return reward
+
+	var reusable_pool := _recent_reusables(floor_no)
+	if not reusable_pool.is_empty() and rng.chance(REUSABLE_CHANCE):
+		reward.item = String(rng.pick(reusable_pool))
+		reward.item_count = 1
+		return reward
 
 	var item_pool := _recent_items(floor_no)
 	if item_pool.is_empty():
@@ -58,10 +67,28 @@ static func _recent_items(floor_number: int) -> Array:
 	var unlocked := Database.item_ids_for_floor(floor_number)
 	var highest := 1
 	for item_id in unlocked:
+		if bool(Database.item(String(item_id)).get("reusable", false)):
+			continue
 		highest = maxi(highest, int(Database.item(item_id).get("floor_min", 1)))
 	var result: Array = []
 	for item_id in unlocked:
+		if bool(Database.item(String(item_id)).get("reusable", false)):
+			continue
 		if int(Database.item(item_id).get("floor_min", 1)) >= highest - 2:
+			result.append(item_id)
+	result.sort()
+	return result
+
+
+## 戦具は一度に1個だけ。直近2段から選び、浅い品だけが続くのを避ける。
+static func _recent_reusables(floor_number: int) -> Array:
+	var unlocked := Database.reusable_item_ids_for_floor(floor_number)
+	var highest := 1
+	for item_id in unlocked:
+		highest = maxi(highest, int(Database.item(String(item_id)).get("floor_min", 1)))
+	var result: Array = []
+	for item_id in unlocked:
+		if int(Database.item(String(item_id)).get("floor_min", 1)) >= highest - 1:
 			result.append(item_id)
 	result.sort()
 	return result

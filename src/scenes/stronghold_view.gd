@@ -60,7 +60,7 @@ static func portrait_of(job_id: String) -> Texture2D:
 ## 覚えた技の一覧は 4 列 x 3 段。職業 4 x ランク 3 = 12 個で必ず収まる。
 const ABILITY_COLUMNS := 4
 
-enum State { MEMBER, JOB, LOADOUT, UPGRADE, PARTY, RULES }
+enum State { MEMBER, JOB, LOADOUT, UPGRADE, PARTY, RULES, DEPART }
 
 var members: Array[PartyMember] = []
 
@@ -84,6 +84,7 @@ func open() -> void:
 	_upgrade_ids = Database.upgrade_ids()
 	_upgrade_index = 0
 	_rule_index = 0
+	_depart_choice = 0
 	_state = State.MEMBER
 	_index = 0
 	_notice.clear()
@@ -160,6 +161,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_input_party(event)
 		State.RULES:
 			_input_rules(event)
+		State.DEPART:
+			_input_depart(event)
 
 
 func _input_member(event: InputEvent) -> void:
@@ -180,8 +183,11 @@ func _input_member(event: InputEvent) -> void:
 	elif event.is_action_pressed("confirm"):
 		Sound.play("confirm")
 		if _index == _depart_row():
-			close()
-			departed.emit()
+			# 1 回目の決定は、今回の支給・店・継承印を編集する段階へ入る。
+			# 一覧で出撃行を選んだだけでは門を開かない。
+			_state = State.DEPART
+			_depart_choice = 0
+			queue_redraw()
 		elif _index == _rules_row():
 			_state = State.RULES
 			_rule_index = 0
@@ -196,18 +202,6 @@ func _input_member(event: InputEvent) -> void:
 			queue_redraw()
 		else:
 			_open_job_menu()
-	elif _index == _depart_row() and (
-		event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right")
-	):
-		# **出撃行では左右で今回の選択を変える**（E-3）。
-		# 別の画面へ潜らせない ―― 出撃の直前に見えていることが要点なので、
-		# ここで完結させる。
-		_cycle_depart_choice(-1 if event.is_action_pressed("ui_left") else 1)
-		queue_redraw()
-	elif _index == _depart_row() and event.is_action_pressed("ui_accept"):
-		_depart_choice = (_depart_choice + 1) % DEPART_CHOICES
-		Sound.play("cursor")
-		queue_redraw()
 	elif event.is_action_pressed("cancel"):
 		# 一覧のどこにいても一手で出撃へ戻れるようにする
 		if _index != _depart_row():
@@ -235,8 +229,34 @@ func debug_open_rules() -> void:
 ## 開発用。出撃（門を開く理由と名簿）の画面を撮るために使う。
 func debug_open_depart() -> void:
 	_index = _depart_row()
-	_state = State.MEMBER
+	_state = State.DEPART
 	queue_redraw()
+
+
+## 出撃内容の編集。3 項目を上下で選び、左右で変え、もう一度の決定で門を開く。
+##
+## `confirm` と `ui_accept` は同じ物理キーへ割り当てられることがあるため、
+## 片方を「次の行」に使わない。上下・左右・決定・取消の4役に固定する。
+func _input_depart(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_down"):
+		_depart_choice = (_depart_choice + 1) % DEPART_CHOICES
+		Sound.play("cursor")
+		queue_redraw()
+	elif event.is_action_pressed("ui_up"):
+		_depart_choice = (_depart_choice - 1 + DEPART_CHOICES) % DEPART_CHOICES
+		Sound.play("cursor")
+		queue_redraw()
+	elif event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right"):
+		_cycle_depart_choice(-1 if event.is_action_pressed("ui_left") else 1)
+		queue_redraw()
+	elif event.is_action_pressed("confirm"):
+		Sound.play("confirm")
+		close()
+		departed.emit()
+	elif event.is_action_pressed("cancel"):
+		Sound.play("cancel")
+		_state = State.MEMBER
+		queue_redraw()
 
 
 ## 開発用。編成の画面を撮るために使う。
@@ -825,7 +845,7 @@ const DEPART_NOTE_H := 120.0
 
 ## 出撃時にどの選択へカーソルがあるか（支給品 / 店の重点 / 継承印）。
 var _depart_choice := 0
-const DEPART_CHOICES := 3
+const DEPART_CHOICES := 4
 
 const UPGRADE_NAME_W := 144.0
 const UPGRADE_LEVEL_W := 56.0
@@ -877,6 +897,16 @@ func _cycle_depart_choice(direction: int) -> void:
 				if pick != "":
 					_notify(String(Database.job(pick).get(
 						"inherit_sign", {}).get("desc", "")))
+		3:
+			var ids: Array[String] = [""]
+			for row in GameState.reusable_loadouts():
+				ids.append(String(row["id"]))
+			var at := maxi(ids.find(GameState.reusable_loadout_id), 0)
+			var pick := ids[posmod(at + direction, ids.size())]
+			if GameState.set_reusable_loadout(pick):
+				Sound.play("cursor")
+				if pick != "":
+					_notify(String(RunChoice.reusable_loadout(pick).get("desc", "")))
 
 
 func _draw_departure_note() -> void:
@@ -1187,9 +1217,9 @@ func _draw_hint() -> void:
 	_menu_line(52).line(Terms.STRONGHOLD_WORLD_ONCE, PixelUI.C_TEXT_DIM)
 
 
-## 今回の出撃で決めること（支給品 / 店の棚 / 継承印）。
+## 今回の出撃で決めること（支給品 / 店の棚 / 継承印 / 戦具）。
 ##
-## 左右で中身を、Ｚで次の項目へ。**選べる候補が無い行は「なし」**と出して、
+## 上下で項目を、左右で中身を変える。**選べる候補が無い行は「なし」**と出して、
 ## 「まだ開いていない」ことが分かるようにする。
 func _draw_depart_choices() -> void:
 	var focus_name := Terms.NONE
@@ -1200,17 +1230,22 @@ func _draw_depart_choices() -> void:
 	if not GameState.inherit_signs.is_empty() and String(GameState.inherit_signs[0]) != "":
 		sign_name = String(Database.job(String(GameState.inherit_signs[0])).get(
 			"inherit_sign", {}).get("name", ""))
+	var tool_name := Terms.NONE
+	if GameState.reusable_loadout_id != "":
+		tool_name = String(RunChoice.reusable_loadout(GameState.reusable_loadout_id).get(
+			"name", Terms.NONE))
 	var rows := [
 		[Terms.DEPART_SUPPLY,
 			String(RunChoice.supply_set(GameState.supply_set_id).get("name", ""))],
 		[Terms.DEPART_FOCUS, focus_name],
 		[Terms.DEPART_SIGN, sign_name],
+		[Terms.DEPART_TOOL, tool_name],
 	]
 	for i in rows.size():
-		var line := _menu_line(2 + i * 24)
+		var line := _menu_line(i * 18)
 		line.row(
 			String(rows[i][0]), String(rows[i][1]),
-			PixelUI.C_ACTIVE if i == _depart_choice else PixelUI.C_TEXT_DIM,
+			PixelUI.C_ACTIVE if _state == State.DEPART and i == _depart_choice else PixelUI.C_TEXT_DIM,
 			PixelUI.C_TEXT
 		)
 

@@ -31,9 +31,13 @@ ROOT = Path(__file__).resolve().parent.parent
 SCREENS = [
     "title", "prologue", "prologue_shatter", "prologue_worlds", "prologue_oath",
     "stronghold", "job", "inherit", "depart", "upgrade", "rules", "party",
-    "world", "map", "town", "cave", "shop", "event", "event_outcome",
-    "battle", "commands", "items", "deep", "boss",
+    "world", "elite", "elite_event", "elite_reward", "map", "town",
+    "town_talk", "town_facility", "town_facility_repeat",
+    "town_chest", "town_chest_opened", "cave", "cave_exit", "greed",
+    "shop", "event", "event_outcome", "event_task",
+    "battle_opening", "battle", "commands", "items", "deep", "boss",
     "menu", "status", "equip", "jobmenu", "settings", "save_erase", "run_abandon",
+    "auto_items",
     "result", "win",
     "gearoffer",
 ]
@@ -115,7 +119,10 @@ def main() -> int:
     failures: dict[str, list[str]] = {}
     # **並列で立てる。** 23 画面を直列に回すと数分かかり、そのあいだ何も分からない。
     # 1 画面 1 プロセスなので互いに干渉しない（`user://` は読むだけ）。
-    workers = max(1, min(len(SCREENS), (os.cpu_count() or 4) // 2))
+    # GUI描画はCPUだけでなくWindowsのデスクトップ資源を使う。16論理CPUで8画面を
+    # 同時起動すると、内容に問題のない画面が数枚だけ開けないことがある。
+    # 4並列なら速度を保ちつつ再現性が安定する。
+    workers = max(1, min(len(SCREENS), (os.cpu_count() or 4) // 4, 4))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         results = dict(pool.map(_check_one, SCREENS))
     for name in SCREENS:

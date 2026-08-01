@@ -21,31 +21,37 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "entrusted",
+          "operation": {"kind": "town_action", "objective": "{home_name}の仕事場で、倒れた旅人を手当てする", "result": "{anchor_name}の傷を手当てし、{motif}を預かった。"},
           "line": "{home_name}で倒れていた{anchor_name}から、{motif}を城にいる弟へ届けてほしいと頼まれる。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_low",
           "anchor_present": true, "motif_state": "protected",
+          "operation": {"kind": "cave_search", "objective": "洞の奥で、伝令が残した足跡を探す", "result": "崩落を越え、{anchor_name}が書き足した返事を見つけた。"},
           "line": "{anchor_name}は傷を隠して同行し、洞で一行をかばう。夜には{motif}へ返事を書き足している。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "opened",
+          "operation": {"kind": "town_action", "objective": "町の仕事場で、伝令記録を照合する", "result": "命令記録と{motif}から、{anchor_name}が背負う罪を確かめた。"},
           "line": "町の記録で、{anchor_name}が故郷を戦場にした命令を運んだと分かる。{motif}には弟への謝罪がある。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
           "anchor_present": true, "motif_state": "judged",
+          "operation": {"kind": "cave_search", "objective": "選んだ答えを守り、城へ続く道を探す", "result": "{anchor_name}の答えを携え、城への抜け道を確保した。"},
           "line": "{anchor_name}は城門で歩けなくなる。手紙をそのまま渡すか、真実を伝えるか、本人を連れていくか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": false, "motif_state": "answered",
+          "operation": {"kind": "boss", "cue": "{motif}を掲げ、主の偽りを破る"},
           "line": "主は弟の姿で{motif}を捨てろと迫る。だが{anchor_name}へ宛てた、本物の弟の返事が届く。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "remembered",
+          "operation": {"kind": "chronicle"},
           "line": "選んだ答えは弟へ届いた。{motif}には、{anchor_name}が帰ろうとした事実が残る。"
         }
       ],
@@ -55,6 +61,7 @@
           "immediate_cost": "真実を語る機会",
           "preserves": "弟が抱いていた姉の記憶",
           "sacrifices": "故郷が滅びた理由の全容",
+          "runtime_effects": ["boss_intel"],
           "ending_id": "gentle_lie"
         },
         {
@@ -62,6 +69,7 @@
           "immediate_cost": "伝令への信頼",
           "preserves": "同じ命令を繰り返さない未来",
           "sacrifices": "美しいままの思い出",
+          "runtime_effects": ["boss_weaken"],
           "ending_id": "painful_truth"
         },
         {
@@ -69,6 +77,7 @@
           "immediate_cost": "安全な進軍",
           "preserves": "本人の声で謝る権利",
           "sacrifices": "無傷で帰る望み",
+          "runtime_effects": ["route_safe"],
           "ending_id": "answered_voice"
         }
       ],
@@ -110,31 +119,37 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "named",
+          "operation": {"kind": "town_action", "objective": "{home_name}の仕事場で、戦獣の傷を診る", "result": "戦獣の傷を処置し、{anchor_name}から{motif}の合図を教わった。"},
           "line": "{home_name}の{anchor_name}は、{motif}を付けた帝国の戦獣を家族として助けてほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "trusted",
+          "operation": {"kind": "cave_search", "objective": "洞の奥で、戦獣が通れる退路を探す", "result": "崩落の先に退路を開き、戦獣は一行を背に乗せた。"},
           "line": "戦獣は{anchor_name}の{motif}にだけ応える。洞が崩れると、一行を背に乗せて助ける。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "silenced",
+          "operation": {"kind": "town_action", "objective": "町の仕事場で、首輪と炉の接続を調べる", "result": "{motif}と心臓が城の炉へつながっていると判明した。"},
           "line": "{anchor_name}は、{motif}と戦獣の心臓が城の炉へつながると知る。炉を止めれば戦獣は死ぬ。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
           "anchor_present": true, "motif_state": "chosen",
+          "operation": {"kind": "cave_search", "objective": "選んだ方法で、炉へ続く導管を処置する", "result": "炉へ続く導管を処置し、戦獣の進む道を決めた。"},
           "line": "{anchor_name}は戦獣の命を一行に託す。主を弱らせるか、危険を分け合うか、戦獣に任せるか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "defiant",
+          "operation": {"kind": "boss", "cue": "{motif}を鳴らし、戦獣と主へ挑む"},
           "line": "主が戦獣へ攻撃を命じる。{anchor_name}が{motif}を鳴らすと、戦獣は自分で進む先を選ぶ。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "free",
+          "operation": {"kind": "chronicle"},
           "line": "戦獣は命令から解放された。{anchor_name}は{motif}を鳴らし、その選択を受け止める。"
         }
       ],
@@ -144,6 +159,7 @@
           "immediate_cost": "戦獣の命",
           "preserves": "世界を救う最も確かな勝機",
           "sacrifices": "子どもと獣の明日",
+          "runtime_effects": ["boss_weaken"],
           "ending_id": "last_bell"
         },
         {
@@ -151,6 +167,7 @@
           "immediate_cost": "子どもの平穏な身体",
           "preserves": "二人が共に生きる可能性",
           "sacrifices": "帝国の力と無縁でいる未来",
+          "runtime_effects": ["boss_intel"],
           "ending_id": "two_heartbeats"
         },
         {
@@ -158,6 +175,7 @@
           "immediate_cost": "主が弱らないままの決戦",
           "preserves": "獣が自分の命を決める権利",
           "sacrifices": "安全な勝ち筋",
+          "runtime_effects": ["route_safe"],
           "ending_id": "chosen_roar"
         }
       ],
@@ -199,31 +217,37 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "recorded",
+          "operation": {"kind": "town_action", "objective": "{home_name}の仕事場で、消えた住民の名を集める", "result": "住民の名と暮らしを{motif}へ書き留めた。"},
           "line": "{home_name}の家と住民が消え始めた。記録係{anchor_name}は{motif}を差し出し、名簿作りを頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "filled",
+          "operation": {"kind": "town_action", "objective": "町の仕事場で、名簿と住民票を照合する", "result": "{anchor_name}と、消えかけた日々の記録をつなぎ直した。"},
           "line": "一行は住民の名と思い出を集める。{anchor_name}は日々の暮らしを{motif}へ書き残す。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "doubted",
+          "operation": {"kind": "cave_search", "objective": "地下で、町を支える装置を探す", "result": "装置を調べ、主を倒せば町も消えると突き止めた。"},
           "line": "{anchor_name}は地下の装置で、町が主に作られたと知る。主を倒せば{motif}と町は消える。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "town_high",
           "anchor_present": true, "motif_state": "rewritten",
+          "operation": {"kind": "town_action", "objective": "町の仕事場で、選んだ保存方法を実行する", "result": "{motif}へ最後の記録を施し、町の行く末を定めた。"},
           "line": "{anchor_name}は、短い命でも本物だと言う。町を残すか、名簿を運ぶか、装置を壊すか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "claimed",
+          "operation": {"kind": "boss", "cue": "{motif}を読み上げ、町の証を示す"},
           "line": "主は住民を作り物だと切り捨てる。{anchor_name}は{motif}を読み、暮らした日々は本物だと答える。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "carried",
+          "operation": {"kind": "chronicle"},
           "line": "町の結末が決まり、名簿も読み終えた。一行は{anchor_name}たちが生きた証を持ち帰る。"
         }
       ],
@@ -233,6 +257,7 @@
           "immediate_cost": "住民が町の外へ出る自由",
           "preserves": "故郷の景色と暮らし",
           "sacrifices": "偽の役目から完全に離れる未来",
+          "runtime_effects": ["boss_weaken"],
           "ending_id": "remaining_streets"
         },
         {
@@ -240,6 +265,7 @@
           "immediate_cost": "町そのもの",
           "preserves": "一人ずつの名と記憶",
           "sacrifices": "帰れる場所",
+          "runtime_effects": ["boss_intel"],
           "ending_id": "names_beyond"
         },
         {
@@ -247,6 +273,7 @@
           "immediate_cost": "誰にも結末を予測できないこと",
           "preserves": "住民が役目を自分で選ぶ権利",
           "sacrifices": "確実に何かを残す保証",
+          "runtime_effects": ["route_safe"],
           "ending_id": "unwritten_morning"
         }
       ],
@@ -288,31 +315,37 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "surrendered",
+          "operation": {"kind": "town_action", "objective": "{home_name}の仕事場で、投降兵の装備を調べる", "result": "{anchor_name}の武装を解き、{motif}と救出経路を預かった。"},
           "line": "{motif}を掲げて{home_name}へ投降した{anchor_name}は、若者の救出まで裁きを待ってほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_low",
           "anchor_present": true, "motif_state": "used",
+          "operation": {"kind": "cave_search", "objective": "洞に残る帝国の通路を探す", "result": "隠し通路を開き、捕虜が逃げられる道を確保した。"},
           "line": "{anchor_name}は帝国の通路を使って捕虜を逃がす。救われた若者たちは、その指示に従う。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "stained",
+          "operation": {"kind": "town_action", "objective": "町の仕事場で、投降証と命令書を照合する", "result": "{anchor_name}が焼き討ち命令へ署名した事実を確認した。"},
           "line": "避難民は{motif}を示し、{anchor_name}が{home_name}への焼き討ち命令に署名したと告発する。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
           "anchor_present": true, "motif_state": "judged",
+          "operation": {"kind": "cave_search", "objective": "選んだ指揮で、残る徴兵隊への道を開く", "result": "徴兵隊への経路を押さえ、選んだ裁きの形を守った。"},
           "line": "残る徴兵隊の場所を知るのは{anchor_name}だけだ。拘束するか、救出を任せるか、被害者に決めてもらうか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "raised",
+          "operation": {"kind": "boss", "cue": "{motif}を置き、古い命令を拒む"},
           "line": "主は古い命令に従えば全員を帰すと誘う。{anchor_name}は{motif}を置き、決定を一行へ任せる。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "lowered",
+          "operation": {"kind": "chronicle"},
           "line": "若者たちは帰還したが、{anchor_name}の罪は消えない。{motif}は裁きの場へ運ばれる。"
         }
       ],
@@ -322,6 +355,7 @@
           "immediate_cost": "最短の救出経路",
           "preserves": "加害者を無条件に信じない原則",
           "sacrifices": "救える人数と時間",
+          "runtime_effects": ["boss_intel"],
           "ending_id": "bound_return"
         },
         {
@@ -329,6 +363,7 @@
           "immediate_cost": "裏切られる危険",
           "preserves": "徴兵隊を全員帰す可能性",
           "sacrifices": "被害者がすぐ裁く権利",
+          "runtime_effects": ["boss_weaken"],
           "ending_id": "last_command"
         },
         {
@@ -336,6 +371,7 @@
           "immediate_cost": "一行が結論を急ぐ権利",
           "preserves": "傷つけられた側の意思",
           "sacrifices": "単純な正解",
+          "runtime_effects": ["route_safe"],
           "ending_id": "borrowed_judgment"
         }
       ],
@@ -377,31 +413,37 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "heard",
+          "operation": {"kind": "town_action", "objective": "{home_name}の仕事場で、再起動した機械を調べる", "result": "機械は番号を拒み、{anchor_name}と名乗った。"},
           "line": "{home_name}で再起動した機械は番号を拒み、{anchor_name}と名乗る。{motif}の続きを探している。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "learned",
+          "operation": {"kind": "cave_search", "objective": "洞の奥で、失われた記憶部品を探す", "result": "記憶部品を回収し、{anchor_name}は命令にない救助を選んだ。"},
           "line": "{anchor_name}は命令にない行動で負傷者を救う。一人になると{motif}を練習している。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "town_mid",
           "anchor_present": true, "motif_state": "decoded",
+          "operation": {"kind": "town_action", "objective": "町の仕事場で、機械の炉と記憶を解析する", "result": "炉を鍵にすれば、{anchor_name}の人格が消えると判明した。"},
           "line": "調べた{motif}から、{anchor_name}の炉が城門の鍵だと分かる。使えば門は開くが、記憶と人格は消える。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "cave_high",
           "anchor_present": true, "motif_state": "completed",
+          "operation": {"kind": "cave_search", "objective": "選んだ方法で、城門の認証路を組み替える", "result": "認証路を組み替え、{anchor_name}が選んだ名を守った。"},
           "line": "{anchor_name}は初めて怖いと口にする。初期化するか、記憶を移すか、別の方法で城門を破るか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "sung",
+          "operation": {"kind": "boss", "cue": "{anchor_name}は名を告げ、{motif}を奏でる"},
           "line": "城が製造番号で服従を命じる。{anchor_name}は自分の名を答え、{motif}を最後まで奏でる。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "inherited",
+          "operation": {"kind": "chronicle"},
           "line": "{anchor_name}が自分で名を選んだ事実は残った。{motif}は命令ではなく、その名を呼ぶ歌になる。"
         }
       ],
@@ -411,6 +453,7 @@
           "immediate_cost": "機械が得た記憶と人格",
           "preserves": "一行が城へ入る確実な道",
           "sacrifices": "同じ姿で再会する未来",
+          "runtime_effects": ["boss_weaken"],
           "ending_id": "name_after_reset"
         },
         {
@@ -418,6 +461,7 @@
           "immediate_cost": "身体と多くの記憶",
           "preserves": "名と歌の断片",
           "sacrifices": "これまで通りの人格",
+          "runtime_effects": ["boss_intel"],
           "ending_id": "small_voice"
         },
         {
@@ -425,6 +469,7 @@
           "immediate_cost": "最も危険な決戦",
           "preserves": "機械が自分のまま生きる権利",
           "sacrifices": "安全な侵入路",
+          "runtime_effects": ["route_safe"],
           "ending_id": "walks_away"
         }
       ],
@@ -466,31 +511,37 @@
         {
           "id": "hook", "phase": "hook", "site_role": "town_low",
           "anchor_present": true, "motif_state": "reflected",
+          "operation": {"kind": "town_action", "objective": "{home_name}の仕事場で、案内人の傷と記憶を調べる", "result": "{motif}に、{anchor_name}と城の主が重なって映った。"},
           "line": "{home_name}の案内人{anchor_name}は過去を思い出せない。{motif}に映る正体を確かめてほしいと頼む。"
         },
         {
           "id": "bond", "phase": "bond", "site_role": "cave_low",
           "anchor_present": true, "motif_state": "shared",
+          "operation": {"kind": "cave_search", "objective": "洞の奥で、案内人の記憶の痕跡を探す", "result": "痕跡を回収し、{anchor_name}が傷を分け受ける力を確かめた。"},
           "line": "{anchor_name}は一行の傷を引き受ける。{motif}には、本人と城の主が同時に映っている。"
         },
         {
           "id": "reversal", "phase": "reversal", "site_role": "cave_mid",
           "anchor_present": true, "motif_state": "recognized",
+          "operation": {"kind": "cave_search", "objective": "地下の祭壇で、案内人と主のつながりを調べる", "result": "{anchor_name}が主から切り離された感情だと判明した。"},
           "line": "調べた{motif}から、{anchor_name}は主から切り離された感情だと分かる。元に戻れば今の人格は消える。"
         },
         {
           "id": "choice", "phase": "choice", "site_role": "town_high",
           "anchor_present": true, "motif_state": "accepted",
+          "operation": {"kind": "town_action", "objective": "町の仕事場で、選んだ儀式の準備を整える", "result": "儀式の準備を終え、{anchor_name}を一人の仲間として送り出した。"},
           "line": "{anchor_name}は今の自分も本物だと言う。主へ戻すか、つながりを断つか、本人に任せるか。"
         },
         {
           "id": "finale", "phase": "finale", "site_role": "castle",
           "anchor_present": true, "motif_state": "whole",
+          "operation": {"kind": "boss", "cue": "{motif}に映る仲間と、主へ挑む"},
           "line": "主は戻れば苦しみは終わると誘う。{motif}には、一行と旅をした{anchor_name}だけが映る。"
         },
         {
           "id": "epilogue", "phase": "epilogue", "site_role": "castle",
           "anchor_present": true, "motif_state": "witnessed",
+          "operation": {"kind": "chronicle"},
           "line": "どの結末を選んでも、一行は{anchor_name}が一人の仲間として旅をしたことを証言する。"
         }
       ],
@@ -500,6 +551,7 @@
           "immediate_cost": "案内人という人格",
           "preserves": "世界を支える完全な守護者",
           "sacrifices": "旅の続きを共に歩く未来",
+          "runtime_effects": ["boss_weaken"],
           "ending_id": "merciful_whole"
         },
         {
@@ -507,6 +559,7 @@
           "immediate_cost": "世界を安定させる古い仕組み",
           "preserves": "案内人の独立した生",
           "sacrifices": "完成へ戻る道",
+          "runtime_effects": ["boss_intel"],
           "ending_id": "imperfect_life"
         },
         {
@@ -514,6 +567,7 @@
           "immediate_cost": "望む答えを押しつける権利",
           "preserves": "本人の意思",
           "sacrifices": "一行が結末を管理すること",
+          "runtime_effects": ["route_safe"],
           "ending_id": "self_chosen_form"
         }
       ],

@@ -27,6 +27,7 @@ docs/preview/play/
 # .import は撮影物には不要（ゲームからは参照していない）。
 docs/preview/screen_*.png
 docs/preview/screen_*.png.import
+docs/preview/godot_*.log
 !docs/preview/screen_battle.png
 !docs/preview/screen_explore.png
 !docs/preview/screen_stronghold.png

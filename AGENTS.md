@@ -30,16 +30,17 @@ CTB 戦闘（2 階層コマンド / 属性 / 状態異常 / 範囲 / 多段 / �
 | 技 | 40 |
 | 敵 | 通常 30 / 主 7 |
 | 世界 | 64x48 タイル / 町 4 / 洞 5 / 城まで 52〜74 歩 |
-| 決定性テスト | 496 項目 |
-| シミュレータの実測 | 直行 29%着 / 0%勝、封 58%/4%、全周 72%/21% |
+| コア検算 | 一括 722 成功 / 0 失敗 |
+| シミュレータの実測 | 100回/方針: 全周 65%着 / 13%勝 |
 
 確かめ方は 6 つ。**どれも通してから終わりにする。**
 
 ```bash
-godot --headless --script tests/test_core.gd          # 決定性・データ整合・棚卸ゲート
+python tools/test_core.py                             # 推奨: 8領域・世界4分割を並列実行
+godot --headless --script tests/test_core.gd          # 互換用: 全領域を1プロセスで実行
 godot --headless --script tests/test_window_system.gd # 窓の割り付け（画面を撮らない）
-godot --headless --script tests/balance.gd -- --runs=500  # 世界シミュレータ（帯の外で 1）
-python tools/check_ui.py                              # 33 画面のはみ出し・詰め・小さい漢字
+python tools/godot_run.py --timeout=600 --headless --script tests/balance.gd -- --runs=100  # 開発Gate。4方針で計400ラン
+python tools/check_ui.py                              # 47 画面のはみ出し・詰め・小さい漢字
 python tools/check_assets.py                          # 候補・生成物・実行時参照
 python tools/check_terms.py                           # 造語の直書き
 python tools/check_abilities.py                       # 押す理由の無い技
@@ -76,7 +77,9 @@ context が尽きる。**下の単位で 1 セッション 1 件**にする。�
   作ると落ちる。** 「軽い代わりに弱い」は正当な違いとして通る。
 - 戦闘で押せるのは**現職の技 ＋ 継承 2 枠 ＋ 常設**（F-4 で入れた）。
   `learned` は何も失わない。★5 の象徴技も、この枠の中で戦う。
-- 技を触ると難度が動く。**`balance.gd -- --runs=500` は帯の外で終了コード 1。**
+- 技を触ると難度が動く。開発中は **`balance.gd -- --runs=100`**、数値調整の確定・
+  リリース前だけ `--runs=500`。値は方針ごとなので、500指定は計2,000ランになる。
+  帯の外では終了コード 1。
   主の強さは `Encounter` の 3 定数で詰める（手順は balance-tuning の skill）。
 
 ## やることの置き場
@@ -148,11 +151,13 @@ python tools/gen_assets.py                            # ドット絵を生成
 python tools/gen_audio.py                             # 音を生成
 python tools/verify_audio.py                          # 音の検算（無音・音程・クリップ）
 godot --headless --import                             # class_name を登録（新クラス追加後は必須）
-godot --headless --script res://tests/test_core.gd    # 決定性テスト（常に緑に保つ）
+python tools/test_core.py                             # コア検算（推奨・並列）
+godot --headless --script res://tests/test_core.gd    # 一括互換（常に緑に保つ）
 godot --headless --script res://tests/balance.gd      # 到達率と勝率を実測する
 godot --headless --script tests/test_window_system.gd  # 窓の割り付けを単独で検査
 godot --path . -- --shot=title                        # 画面を 1 枚撮って終了
 godot --path . -- --shot=title --audio                # 音も鳴らす（音を確かめるときだけ）
+godot --path . -- --inspect=town_talk                 # その実画面へ直行し、終了せず操作する
 godot --path .                                        # 起動
 
 python tools/stamp_version.py                         # 版の刻印を git から更新
@@ -166,7 +171,13 @@ godot --headless --export-release "Windows Desktop" build/windows/RePrise.exe   
 立てるため鳴ると実際にうるさい（BGM が 23 本同時に鳴る）。
 音そのものを確かめたいときだけ `--audio` を付ける。
 
-`--shot=` に渡せる画面（`src/scenes/main.gd` の `_capture`）:
+`--shot=` に渡せる画面（`src/dev/capture_scenes.gd` の `run()`）。
+**画面を足すときはここへ 1 節足す**（S-1 で `main.gd` から出した ―― 本編と
+同じファイルに置くと、機能の作業と撮影の作業が同じ場所を奪い合う）。
+起動時の開発指定と自動プレイの道案内は `src/dev/dev_probe.gd`:
+
+同じ値を `--inspect=` に渡すと撮影せず、その実ゲーム状態を開いたまま操作できる。
+個別画面の確認は秒数指定の自動プレイよりこちらを優先する。どちらも実セーブを触らない。
 
 | 値 | 撮れるもの |
 |---|---|
@@ -178,8 +189,15 @@ godot --headless --export-release "Windows Desktop" build/windows/RePrise.exe   
 | `explore` | 探索 |
 | `world` | ワールドの全景 |
 | `shop` | 町の品書き（最初の町へ直に入る） |
+| `town_talk` | 町NPCとの会話 |
+| `town_facility` / `town_facility_repeat` | 仕事場の初回利用 / 再利用 |
+| `town_chest` / `town_chest_opened` | 町の旅人箱を開ける直前 / 報酬表示 |
 | `cave` | 洞の中（最初の洞へ直に入る） |
+| `greed` | 1 つ目の宝箱を開けたあと（残りの箱に格上の印が付く） |
+| `elite` / `elite_event` / `elite_reward` | 街道脇の格上 / 挑戦前の型 / 勝利後の三択 |
 | `battle` | 通常戦闘 |
+| `auto_items` | オートが許可された回復道具を使う場面 |
+| `battle_opening` | 開戦文（敵が先に動く通知を含む） |
 | `commands` | 戦闘の とくぎ サブウィンドウ（技を全部与えて確認する） |
 | `items` | 戦闘中のどうぐ一覧 |
 | `menu` | 探索中のメニュー（どうぐ / つよさ / そうび） |
@@ -223,7 +241,7 @@ godot --path . -- --play=240 --dev-level=8         # レベル 8 から始めて
   書き写したら負け。** 旧版は「1 階につき 4 戦」という書き写した模型を持っていて、
   通るのに存在しない構造を測っていた（壊れているより悪い）。
 - 判定は**いちばん強い方針（全周）**で見る。直行が勝てないのは設計どおり。
-  いまの合わせ先は 直行 0% / 寄り道 6% / 全周 22%。
+  直近100回/方針では 直行 0% / 封 3% / 全周 12%。
   **直行で勝てるようになったら「寄るか急ぐか」が判断として死んでいる。**
 - 見た目を変えたら `--shot=` で撮って**実際に画像を見る**。目視せずに「できた」と言わない。
 - 絵を足したら `python tools/godot_run.py --shot=title                 # Godot を走らせて必ず始末する
@@ -251,7 +269,7 @@ python tools/check_assets.py` を通す。**候補・生成物・実行時参照
   体系（語幹 + 段階の接尾）を借りるのはよいが、語は独自に作る。
 - 技を足すときは「役割が既存と違うか」を確認する。強い通常攻撃を増やしても選択肢は増えない。
 - 範囲攻撃には必ず減衰を入れる（少ないほど 1 体あたりが増える）。
-- 数値を触ったら `tests/balance.gd` で測り直す。現状は 全周で 30% 着 / 22% 勝。
+- 数値を触ったら `tests/balance.gd` で測り直す。開発中は100回/方針、確定時は500回/方針。
 
 ## 世界を触るとき
 

@@ -1,4 +1,4 @@
-﻿"""
+"""
 アセット生成 — assets/ 以下の PNG をここから作る。
 
 ドット絵は原則 ASCII マップで記述する。テクスチャのような反復パターンだけ
@@ -282,6 +282,23 @@ TILE_STAIRS = [
     "KKKKKKKKKKKKKKKK",
 ]
 
+
+def append_upstairs(sheet: Canvas) -> Canvas:
+    """既存の下り階段を反転し、10枚目に上り階段を足す。
+
+    生物相ごとの候補シートは従来どおり9枚で受け取る。階段だけは既存絵を
+    反転することで、各シートの色と筆致を保ったまま入口を描き分ける。
+    """
+    if (sheet.w, sheet.h) != TILESET_SIZE:
+        raise ValueError(f"上り階段の追加元は {TILESET_SIZE} 必須")
+    out = Canvas(sheet.w + TILE, sheet.h)
+    out.blit(sheet, 0, 0)
+    source_x = 4 * TILE
+    for y in range(TILE):
+        for x in range(TILE):
+            out.set(sheet.w + x, y, sheet.get(source_x + x, TILE - 1 - y))
+    return out
+
 TILE_DOOR = [
     "KKKKKKKKKKKKKKKK",
     "KRRRRRRRRRRRRRRK",
@@ -318,6 +335,29 @@ TILE_CHEST = [
     "...KKKKKKKKKK...",
     "....dddddddd....",
     "................",
+    "................",
+    "................",
+]
+
+
+# 町専用の案内札。以前は宝箱タイルを看板へ流用していたため、町に
+# 「開けられない宝箱」が何個もあるように見えた。横長の板と細い支柱で、
+# 金具の付いた箱とはシルエットから分ける。
+TILE_TOWN_SIGN = [
+    "................",
+    "..KKKKKKKKKK....",
+    "..KRRRRRRRRK....",
+    "..KRrrrrrrRK....",
+    "..KRRRggRRRK....",
+    "..KKKKKKKKKK....",
+    "......KRRK......",
+    "......KrrK......",
+    "......KRRK......",
+    "......KrrK......",
+    "......KRRK......",
+    "......KrrK......",
+    ".....KKRRKK.....",
+    "....dddddddd....",
     "................",
     "................",
 ]
@@ -481,7 +521,8 @@ BIOMES = ["dungeon", "grassland", "snowfield", "volcano", "wetland"]
 TOWN_ROAD_FIRST = 9
 TOWN_PLAZA_FIRST = 13
 TOWN_VARIANTS = 4
-TOWN_TILESET_TILES = TOWN_PLAZA_FIRST + TOWN_VARIANTS
+TOWN_SIGN_INDEX = TOWN_PLAZA_FIRST + TOWN_VARIANTS
+TOWN_TILESET_TILES = TOWN_SIGN_INDEX + 1
 TOWN_TILESET_SIZE = (TILE * TOWN_TILESET_TILES, TILE)
 
 # すべて BGR555 上の色。通常地面と街路・広場は色相を共有し、
@@ -593,6 +634,15 @@ def _verify_town_tileset(name: str, sheet: Canvas) -> None:
                 f"town_{name}: {a}/{b}の色差{gap:.1f}が範囲外（8〜110）"
             )
 
+    # 看板が再び宝箱の複製へ戻ったら、ユーザーには「開かない宝箱」にしか見えない。
+    different = 0
+    for y in range(TILE):
+        for x in range(TILE):
+            if sheet.get(6 * TILE + x, y) != sheet.get(TOWN_SIGN_INDEX * TILE + x, y):
+                different += 1
+    if different < 48:
+        raise ValueError(f"town_{name}: 案内札が宝箱と見分けられない（差{different}px）")
+
 
 def build_town_tilesets() -> None:
     """5生物相の建物を保ち、町専用の静かな床を加えたシートを作る。"""
@@ -619,12 +669,13 @@ def build_town_tilesets() -> None:
                 (TOWN_PLAZA_FIRST + variant) * TILE,
                 0,
             )
+        out.blit(from_ascii(TILE_TOWN_SIGN, STONE), TOWN_SIGN_INDEX * TILE, 0)
         _verify_town_tileset(name, out)
         out.to_png(ASSETS / "tiles" / f"town_{name}.png")
         out.scaled(4).to_png(PREVIEW / f"town_tiles_{name}.png")
         print(
             f"  町床: town_{name}.png"
-            "（通常 / 街路4変種 / 広場4変種、各タイル模様12px以下）"
+            "（通常 / 街路4変種 / 広場4変種 / 案内札、各タイル模様12px以下）"
         )
 
 
@@ -641,24 +692,26 @@ def build_biomes() -> None:
         if not readable:
             print(f"  見送り: candidate_tiles_{name}.png — {reason}")
             continue
-        sheet.to_png(ASSETS / "tiles" / f"{name}.png")
-        sheet.scaled(6).to_png(PREVIEW / f"tiles_{name}.png")
+        output = append_upstairs(sheet)
+        output.to_png(ASSETS / "tiles" / f"{name}.png")
+        output.scaled(6).to_png(PREVIEW / f"tiles_{name}.png")
         print(f"  取り込み: {name}.png（chara_image/candidate_tiles_{name}.png）")
 
 
 def build_tileset() -> None:
-    """9 枚を横一列に並べた 144x16 のタイルシート。
+    """候補9枚に上り階段を足した、160x16のタイルシート。
 
     外で描いたものがあればそれを採用する。並び順（床・ひび割れ床・壁・天面・
-    階段・扉・宝箱・虚空・出店）は DungeonMap の enum と一致させること。
+    下り階段・扉・宝箱・虚空・出店・上り階段）は DungeonMap の enum と一致させること。
     """
     imported = _load_sheet("candidate_tiles_dungeon", TILESET_SIZE)
     if imported is not None:
         imported = separate_floor_wall(imported, "dungeon")
         readable, reason = _tileset_readable(imported)
         if readable:
-            imported.to_png(ASSETS / "tiles" / "dungeon.png")
-            imported.scaled(6).to_png(PREVIEW / "dungeon.png")
+            output = append_upstairs(imported)
+            output.to_png(ASSETS / "tiles" / "dungeon.png")
+            output.scaled(6).to_png(PREVIEW / "dungeon.png")
             print("  取り込み: dungeon.png（chara_image/candidate_tiles_dungeon.png）")
             return
         # 採用しない。ここで黙って通すと、綺麗だが遊べない地形が出来上がる。
@@ -678,8 +731,9 @@ def build_tileset() -> None:
     sheet = Canvas(TILE * len(tiles), TILE)
     for i, t in enumerate(tiles):
         sheet.blit(t, i * TILE, 0)
-    sheet.to_png(ASSETS / "tiles" / "dungeon.png")
-    sheet.scaled(6).to_png(PREVIEW / "dungeon.png")
+    output = append_upstairs(sheet)
+    output.to_png(ASSETS / "tiles" / "dungeon.png")
+    output.scaled(6).to_png(PREVIEW / "dungeon.png")
 
 
 # --------------------------------------------------------------------------
@@ -1494,25 +1548,29 @@ NPC_ROLES = [
 # 町へ並べると NPC だけ別の縮尺に見える。候補原画の輪郭は残しつつ、
 # **ゲームへ出す直前に偶数寸法のフィールドキャラ規格へ翻訳する。**
 #
-# 暖かな茶革へ戻さず、黒い漆・象牙・一系統の差し色という作品の語彙へ揃える。
+# **実画面の緑・雪・火山床のどれにも置ける、低彩度の生活色へ揃える。**
+#
+# 以前は役ごとの識別を鮮やかな緑・紫・水色へ任せていたため、草地へ並べると
+# NPCだけがネオン色で発光して見えた。役の違いは候補原画の帽子・荷物・杖などの
+# 輪郭に既にある。色はそれを補う程度に抑え、主人公より先に目へ飛び込ませない。
 NPC_ACCENTS = {
-    "innkeeper": ("#58D8B8", "#187860"),
-    "merchant": ("#E878C8", "#903060"),
-    "elder": ("#C098F8", "#603878"),
-    "scout": ("#58B8D8", "#286878"),
-    "guard": ("#F06868", "#903038"),
-    "healer": ("#58E0C0", "#187860"),
-    "blacksmith": ("#F08050", "#983828"),
-    "miner": ("#B890F0", "#604878"),
-    "ferryman": ("#68C8E8", "#286878"),
-    "farmer": ("#88D878", "#487038"),
-    "beastkeeper": ("#D87858", "#783828"),
-    "mechanic": ("#58D8D8", "#287878"),
-    "scribe": ("#A890E8", "#504070"),
-    "refugee": ("#D85868", "#783040"),
-    "pilgrim": ("#D0A0F0", "#684878"),
-    "performer": ("#F070B0", "#903058"),
-    "imperial_officer": ("#E85050", "#882028"),
+    "innkeeper": ("#A08068", "#584438"),
+    "merchant": ("#A87078", "#583C48"),
+    "elder": ("#8C90A8", "#484C60"),
+    "scout": ("#688C80", "#384C48"),
+    "guard": ("#78889C", "#404854"),
+    "healer": ("#8CA080", "#4C5848"),
+    "blacksmith": ("#A06C58", "#583C34"),
+    "miner": ("#988068", "#50483C"),
+    "ferryman": ("#708C9C", "#3C505C"),
+    "farmer": ("#849064", "#48503C"),
+    "beastkeeper": ("#98745C", "#543C34"),
+    "mechanic": ("#88886C", "#484838"),
+    "scribe": ("#888098", "#484454"),
+    "refugee": ("#886868", "#503C3C"),
+    "pilgrim": ("#9C9078", "#544C40"),
+    "performer": ("#986C80", "#543848"),
+    "imperial_officer": ("#986C6C", "#543C40"),
 }
 
 NPC_TARGET_H = 28
@@ -1525,12 +1583,12 @@ def _rgba(hex_color: str) -> tuple[int, int, int, int]:
     return (rgb[0], rgb[1], rgb[2], 255)
 
 
-NPC_K = _rgba("#0E0A16")
-NPC_DARK = _rgba("#241C38")
-NPC_MID = _rgba("#403650")
-NPC_IVORY_SHADOW = _rgba("#A8B0C0")
-NPC_IVORY = _rgba("#E8DCC8")
-NPC_WHITE = _rgba("#F8F0E0")
+NPC_K = _rgba("#101018")
+NPC_DARK = _rgba("#242830")
+NPC_MID = _rgba("#404850")
+NPC_IVORY_SHADOW = _rgba("#989C9C")
+NPC_IVORY = _rgba("#D8D0C0")
+NPC_WHITE = _rgba("#F0E8D8")
 
 
 def _opaque_bbox(sheet: Canvas) -> tuple[int, int, int, int]:
@@ -1639,6 +1697,12 @@ def _verify_npc_runtime_style(role: str, sheet: Canvas) -> None:
     drawn = [px for px in sheet.px if px != TRANSPARENT]
     fill = len(drawn) / float(max(width * height, 1))
     bright = sum(max(px[:3]) >= 200 for px in drawn) / float(len(drawn))
+    saturations = [
+        (max(px[:3]) - min(px[:3])) / float(max(max(px[:3]), 1))
+        for px in drawn
+    ]
+    vivid = sum(value > 0.48 for value in saturations) / float(len(drawn))
+    mean_saturation = sum(saturations) / float(len(saturations))
     if width not in (NPC_MIN_W, NPC_MAX_W):
         raise ValueError(f"npc_{role}: 実画面幅が規格外（{width}px）")
     if height != NPC_TARGET_H or y1 != CHAR_H - 1:
@@ -1647,8 +1711,15 @@ def _verify_npc_runtime_style(role: str, sheet: Canvas) -> None:
         )
     if fill < 0.40:
         raise ValueError(f"npc_{role}: 輪郭が細すぎる（充填率 {fill:.2f}）")
-    if bright < 0.05:
+    if bright < 0.04:
         raise ValueError(f"npc_{role}: 象牙の明部が足りない（{bright:.2f}）")
+    # 暗部まで紫や緑へ寄せると、面積の大半が高彩度になって床から浮く。
+    # 差し色そのものは禁止せず、人物全体をネオン色で覆う配色だけを落とす。
+    if vivid > 0.15 or mean_saturation > 0.36:
+        raise ValueError(
+            f"npc_{role}: 彩度が高すぎる"
+            f"（鮮色{vivid:.2f} / 平均{mean_saturation:.2f}）"
+        )
 
 
 def _prepare_hero_sheet(job: str, source: Canvas) -> Canvas:
@@ -2729,6 +2800,49 @@ IMPORTED_BOSSES = [
 ]
 
 
+def _verify_thorn_crowned_king_style(sheet: Canvas) -> None:
+    """プロローグの主が、鹿型の森ボスへ戻るのを止める。
+
+    この主は名前の「荊」を枝角へ直訳した結果、四足の鹿・苔・茶木が画面で
+    いちばん強く読まれていた。色名や画像認識には頼らず、実寸で残る二点――
+    暖色の占有率と、下半身が脚へ分離せず外套の塊になっているか――を測る。
+    """
+    opaque = [px for px in sheet.px if px[3] == 255]
+    if not opaque:
+        raise ValueError("candidate_boss_thorn_crowned_king: 主が空画像")
+
+    warm_brown = sum(
+        px[0] > 50 and px[0] > px[2] * 1.15 and px[0] > px[1] * 1.08
+        for px in opaque
+    ) / float(len(opaque))
+    lower_opaque = sum(
+        sheet.get(x, y)[3] == 255
+        for y in range(sheet.h * 3 // 4, sheet.h)
+        for x in range(sheet.w)
+    )
+    lower_fill = lower_opaque / float(max(sheet.w * (sheet.h // 4), 1))
+    ivory = sum(
+        min(px[:3]) >= 160 and max(px[:3]) - min(px[:3]) <= 64
+        for px in opaque
+    ) / float(len(opaque))
+
+    if warm_brown > 0.12:
+        raise ValueError(
+            "candidate_boss_thorn_crowned_king: 茶色が主役へ戻っている"
+            f"（暖色率 {warm_brown:.2f} > 0.12）"
+        )
+    if lower_fill < 0.52:
+        raise ValueError(
+            "candidate_boss_thorn_crowned_king: 下半身が外套でなく四足に見える"
+            f"（下端充填率 {lower_fill:.2f} < 0.52）"
+        )
+    if ivory < 0.02:
+        raise ValueError(
+            "candidate_boss_thorn_crowned_king: 象牙の仮面が実寸で読めない"
+            f"（明色率 {ivory:.2f} < 0.02）"
+        )
+
+
 def _load_monster_sheet(name: str) -> Canvas | None:
     """外で描いた敵の絵を読む。無ければ None（＝ ASCII マップから起こす）。
 
@@ -2778,6 +2892,8 @@ def build_imported_monsters() -> None:
         _verify_sheet(f"candidate_boss_{name}", sheet, (sheet.w, sheet.h))
         if sheet.w > MONSTER_MAX[0] or sheet.h > MONSTER_MAX[1]:
             raise ValueError("candidate_boss_%s: %dx%d は大きすぎる" % (name, sheet.w, sheet.h))
+        if name == "thorn_crowned_king":
+            _verify_thorn_crowned_king_style(sheet)
         if moved:
             print(f"    candidate_boss_{name}: {moved} 色を BGR555 へ丸めた")
         sheet.to_png(ASSETS / "sprites" / f"{name}.png")

@@ -83,10 +83,10 @@ func _on_completed(_result: int, code: int, _headers: PackedStringArray, body: P
 	set_process(false)
 	if code != 200:
 		return
-	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
-	if typeof(parsed) != TYPE_DICTIONARY:
+	var parsed := _parse_dictionary(body.get_string_from_utf8(), "Ollama応答")
+	if parsed.is_empty():
 		return
-	var text := String((parsed as Dictionary).get("response", "")).strip_edges()
+	var text := String(parsed.get("response", "")).strip_edges()
 	if debug_enabled():
 		print("[AI:%s] %d 文字" % [_label, text.length()])
 		print(text)
@@ -124,9 +124,59 @@ static func enabled() -> bool:
 ## 返事から JSON を取り出す。モデルは前後に説明を付けてくる。
 ## 取れなければ空の辞書（呼び出し側はテンプレートのままにする）。
 static func extract_json(text: String) -> Dictionary:
-	var start := text.find("{")
-	var finish := text.rfind("}")
-	if start < 0 or finish <= start:
+	# `JSON.parse_string()` は不正入力をGodotのERRORへ出す。AIの不正JSONは
+	# 通信失敗と同じ通常のフォールバックなので、Errorを返す `JSON.parse()` で静かに落とす。
+	# 前後に説明やコードフェンスがあっても、最初の釣り合ったJSONオブジェクトだけを試す。
+	var cursor := 0
+	while cursor < text.length():
+		var start := text.find("{", cursor)
+		if start < 0:
+			break
+		var finish := _matching_brace(text, start)
+		if finish < 0:
+			cursor = start + 1
+			continue
+		var parsed := _parse_dictionary(text.substr(start, finish - start + 1), "文章候補")
+		if not parsed.is_empty():
+			return parsed
+		cursor = finish + 1
+	return {}
+
+
+## 文字列中の波括弧を数えず、`start` と対になる閉じ括弧を探す。
+static func _matching_brace(text: String, start: int) -> int:
+	var depth := 0
+	var in_string := false
+	var escaped := false
+	for index in range(start, text.length()):
+		var character := text.substr(index, 1)
+		if in_string:
+			if escaped:
+				escaped = false
+			elif character == "\\":
+				escaped = true
+			elif character == "\"":
+				in_string = false
+			continue
+		if character == "\"":
+			in_string = true
+		elif character == "{":
+			depth += 1
+		elif character == "}":
+			depth -= 1
+			if depth == 0:
+				return index
+	return -1
+
+
+## 外部入力用の、エラーログを出さない辞書JSON解析。
+static func _parse_dictionary(text: String, label: String) -> Dictionary:
+	var parser := JSON.new()
+	var error := parser.parse(text)
+	if error != OK or typeof(parser.data) != TYPE_DICTIONARY:
+		if debug_enabled():
+			print("[AI:%s] JSONを採用しない（%s / 行%d）" % [
+				label, parser.get_error_message(), parser.get_error_line()
+			])
 		return {}
-	var parsed: Variant = JSON.parse_string(text.substr(start, finish - start + 1))
-	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}
+	return parser.data as Dictionary

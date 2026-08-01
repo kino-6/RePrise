@@ -1,6 +1,10 @@
+class_name Main
 extends Node2D
 
 const ChestReward := preload("res://src/dungeon/chest_reward.gd")
+const TownInteractionScript := preload("res://src/world/town_interaction.gd")
+const EventOperationScript := preload("res://src/quest/event_operation.gd")
+const StoryOperationScript := preload("res://src/quest/story_operation.gd")
 
 ## 画面の切り替えとランの進行。
 ##
@@ -40,6 +44,8 @@ var _mode: Mode = Mode.EXPLORE
 
 ## いま歩いている洞の 1 階ぶん（世界の上にいるときは null）。
 var _map: DungeonMap = null
+## 戻った階の箱・店・乱数を巻き戻さないため、洞を出るまで各階を保持する。
+var _dungeon_floors: Dictionary = {}
 
 ## いま居る町の中（町に居ないときは null）。
 var _town: TownMap = null
@@ -62,6 +68,8 @@ var _guardian_beaten := false
 
 ## 今の戦闘が主との戦いか。勝った時にランを閉じるかどうかがここで変わる。
 var _boss_battle := false
+## 紙芝居にせず、主戦の開戦文へ物語の一手を載せるための短い行。
+var _battle_opening_context: Array[String] = []
 
 ## トランジションは絵だけでなく、入力を止めて初めて成立する。
 ##
@@ -80,7 +88,22 @@ var _transition_release_elapsed := 0.0
 var _dev_inn_visits := 0
 var _dev_shop_opens := 0
 var _dev_talks := 0
+var _dev_facility_visits := 0
+var _dev_facility_uses := 0
+var _dev_town_chests := 0
 var _dev_last_talk_line := ""
+var _dev_talked_roles: Dictionary = {}
+
+## 町会話はEventViewの軽い会話窓を借りる。世界イベントの返り先と混ぜない印。
+var _town_talk_open := false
+
+## イベント報酬の解決中は、装備入手signalをその場で開かず後続列へ積む。
+## 町・洞・移動の完了時は Mode.EXPLORE なので、この印が無いと装備窓が
+## 完了結果を上書きする。
+var _event_resolution_active := false
+
+## EventOperation の戦闘として始めた戦いか。通常遭遇の勝利と混ぜない。
+var _event_task_battle_active := false
 
 
 func _ready() -> void:
@@ -152,12 +175,15 @@ func _ready() -> void:
 	event_view = EventView.new()
 	event_view.visible = false
 	add_child(event_view)
-	# 同じ窓を拍とイベントで使い回すので、返り先はここで振り分ける。
 	# 同じ窓を 3 通りに使い回すので、返り先はここで振り分ける
 	# （結果の窓 / 物語の拍 / イベントの選択）。
 	event_view.chosen.connect(func(c: Dictionary) -> void:
 		if _cross_world_open:
 			_on_cross_world_choice(c)
+		elif _town_talk_open:
+			_close_town_talk()
+		elif _elite_reward_open:
+			_on_elite_reward_choice(c)
 		elif _outcome_open:
 			_close_outcome()
 		elif _story_beat.is_empty():
@@ -169,6 +195,11 @@ func _ready() -> void:
 		if _cross_world_open:
 			# またぐ物語も見送れない。既定の手で閉じる。
 			_on_cross_world_choice({})
+		elif _town_talk_open:
+			_close_town_talk()
+		elif _elite_reward_open:
+			# 格上を倒した報酬は捨てられない。取消なら先頭の装備を選ぶ。
+			_on_elite_reward_choice(_elite_reward_choices()[0])
 		elif _outcome_open:
 			_close_outcome()
 		elif _story_beat.is_empty():
@@ -197,12 +228,14 @@ func _ready() -> void:
 	stronghold.departed.connect(_start_run)
 	explore.encounter_triggered.connect(_on_encounter)
 	explore.descended.connect(_on_descend)
+	explore.ascended.connect(_on_ascend)
 	explore.boss_reached.connect(_on_boss_reached)
 	explore.shop_entered.connect(_on_shop_entered)
 	explore.site_entered.connect(_on_site_entered)
 	explore.event_reached.connect(_on_event_reached)
 	explore.talked.connect(_on_talked)
-	explore.rumor = _rumor
+	explore.town_facility_used.connect(_on_town_facility)
+	explore.town_chest_opened.connect(_on_town_chest)
 	explore.inn_entered.connect(_on_inn)
 	explore.town_left.connect(_on_town_left)
 	# 町を出たら世界へ戻る（世界の上に立ち直す）。洞の出店ならその階へ戻るだけ。
@@ -226,10 +259,10 @@ func _ready() -> void:
 	result.dismissed.connect(_enter_stronghold)
 
 	_make_curtain()
-	# **引数を捌いたかどうかで分ける。** `_capture()` は await を含むので、
+	# **引数を捌いたかどうかで分ける。** 撮影は await を含むので、
 	# 呼んだ直後に制御が戻る。そこでタイトルを出すと、撮ろうとした画面を
 	# 上書きしてしまう（`--shot=town` がタイトルを撮っていた）。
-	if not _handle_debug_args():
+	if not dev.handle_debug_args(self):
 		_enter_title()
 
 
@@ -271,6 +304,10 @@ func _begin_transition_input() -> void:
 func _transition_visual_finished() -> void:
 	if not _transition_input_locked:
 		return
+	# BattleView は start() してもここまでは止まっている。覆いの裏で敵が行動し、
+	# 最初に見えるものが攻撃エフェクトになる回帰を、この境界で防ぐ。
+	if _mode == Mode.BATTLE and battle != null:
+		battle.reveal_opening()
 	_transition_visual_done = true
 	_transition_release_elapsed = 0.0
 
@@ -285,54 +322,10 @@ func _unlock_transition_input() -> void:
 		explore.set_active(_mode == Mode.EXPLORE)
 
 
-## 開発用。画面を 1 枚撮って終了する。
-##   godot --path . -- --shot=explore
-## GUI を触らずに見た目を確認できるので、ドット絵の調整に効く。
-## 開発用の引数を捌く。**何か捌いたら true**（呼び出し側がタイトルを出さない）。
-func _handle_debug_args() -> bool:
-	# **先に全部の引数を見る。** 下の輪は最初に当たった指定で return するので、
-	# 「--play=12 --dev-save=probe」のように後ろへ書くと読まれなかった。
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--dev-save="):
-			_dev_save_name = arg.trim_prefix("--dev-save=")
-		if arg.begins_with("--seed="):
-			_play_seed = int(arg.trim_prefix("--seed="))
-
-	for arg in OS.get_cmdline_user_args():
-		# 開発用。「この世界のこの場面」を保存／読み込みする。
-		#   godot --path . -- --dev-load=boss1
-		# **読み込んだあとも他の指定を続ける。** ここで return すると
-		# 「--dev-load=x --play=10」の自動プレイが始まらず、headless が終わらない。
-		if arg.begins_with("--dev-load="):
-			if GameState.dev_load(arg.trim_prefix("--dev-load=")):
-				print("開発用の保存から再開: %s" % arg.trim_prefix("--dev-load="))
-				_resume_loaded()
-				_loaded_from_dev = true
-			continue
-		if arg.begins_with("--shot="):
-			_capture(arg.trim_prefix("--shot="))
-			return true
-		if arg.begins_with("--play="):
-			# **種を渡せるようにする**（P-2）。実行ごとにコマの置き場が分かれるので、
-			# 別の種で 2 回走らせれば、それぞれの成果物を混ぜずに比べられる。
-			_start_autoplay(float(arg.trim_prefix("--play=")), _play_seed)
-			return true
-	return _loaded_from_dev
-
-
-## 開発用。人と同じ入力だけを流し込んで通しを確認する（src/dev/autoplay.gd）。
-## 自動プレイの種（`--seed=`）。実行ごとにコマの置き場が変わる。
-var _play_seed := 12345
-
-
-func _start_autoplay(seconds: float, seed_value: int = 12345) -> void:
-	# 名前付き保存からの再開でなければ、人と同じくタイトルから始める。
-	# ここを省くと初期 Mode.EXPLORE のまま地図なし画面へ入力してしまう。
-	if not _loaded_from_dev:
-		_enter_title()
-	var driver := AutoPlay.new()
-	add_child(driver)
-	driver.start(self, maxf(seconds, 5.0), seed_value)
+## 開発用。決まった画面へ直行して撮る／自動で遊ぶ／保存を読む（S-1）。
+## 中身は `src/dev/dev_probe.gd` にある。**本編と同じファイルに置かない**
+## ―― `--shot=` を足す作業はどのタスクでも起きるので、ここが衝突源になる。
+var dev: DevProbe = DevProbe.new()
 
 
 ## 自動プレイが「いまどの画面か」を知るための窓口。開発用。
@@ -351,10 +344,24 @@ func dev_status() -> String:
 	# 証跡としては弱い。開始時に控えたものを、戦いが終わるまで出す。
 	if _mode == Mode.BATTLE and _battle_place != "":
 		return "%s %s 危険度%d" % [dev_mode_name(), _battle_place, _battle_danger]
-	if _mode == Mode.EXPLORE or _mode == Mode.SHOP:
-		return "%s %s 危険度%d" % [
+	if (
+		_mode == Mode.EXPLORE or _mode == Mode.SHOP
+		or (_mode == Mode.EVENT and not GameState.site.is_empty())
+	):
+		var base := "%s %s 危険度%d" % [
 			dev_mode_name(), _place_name(), GameState.floor_number]
+		var objective := StoryOperationScript.objective(GameState.story_task)
+		if objective == "":
+			objective = EventOperationScript.objective(GameState.event_task)
+		return base if objective == "" else "%s 目的:%s" % [base, objective]
 	return dev_mode_name()
+
+
+## 開発用。画面が同じでも内部処理が進んでいるかを自動プレイへ渡す。
+func dev_progress_signature() -> String:
+	if _mode == Mode.BATTLE and battle.has_method("dev_progress_signature"):
+		return "BATTLE:%s" % battle.dev_progress_signature()
+	return dev_status()
 
 
 ## いま居る場所の呼び名（監査用）。
@@ -395,48 +402,33 @@ func dev_take_encounter_gap() -> int:
 	return explore.dev_take_encounter_gap()
 
 
-## 開発用。「先へ進む一歩」。世界では城へ、洞では階段へ向かう。
-## 自動プレイがこれで世界を横断する。届かなければ空文字。
+## 開発用。目的地への「次の一歩」は DevProbe が決める（S-1）。
+## 自動プレイ（`src/dev/autoplay.gd`）はここを窓口にする。
 func dev_step_to_exit() -> String:
-	if _mode != Mode.EXPLORE:
-		return ""
-	# 町は閉じた広場なので、酔歩では出口に当たらない（40 秒 居座った）。
-	# 町に居るあいだは出口へ向かわせる。
-	if _town != null:
-		return explore.dev_step_toward(_town.exit_pos)
-	if _map == null:
-		if GameState.world == null:
-			return ""
-		return explore.dev_step_toward(GameState.world.castle_pos)
-	return explore.dev_step_toward(_map.stairs_pos)
+	return dev.step_to_exit(self)
 
 
-## 開発用。近くの店へ向かう一歩。世界では町、洞では出店。無ければ空文字。
 func dev_step_to_shop() -> String:
-	if _mode != Mode.EXPLORE:
-		return ""
-	if _town != null:
-		return explore.dev_step_toward(_town.shop_pos)
-	if _map == null:
-		var town := _nearest_town()
-		return "" if town.x < 0 else explore.dev_step_toward(town)
-	if _map.shop_pos.x < 0:
-		return ""
-	return explore.dev_step_toward(_map.shop_pos)
+	return dev.step_to_shop(self)
 
 
-## 開発用。町の宿へ向かう一歩。町以外なら空文字。
 func dev_step_to_inn() -> String:
-	if _mode != Mode.EXPLORE or _town == null:
-		return ""
-	return explore.dev_step_toward(_town.inn_pos)
+	return dev.step_to_inn(self)
+
+
+func dev_step_to_town_facility() -> String:
+	return dev.step_to_town_facility(self)
 
 
 func dev_reset_facility_metrics() -> void:
 	_dev_inn_visits = 0
 	_dev_shop_opens = 0
 	_dev_talks = 0
+	_dev_facility_visits = 0
+	_dev_facility_uses = 0
+	_dev_town_chests = 0
 	_dev_last_talk_line = ""
+	_dev_talked_roles = {}
 
 
 func dev_inn_visits() -> int:
@@ -451,6 +443,36 @@ func dev_talks() -> int:
 	return _dev_talks
 
 
+func dev_facility_uses() -> int:
+	return _dev_facility_uses
+
+
+func dev_facility_visits() -> int:
+	return _dev_facility_visits
+
+
+func dev_town_chests() -> int:
+	return _dev_town_chests
+
+
+## 開発用。欲が呼んだ格上の数と、洞で開けた宝箱の数（R-3 の実入力監査）。
+## **開けた数と湧いた数が両方要る** ―― 1 つ目で湧いていないことも証跡になる。
+func dev_greed_summons() -> int:
+	return _dev_greed_summons
+
+
+func dev_chests_taken() -> int:
+	return _dev_chests_taken
+
+
+var _dev_greed_summons := 0
+var _dev_chests_taken := 0
+
+
+func dev_step_to_town_chest() -> String:
+	return dev.step_to_town_chest(self)
+
+
 func dev_shop_category() -> String:
 	return shop.current_category() if _mode == Mode.SHOP else ""
 
@@ -459,463 +481,8 @@ func dev_menu_at_root() -> bool:
 	return _mode == Mode.MENU and menu.is_root()
 
 
-## 開発用。町で最も近い住人へ向かう一歩。
 func dev_step_to_talk() -> String:
-	if _mode != Mode.EXPLORE or _town == null or _town.folk.is_empty():
-		return ""
-	var nearest := Vector2i(-1, -1)
-	var best_length := -1
-	for raw_pos in _town.folk:
-		var pos: Vector2i = raw_pos
-		var candidate_line := String(_town.folk[pos].get("line", ""))
-		if String(_town.folk[pos].get("kind", "")) == "elder":
-			candidate_line = _rumor()
-		if (
-			_dev_last_talk_line != ""
-			and candidate_line == _dev_last_talk_line
-		):
-			continue
-		var route := _town.route(explore.player_pos, pos)
-		if not route.is_empty() and (best_length < 0 or route.size() < best_length):
-			nearest = pos
-			best_length = route.size()
-	return "" if nearest.x < 0 else explore.dev_step_toward(nearest)
-
-
-## 開発用。その種類の拠点地のうち、門にいちばん近いもの。撮影に使う。
-func _first_site(kind: String) -> Vector2i:
-	if GameState.world == null:
-		return Vector2i(-1, -1)
-	var best := Vector2i(-1, -1)
-	var best_d := -1
-	for pos in GameState.world.sites:
-		if String(GameState.world.sites[pos].get("kind", "")) != kind:
-			continue
-		var at: Vector2i = pos
-		var d := absi(at.x - GameState.world.start_pos.x) + absi(at.y - GameState.world.start_pos.y)
-		if best_d < 0 or d < best_d:
-			best_d = d
-			best = at
-	return best
-
-
-## 世界でいちばん近い町。自動プレイが買い物を試すのに使う。
-func _nearest_town() -> Vector2i:
-	if GameState.world == null:
-		return Vector2i(-1, -1)
-	var best := Vector2i(-1, -1)
-	var best_d := -1
-	for pos in GameState.world.sites:
-		if String(GameState.world.sites[pos].get("kind", "")) != "town":
-			continue
-		var at: Vector2i = pos
-		var d := absi(at.x - explore.player_pos.x) + absi(at.y - explore.player_pos.y)
-		if best_d < 0 or d < best_d:
-			best_d = d
-			best = at
-	return best
-
-
-func _capture(which: String) -> void:
-	match which:
-		"title":
-			pass  # 起動直後がタイトル
-		"prologue":
-			_enter_prologue()
-		"prologue_shatter":
-			_enter_prologue()
-			prologue.debug_open_beat(3)
-		"prologue_worlds":
-			_enter_prologue()
-			prologue.debug_open_beat(6)
-		"prologue_oath":
-			_enter_prologue()
-			prologue.debug_open_beat(7)
-		"stronghold":
-			_enter_stronghold()
-		"job":
-			_enter_stronghold()
-			stronghold.debug_open_job_menu(0)
-		"inherit":
-			_enter_stronghold()
-			var member := GameState.active_party()[0]
-			for job_id in Database.job_ids():
-				member.job_exp[job_id] = 9999
-				for entry in Database.job(job_id).get("mastery", []):
-					var ability_id := String(entry.get("ability", ""))
-					if ability_id != "" and ability_id not in member.learned:
-						member.learned.append(ability_id)
-			var candidates := member.inheritable_abilities()
-			if not candidates.is_empty():
-				member.inherited[0] = candidates[0]
-			GameState.inherit_signs = ["soldier"]
-			stronghold.debug_open_loadout(0)
-		"depart":
-			# 潜る理由の 3 行が名簿と重なっていないかを見るため
-			_enter_stronghold()
-			stronghold.debug_open_depart()
-		"upgrade":
-			_enter_stronghold()
-			stronghold.debug_open_upgrades()
-		"rules":
-			_enter_stronghold()
-			# 最長の名前・最大枠・高い倍率で収まりを見る。
-			GameState.upgrades["world_lens"] = 2
-			GameState.upgrades["marching_score"] = 2
-			GameState.upgrades["oath_tablet"] = 2
-			GameState.upgrades["provisions"] = 1
-			GameState.upgrades["lifeline"] = 1
-			GameState.run_rule_choices = {
-				"difficulty": "ruin",
-				"pace": "sprint",
-				"contracts": ["closed_market", "empty_pack", "no_escape"],
-			}
-			stronghold.debug_open_rules()
-		"explore":
-			_start_run()
-		"items":
-			_start_run()
-			GameState.add_item("herb", 3)
-			GameState.add_item("water", 2)
-			_on_encounter()
-			for _i in 60:
-				await get_tree().create_timer(0.1).timeout
-				if battle.is_awaiting_command():
-					break
-			battle.debug_open_item_menu()
-		"shop":
-			# 町の武器売り場を撮る。物語や重なったイベントを経由すると
-			# 品書きではない画面になるので、撮影時だけ町へ直に入る。
-			_start_run()
-			GameState.gold = 300
-			var town := _first_site("town")
-			if town.x >= 0:
-				GameState.enter_site(town)
-				_open_town()
-				_on_shop_entered()
-				shop.debug_set_category("weapon")
-		"world":
-			# 世界の全景。歩ける地形と拠点地の見分けを確かめる。
-			_start_run()
-		"map":
-			# 地図イベント後に封と安全路が増えた状態を撮る。
-			_start_run()
-			GameState.event_map_reveals = 1
-			for seal in GameState.world.seals:
-				seal["known"] = true
-			_open_world_chart()
-		"acrosschoice":
-			# またぐ物語の最後の段階（三択）。
-			_enter_stronghold()
-			GameState.cross_world = CrossWorldArc.empty_state()
-			CrossWorldArc.select(GameState.cross_world, 9, 4242, {})
-			var arc: Dictionary = CrossWorldArc.active(GameState.cross_world, {})
-			GameState.cross_world["phase_index"] = (arc["beats"] as Array).size() - 1
-			GameState.runs_attempted = 99
-			var last: Dictionary = (arc["beats"] as Array).back()
-			_open_cross_world_choice(last)
-		"hitfx":
-			# 技の絵が敵の上に出るところを撮る。
-			_start_run()
-			GameState.world.story_beat = 99
-			_on_encounter()
-			for _i in 60:
-				await get_tree().create_timer(0.1).timeout
-				if battle.is_awaiting_command():
-					break
-			await get_tree().create_timer(0.4).timeout
-			# 描画そのものを確かめる（技→絵の対応は単体テストで見る）。
-			effect.play("fx_fire", Vector2(256, 120))
-		"effect":
-			# 演出の見え方を撮る。演出は 0.4 秒で終わるので、
-			# **世界を立ててから最後に流す**（下の待ちも短くしてある）。
-			_start_run()
-			GameState.world.story_beat = 99
-			await get_tree().create_timer(0.5).timeout
-			effect.play("seal_break", Vector2(256, 120))
-		"story":
-			# 物語の 1 拍目。語りが窓に収まっているかを見る。
-			_start_run()
-			var b0: Dictionary = GameState.world.story.get("beats", [])[0]
-			var at0 := GameState.world.pos_of_site_id(String(b0.get("site_id", "")))
-			GameState.world_pos = at0
-			_open_story(b0)
-		"choicebeat":
-			# 「代償の選択」の拍。守るもの・手ばなすものが読めるかを見る。
-			_start_run()
-			var beats: Array = GameState.world.story.get("beats", [])
-			for i in beats.size():
-				if String(beats[i].get("phase", "")) == "choice":
-					GameState.world.story_beat = i
-					GameState.world_pos = GameState.world.pos_of_site_id(
-						String(beats[i].get("site_id", "")))
-					_open_story(beats[i])
-					break
-		"event":
-			# イベントの選択画面。払うものが選ぶ前に見えているかを確かめる。
-			_start_run()
-			for pos in GameState.world.events:
-				_open_event(pos)
-				break
-		"event_outcome":
-			# 選択後に代償と利益が読めるか。表示だけで終わる回帰もここで見る。
-			_start_run()
-			var definition := WorldEventCatalog.event_by_id("signal_tower")
-			var instance := WorldEventCatalog.instantiate(
-				definition, DetRng.new(771), {"biome": GameState.biome_here()}
-			)
-			_event_pos = GameState.world.start_pos
-			GameState.world.events[_event_pos] = instance
-			_on_event_choice(instance.get("choices", [])[1])
-		"town", "town_dungeon", "town_grassland", "town_wetland", \
-		"town_snowfield", "town_volcano":
-			# 町の中の見え方（宿・店・人）を確かめる。
-			# 物語や重なった出来事は町より先に出るので、撮影では直に入る。
-			_start_run()
-			# キャラ美術の実画面基準は、ユーザー指定のまほうつかい。
-			# NPCとの頭身・明暗・接地を毎回同じ基準で比較できるよう撮影時だけ替える。
-			var leader := GameState.active_party()[0]
-			leader.change_job("mage")
-			var town_at := _first_site("town")
-			if town_at.x >= 0:
-				GameState.enter_site(town_at)
-				if which.begins_with("town_"):
-					# 5生物相の町床Gate。構造とNPCを同じに保ち、床だけ比較する。
-					GameState.site["tileset"] = which.trim_prefix("town_")
-				_open_town()
-		"cave":
-			_start_run()
-			var cave := _first_site("cave")
-			if cave.x >= 0:
-				_on_site_entered(cave)
-		"deep":
-			# 終点近くの敵の見え方を確認する。
-			_start_run()
-			GameState.floor_number = GameState.FINAL_FLOOR - 1
-			_enter_floor()
-			for _i in 40:
-				_on_encounter()
-				if battle.visible:
-					break
-			for _i in 60:
-				await get_tree().create_timer(0.1).timeout
-				if battle.is_awaiting_command():
-					break
-		"boss":
-			_start_run()
-			# 主の絵を撮るのが目的なので、開幕で壊滅しない程度に育てておく。
-			# 敵 AI が範囲攻撃を選ぶようになってから、レベル 1 では 1 手で全滅する。
-			for m in GameState.active_party():
-				while m.level < 20:
-					m.gain_exp(m.exp_to_next())
-				m.hp = m.max_hp()
-				m.mp = m.max_mp()
-			# **世界へ入り直さない。** `_enter_world()` の暗転と主戦の閃光が
-			# かち合って、撮影が世界のままになる。戦闘だけを立てる。
-			# 実プレイと同じく「城の中」にしてから立てる（背景が城の絵になる）。
-			GameState.floor_number = GameState.FINAL_FLOOR
-			GameState.enter_site(GameState.world.castle_pos)
-			_battle_rng = GameState.rng_for("battle")
-			_on_boss_reached()
-			for _i in 60:
-				await get_tree().create_timer(0.1).timeout
-				if battle.is_awaiting_command():
-					break
-		"menu":
-			_start_run()
-			GameState.add_item("herb", 3)
-			GameState.add_gear("short_sword")
-			GameState.add_gear("leather_vest")
-			_open_menu()
-		"jobmenu":
-			# てんしょくの一覧の見え方を確かめる
-			_start_run()
-			# 熟練を積んだ状態で撮る。★ が最大まで並ぶのはこのときだけ。
-			for m in GameState.active_party():
-				while m.level < 7:
-					m.gain_exp(m.exp_to_next())
-				# 全職の熟練を積む（★ が最大まで並ぶ状態を作る）。
-				for job_id in Database.job_ids():
-					m.job_exp[job_id] = 9999
-			_open_menu()
-			menu.debug_open_jobs()
-		"status":
-			# つよさ の重なりを見る
-			_start_run()
-			for m in GameState.active_party():
-				while m.level < 12:
-					m.gain_exp(m.exp_to_next())
-			_open_menu()
-			menu.debug_open_status()
-		"equip":
-			_start_run()
-			GameState.add_gear("war_axe")
-			GameState.add_gear("flame_dagger")
-			_open_menu()
-			menu.debug_open_equip()
-		"party":
-			_enter_stronghold()
-			GameState.echo = 90
-			stronghold.debug_open_party()
-		"settings":
-			settings.open()
-			_set_mode(Mode.SETTINGS)
-		"save_erase":
-			settings.open(true, true)
-			settings.debug_open_save_erase()
-			_set_mode(Mode.SETTINGS)
-		"run_abandon":
-			# 実際には終わらせず、最終確認だけを撮る。
-			_start_run()
-			_open_menu()
-			_open_settings()
-			settings.debug_open_run_abandon()
-		"upgrade":
-			_enter_stronghold()
-			GameState.echo = 42
-			stronghold.debug_open_upgrades()
-		"win":
-			_start_run()
-			# 記録の見え方を確かめたいので、それらしい戦績を入れておく
-			GameState.kills = 24
-			GameState.gold_earned = 380
-			GameState.floor_number = GameState.FINAL_FLOOR
-			GameState.deepest_floor = GameState.FINAL_FLOOR
-			# 物語を通した状態で戦記を見る（終幕が回収されているか）。
-			GameState.world.story_beat = 6
-			var cs: Array = GameState.world.story.get("choices", [])
-			if not cs.is_empty():
-				GameState.world.story_choice = String(cs[0].get("id", ""))
-			result.show_summary(GameState.end_run(true))
-			_set_mode(Mode.RESULT)
-		"commands":
-			# 技が 1 ページに収まらないときの見え方を確認する。
-			# 保存を挟まないので、この改変が名簿に残ることはない。
-			_start_run()
-			for m in GameState.active_party():
-				for job_id in Database.job_ids():
-					for entry in Database.job(job_id).get("mastery", []):
-						var ability_id := String(entry.get("ability", ""))
-						if ability_id != "" and ability_id not in m.learned:
-							m.learned.append(ability_id)
-			_on_encounter()
-			for _i in 60:
-				await get_tree().create_timer(0.1).timeout
-				if battle.is_awaiting_command():
-					break
-			# 技が増えたときのサブウィンドウの見え方を確かめる。
-			battle.debug_open_ultimate_menu()
-		"cover":
-			# 場面転換の覆い（B-3）。**覆いきる途中**を撮る。
-			# 実際の切り替えに任せると、どの覆いがいつ鳴るかが撮影と噛み合わない
-			# （世界地図の門を「覆いが出ている」と見間違えた）。直に鳴らす。
-			_start_run()
-			await get_tree().create_timer(0.9).timeout
-			_transition.play_cover("iris_gate", func() -> void: pass)
-		"gearoffer":
-			# 拾った装備を着けるか聞く窓（C-9）。
-			_start_run()
-			await get_tree().create_timer(0.5).timeout
-			GameState.add_gear("war_axe")
-		"transition":
-			# 遭遇の演出そのものを撮る。待ちは下の `wait` で調整する
-			# （ここで待つと、そのあとの固定待ちが足されて撮り逃す）。
-			_start_run()
-			_on_encounter()
-		"transition_lock":
-			# 覆いが開いている中点で移動入力を押し、座標が変わらないことを実測する。
-			_start_run()
-			await get_tree().create_timer(0.8).timeout
-			var before := explore.player_pos
-			var action := dev_step_to_exit()
-			_fade_to(Mode.EXPLORE)
-			await get_tree().create_timer(
-				ScreenTransition.IN_TIME + ScreenTransition.MOSAIC_SWAP_HOLD * 0.75
-			).timeout
-			if action != "":
-				Input.action_press(action)
-				await get_tree().create_timer(ExploreView.MOVE_DELAY + 0.04).timeout
-				Input.action_release(action)
-			if explore.player_pos != before:
-				push_error("遷移入力Gate: NG %s -> %s" % [before, explore.player_pos])
-				get_tree().quit(1)
-				return
-			print("遷移入力Gate: OK（覆いの途中では移動しない）")
-		"defeat_transition":
-			# 戦場が崩れずに沈んでいく、全滅専用の暗転途中を撮る。
-			_start_run()
-			_on_encounter()
-			await get_tree().create_timer(
-				ScreenTransition.IN_TIME + ScreenTransition.OUT_TIME + 0.08
-			).timeout
-			Sound.stop_bgm()
-			# セーブを書き換える end_run() は通さず、実際と同じ遷移経路だけを鳴らす。
-			_transition_to_result(true)
-		"battle":
-			_start_run()
-			_on_encounter()
-			# 味方のコマンド選択が出るまで待つ（見せたいのはその画面なので）
-			for _i in 60:
-				await get_tree().create_timer(0.1).timeout
-				if battle.is_awaiting_command():
-					break
-		"result":
-			_start_run()
-			result.show_summary(GameState.end_run(false))
-			_set_mode(Mode.RESULT)
-		"chronicle":
-			# ローカル AI が書いた戦記を確かめる（届かなければテンプレートのまま）。
-			_start_run()
-			GameState.kills = 18
-			GameState.gold_earned = 240
-			GameState.floor_number = 7
-			GameState.deepest_floor = 7
-			result.show_summary(GameState.end_run(false))
-			_set_mode(Mode.RESULT)
-	# 戦記の撮影だけは、ローカル AI の文章が届くのを少し待つ。
-	# 戦記だけは AI の文章を待つ。演出は 0.4 秒で終わるので短く撮る。
-	# 最長の頁遷移（0.88秒）と入力解放待ちを越えてから、静止画面を撮る。
-	var wait := 1.05
-	if which == "chronicle":
-		wait = 9.0
-	elif which == "effect" or which == "hitfx":
-		wait = 0.15
-	elif which == "cover":
-		wait = ScreenTransition.COVER_IN_TIME * 0.65
-	elif which == "transition":
-		# **崩れている途中**を撮る。入りきると戦闘画面になってしまうので、
-		# 入りの時間の 6 割で切る。
-		wait = ScreenTransition.IN_TIME * 0.6
-	elif which == "defeat_transition":
-		wait = ScreenTransition.DEFEAT_DIM_TIME * 0.65
-	await get_tree().create_timer(wait).timeout
-	await RenderingServer.frame_post_draw
-	var image := get_viewport().get_texture().get_image()
-	var path := "res://docs/preview/screen_%s.png" % which
-	DirAccess.make_dir_recursive_absolute("res://docs/preview")
-	image.save_png(path)
-	print("撮影: %s (%dx%d)" % [path, image.get_width(), image.get_height()])
-	# はみ出しの検出結果。--ui-check を付けたときだけ出る。
-	if PixelUI.ui_check_enabled():
-		var bad := PixelUI.ui_violations()
-		if bad.is_empty():
-			print("  はみ出し: なし")
-		else:
-			for note in bad:
-				print("  はみ出し: %s" % note)
-		# **詰めた文字も見せる。** 横のはみ出しは draw_text が自動で `…` に
-		# するので遊ぶ側には見えないが、詰まっていること自体が割り付けの誤り。
-		for note in PixelUI.clipped():
-			print("  詰めた: %s" % note)
-		# 安全のため描画しなかった行も失敗にする。空の窓を正常扱いしない。
-		for note in PixelUI.dropped_lines():
-			print("  行落ち: %s" % note)
-		# **12px の漢字は潰れて読めない**（D-5）。かなと数字だけにする。
-		for note in PixelUI.small_kanji():
-			print("  小さすぎる漢字: %s" % note)
-	get_tree().quit()
-
-
+	return dev.step_to_talk(self)
 # --------------------------------------------------------------------------
 
 
@@ -967,12 +534,8 @@ func _enter_stronghold() -> void:
 ## する ―― 場所ごとに「段階を探して出して進める」を書くと、片方だけ
 ## `advance` を忘れて段階が止まる（実際に拠点の実装だけがあった）。
 ##
-## 出し方は場所で変える:
-##
-##   * **町と洞は流す**（`toast`）。歩いている最中に窓で止めると、
-##     どこへ向かっていたか分からなくなる。
-##   * **主戦の直前は止める**（窓）。ここは読ませる場面で、しかも
-##     読み終わってから戦いが始まる必要がある。
+## 三択の決着以外はすべてその場の通知として流す。文章一枚で入力を止める
+## 「紙芝居」をイベントとして数えず、町到達・洞探索・主戦という実プレイを進める。
 ##
 ## 段階が無ければ何もせず false。呼ぶ側は「無ければ素通り」でよい。
 func _show_cross_world_beat(placement: String) -> bool:
@@ -986,12 +549,10 @@ func _show_cross_world_beat(placement: String) -> bool:
 		return true
 	GameState.advance_cross_world()
 	if placement == "castle_pre_boss":
-		_pending_boss_after_beat = true
-		event_view.open_outcome(
-			GameState.cross_world_title(), [line], GameState.floor_number)
-		_outcome_open = true
-		_set_mode(Mode.EVENT)
-		return true
+		_battle_opening_context.append(
+			"%sの記録が 決戦へ つながる" % GameState.cross_world_title()
+		)
+		return false
 	hud.toast(line)
 	return false   # 流すだけなので、呼ぶ側の流れは止めない
 
@@ -1012,6 +573,11 @@ var _pending_boss_after_beat := false
 ## 店の中やラン開始直後に手へ入ることがある。捨てると「拾ったのに聞かれない」
 ## 経路ができて、「入手の経路を 1 つに集約する」という C-9 の前提が崩れる。
 var _pending_gear: Array[String] = []
+
+## 世界上で予告した格上の型と、勝利後に選ぶ戦利品。
+var _pending_elite_rule_id := ""
+var _pending_elite_reward := false
+var _elite_reward_open := false
 
 
 ## またぐ物語の最後の段階。三択を出して結末を決める。
@@ -1083,17 +649,13 @@ const QUEST_PROMPT := """あなたは現代の日本語RPGを担当するゲー�
 """
 
 
-## 開発用。`--dev-save=名前` を付けて起動すると、ランを始めた直後に保存する。
-var _dev_save_name := ""
-
-## 開発用の保存から立ち上げたか（そのときはタイトルへ戻さない）。
-var _loaded_from_dev := false
-
-
 ## 読み込んだ状態から画面を立ち上げる（中断の再開と同じ道）。
 func _resume_loaded() -> void:
 	_event_skinned = {}
 	_awaiting_event_text = false
+	# 中断データは世界種と現在階だけを持つ。別ランの階層キャッシュを混ぜない。
+	_dungeon_floors.clear()
+	_pending_greed_elite = ""
 	if String(GameState.site.get("kind", "")) == "cave":
 		_enter_floor()
 	else:
@@ -1113,6 +675,9 @@ func _resume_run() -> void:
 
 func _start_run() -> void:
 	GameState.start_new_run()
+	_dungeon_floors.clear()
+	_pending_greed_elite = ""
+	dev.reset_run_gates()
 	Sound.play("depart")
 	_ask_quest_text()
 	# 開発用の状態指定（--dev-level=8 など）。指定が無ければ何もしない。
@@ -1122,9 +687,9 @@ func _start_run() -> void:
 	# 世界の門。**ランの始まりはここだけ**なので、節目として演出を置く。
 	effect.play("world_gate")
 	# 「封の言い伝え」を買っているぶん、出撃前から在り処が分かっている。
-	if _dev_save_name != "":
-		if GameState.dev_save(_dev_save_name):
-			print("開発用の保存: %s" % _dev_save_name)
+	if dev.save_name != "":
+		if GameState.dev_save(dev.save_name):
+			print("開発用の保存: %s" % dev.save_name)
 	var told := GameState.reveal_known_seals()
 	if not told.is_empty():
 		hud.toast("言い伝え: %s" % " ".join(told))
@@ -1150,19 +715,32 @@ func _enter_world() -> void:
 
 
 ## 洞の 1 階ぶんへ入る。
-func _enter_floor() -> void:
-	_encounter_rng = GameState.rng_for("encounter")
-	_battle_rng = GameState.rng_for("battle")
+func _enter_floor(arrive_from_below: bool = false) -> void:
 	# 洞に主の間は置かない。**主が居るのは世界の終点（城）だけ。**
 	# 寄り道の底にも主を置くと、寄り道が本筋と同じ重さになって
 	# 「寄るか急ぐか」の判断が消える。洞の見返りは宝箱と出店。
 	# 洞の中の絵はその土地の生物相から来る（雪原の洞は雪原の絵）。
 	_guardian_battle = false
 	_show_cross_world_beat("cave_mid")
-	_map = DungeonGenerator.generate(GameState.rng_for("terrain"), GameState.floor_number, false)
-	_map.biome = String(GameState.site.get("tileset", "dungeon"))
+	var cave_floor := int(GameState.site.get("floor", 1))
+	if _dungeon_floors.has(cave_floor):
+		var saved_floor: Dictionary = _dungeon_floors[cave_floor]
+		_map = saved_floor["map"]
+		_encounter_rng = saved_floor["encounter_rng"]
+		_battle_rng = saved_floor["battle_rng"]
+	else:
+		_encounter_rng = GameState.rng_for("encounter")
+		_battle_rng = GameState.rng_for("battle")
+		_map = DungeonGenerator.generate(GameState.rng_for("terrain"), GameState.floor_number, false)
+		_map.biome = String(GameState.site.get("tileset", "dungeon"))
+		_dungeon_floors[cave_floor] = {
+			"map": _map,
+			"encounter_rng": _encounter_rng,
+			"battle_rng": _battle_rng,
+		}
 	_door_warned = false
-	explore.setup(_map, _encounter_rng, _leader_job())
+	var arrival := _map.down_arrival_pos if arrive_from_below else Vector2i(-1, -1)
+	explore.setup(_map, _encounter_rng, _leader_job(), arrival)
 	Sound.play_bgm("cave")
 	_fade_to(Mode.EXPLORE)
 
@@ -1189,17 +767,35 @@ func _on_site_entered(
 	if from.x >= 0 and from != pos:
 		_site_return_pos = from
 	GameState.world_pos = pos
-	# **物語がいちばん先。** 拍 → イベント → 町や洞の中身、の順に出す。
-	# 逆にすると、町へ入ったあとに拍が始まって場面が入れ替わる。
+	# 引き受けた物語の工程へ戻る。説明や選択肢へは巻き戻さない。
+	if StoryOperationScript.is_at(GameState.story_task, pos):
+		GameState.world_pos = pos
+		_enter_story_task_site()
+		return
+
+	# **物語がいちばん先。** 拍 → 実操作 → 町や洞の中身、の順に出す。
 	var beat := GameState.story_beat_at(pos)
 	if not beat.is_empty():
 		GameState.stand_on_world(pos)
 		_open_story(beat)
 		return
 
+	# 一度引き受けたイベントは選択肢へ戻さない。町／洞へ入り直すか、
+	# 戦闘から退いたなら同じ敵へ再挑戦する。
+	if EventOperationScript.is_at(GameState.event_task, pos):
+		GameState.world_pos = pos
+		if String(GameState.event_task.get("kind", "")) == EventOperationScript.FIGHT:
+			_pending_fight_grade = int(GameState.event_task.get("fight_grade", 1))
+			_continue_pending_flow()
+		else:
+			_enter_event_task_site()
+		return
+
 	# 拠点地にイベントが重なっていれば、中へ入る前にそれを出す。
 	# 済んだら踏み直しで町や洞へ入れる。
-	if GameState.world != null and not GameState.world.event_at(pos).is_empty() 			and not GameState.event_done.has(pos):
+	if GameState.world != null and not GameState.world.event_at(pos).is_empty() \
+			and not GameState.event_done.has(pos) and GameState.event_task.is_empty() \
+			and GameState.story_task.is_empty():
 		GameState.stand_on_world(pos)
 		_open_event(pos)
 		return
@@ -1210,6 +806,7 @@ func _on_site_entered(
 			_open_town()
 		"cave":
 			_guardian_beaten = false
+			_dungeon_floors.clear()
 			var seal := GameState.seal_here()
 			if not seal.is_empty() and not bool(seal.get("broken", false)):
 				hud.toast("%s の けはい。%s" % [
@@ -1217,12 +814,6 @@ func _on_site_entered(
 				])
 			_enter_floor()
 		"castle":
-			# 城に結ばれた拍（finale / epilogue）は主戦より先に出す。
-			var castle_beat := GameState.story_beat_at(pos)
-			if not castle_beat.is_empty():
-				GameState.stand_on_world(pos)
-				_open_story(castle_beat)
-				return
 			# 終点。**封が残っていると扉は開かない。**
 			# ここで通してしまうと、洞へ寄る理由が宝箱だけに戻る。
 			var left := GameState.seals_remaining()
@@ -1305,7 +896,11 @@ var _event_skin_pos := Vector2i(-1, -1)
 
 func _on_event_text(text: String) -> void:
 	var reply := LocalAI.extract_json(text)
-	if reply.is_empty() or not GameState.world.events.has(_event_skin_pos):
+	if reply.is_empty():
+		# この1件は既定文のままにし、残りのイベント候補は続けて頼む。
+		_ask_event_text()
+		return
+	if not GameState.world.events.has(_event_skin_pos):
 		return
 	var before: Dictionary = GameState.world.events[_event_skin_pos]
 	GameState.world.events[_event_skin_pos] = WorldEventCatalog.apply_ai_skin(before, reply)
@@ -1333,12 +928,18 @@ func _on_quest_text(text: String) -> void:
 func _open_town() -> void:
 	Sound.play("confirm")
 	_dev_last_talk_line = ""
+	_dev_talked_roles = {}
+	var town_index := int(GameState.site.get("index", 0))
 	_town = TownGenerator.generate(
 		GameState.rng_for("town"), GameState.floor_number,
 		String(GameState.site.get("tileset", "dungeon")),
-		int(GameState.site.get("index", 0)),
+		town_index,
 		posmod(GameState.run_seed, TownProfile.cycle_size())
 	)
+	if GameState.town_actions_done.has(
+		TownInteractionScript.supply_chest_key(town_index, _town)
+	):
+		_town.clear_supply_chest()
 	_map = null
 	_encounter_rng = GameState.rng_for("encounter")
 	explore.setup(_town, _encounter_rng, _leader_job())
@@ -1349,28 +950,89 @@ func _open_town() -> void:
 	_fade_to(Mode.EXPLORE)
 
 
-## 町の人の一言。
-##
-## 物知りだけは**封の在り処**を教える。これが町に寄る理由になる
-## （それ以外の役は世間話のままにする。全員が案内役だと町が掲示板になる）。
-func _on_talked(line: String) -> void:
+## 町の人との会話。地元の一言と、いまのランに基づく実用情報を2行へ分ける。
+## toastで流さず、決定するまで残る会話窓で読ませる。
+func _on_talked(person: Dictionary) -> void:
 	_dev_talks += 1
-	_dev_last_talk_line = line
+	if String(GameState.event_task.get("kind", "")) == EventOperationScript.TOWN_CONTACT:
+		_complete_event_task()
+		return
+	var town_index := int(GameState.site.get("index", 0))
+	var talk_data: Dictionary = TownInteractionScript.talk(
+		GameState, _town, town_index, person
+	)
+	var lines: Array[String] = []
+	for raw_line in talk_data.get("lines", []):
+		var line := String(raw_line).strip_edges()
+		if line != "":
+			lines.append(line)
+	var role := String(talk_data.get("role", ""))
+	if role != "":
+		_dev_talked_roles[role] = true
+	_dev_last_talk_line = " ".join(lines)
 	Sound.play("confirm")
-	hud.toast(line)
+	_open_town_talk(String(talk_data.get("speaker", Terms.TOWN_PERSON)), lines)
 
 
-## 物知りの台詞を、まだ解けていない封の手掛かりに差し替える。
-func _rumor() -> String:
-	if GameState.world == null:
-		return ""
-	for s in GameState.world.seals:
-		if bool(s.get("broken", false)):
-			continue
-		var at: Vector2i = s.get("pos", Vector2i(-1, -1))
-		var place := GameState.world.biome_name_at(at.x, at.y)
-		return "%s は %s の 洞に あるという。" % [String(s.get("name", "封")), place]
-	return "封は すべて やぶれた。あとは 城だけだ。"
+## 中央の仕事場。町の生業ごとに別の準備が一度だけできる。
+func _on_town_facility() -> void:
+	if _town == null:
+		return
+	_dev_facility_visits += 1
+	var town_index := int(GameState.site.get("index", 0))
+	var result_data: Dictionary = TownInteractionScript.use_facility(
+		GameState, _town, town_index,
+		GameState.rng_for("town_facility:%d" % town_index)
+	)
+	if bool(result_data.get("changed", false)):
+		_dev_facility_uses += 1
+		Sound.play("learn")
+	else:
+		Sound.play("confirm")
+	# 仕事場そのものが利用済みでも、調査という実入力と物語固有の地図効果は成立する。
+	# 「先に町へ寄ったせいで物語が詰む」経路を作らない。
+	if String(GameState.story_task.get("kind", "")) == StoryOperationScript.TOWN_ACTION:
+		_complete_story_task()
+	explore.queue_redraw()
+	var lines: Array[String] = []
+	for raw_line in result_data.get("lines", []):
+		lines.append(String(raw_line))
+	_open_town_talk(String(result_data.get("speaker", Terms.TOWN_WORKPLACE)), lines)
+
+
+## 町に一つだけある旅人用の物資箱。案内札は反応せず、宝箱の絵だけが開く。
+func _on_town_chest() -> void:
+	if _town == null:
+		return
+	var town_index := int(GameState.site.get("index", 0))
+	var result_data: Dictionary = TownInteractionScript.open_supply_chest(
+		GameState, _town, town_index,
+		GameState.rng_for("town_supply_chest:%d" % town_index)
+	)
+	if bool(result_data.get("changed", false)):
+		_dev_town_chests += 1
+		Sound.play("chest")
+	else:
+		Sound.play("confirm")
+	var lines: Array[String] = []
+	for raw_line in result_data.get("lines", []):
+		lines.append(String(raw_line))
+	_open_town_talk(String(result_data.get("speaker", Terms.TOWN_SUPPLY_CHEST)), lines)
+
+
+func _open_town_talk(speaker: String, lines: Array[String]) -> void:
+	_town_talk_open = true
+	# 会話へ切り替えた同じフレームでも、下段に現在の仲間を残す。
+	# 町入場の暗転完了を待つ実プレイでは更新済みだが、素早い入力や撮影では
+	# 空のHUDが一瞬出ていた。会話窓を開く側で状態を確定させる。
+	_refresh_hud()
+	event_view.open_talk(speaker, lines, GameState.floor_number)
+	_set_mode(Mode.EVENT)
+
+
+func _close_town_talk() -> void:
+	_town_talk_open = false
+	_set_mode(Mode.EXPLORE)
 
 
 ## 宿。**全回復と毒の治療はここだけ**。出店は購入と補給に専念させる。
@@ -1413,6 +1075,7 @@ func _leave_site() -> void:
 	)
 	_site_return_pos = Vector2i(-1, -1)
 	GameState.site = {}
+	_dungeon_floors.clear()
 	_enter_world()
 	explore.suppress_site_once(site_pos)
 
@@ -1527,6 +1190,7 @@ func _flash_into_battle() -> void:
 	# シェーダが使えない環境では素の暗転へ落ちる。**切り替えは必ず起きる。**
 	if _curtain == null:
 		_set_mode(Mode.BATTLE)
+		battle.reveal_opening()
 		return
 	_fade_tween = create_tween()
 	_fade_tween.tween_property(_curtain, "color:a", 1.0, FADE_TIME)
@@ -1542,7 +1206,8 @@ func _flash_into_battle() -> void:
 ## 探索中でなければ聞かない ―― 店の中や戦闘の直後に窓が割り込むと、
 ## いま何をしていたか分からなくなる。手持ちには入っているので失われない。
 func _on_gear_gained(id: String) -> void:
-	if _mode != Mode.EXPLORE:
+	if _mode != Mode.EXPLORE or _event_resolution_active \
+			or not GameState.event_task.is_empty():
 		# **取りこぼさない。** 歩ける状態へ戻ったときに聞く。
 		_pending_gear.append(id)
 		return
@@ -1559,13 +1224,75 @@ func _on_gear_offer_chosen(member_index: int) -> void:
 			var member: PartyMember = members[member_index]
 			# **断っても拾ったものは失わない**ので、着けるときだけ手持ちから抜く。
 			if GameState.equip_gear(member, gear_offer.gear_id):
-				hud.toast("%sは %s を そうびした" % [
+				hud.toast("%sは%sを装備した" % [
 					member.name,
 					Database.gear(gear_offer.gear_id).get("name", gear_offer.gear_id),
 				])
 	gear_offer.close()
-	_set_mode(Mode.EXPLORE)
 	_refresh_hud()
+	_continue_pending_flow()
+
+
+## 結果のあとに残る処理を、装備確認→戦闘→探索の順で1つずつ進める。
+##
+## 装備入手 signal はイベント窓の最中に鳴る。以前は一度 EXPLORE に戻したため、
+## 装備窓を開く deferred call と戦闘開始が競争し、遅い装備窓が戦闘を隠した。
+func _continue_pending_flow() -> void:
+	if not _pending_gear.is_empty() and not GameState.active_party().is_empty():
+		var next_gear: String = _pending_gear.pop_front()
+		gear_offer.open(next_gear, GameState.active_party())
+		_set_mode(Mode.GEAR)
+		return
+	if _pending_boss_after_beat:
+		_pending_boss_after_beat = false
+		_on_boss_reached()
+		return
+	if _pending_fight_grade > 0:
+		var grade := _pending_fight_grade
+		_pending_fight_grade = 0
+		_on_event_encounter(grade)
+		return
+	# 欲が呼んだ格上（R-3）。**取った物を確かめてから来る。**
+	if _pending_greed_elite != "":
+		var kind_id := _pending_greed_elite
+		_pending_greed_elite = ""
+		_begin_greed_battle(kind_id)
+		return
+	# 町／洞のイベントは選択窓で終わらせず、実際の地図へ入ってから
+	# 人物との接触または探索で完了させる。
+	if not GameState.event_task.is_empty() and GameState.site.is_empty():
+		var task_kind := String(GameState.event_task.get("kind", ""))
+		if task_kind in [
+			EventOperationScript.TOWN_CONTACT, EventOperationScript.CAVE_SEARCH
+		]:
+			_enter_event_task_site()
+			return
+	_set_mode(Mode.EXPLORE)
+	_show_event_task_objective()
+
+
+func _enter_event_task_site() -> void:
+	var task: Dictionary = GameState.event_task
+	var at := EventOperationScript.position(task)
+	var entered := GameState.enter_site(at)
+	match String(entered.get("kind", "")):
+		"town":
+			_open_town()
+		"cave":
+			_guardian_beaten = false
+			_dungeon_floors.clear()
+			_enter_floor()
+			if dev.event_cave_gate and _map != null:
+				# 状態を直接完了させず、階段へ入る最後の一歩はAutoPlayの実キーで踏む。
+				explore.setup(
+					_map, _encounter_rng, _leader_job(), _map.down_arrival_pos
+				)
+				dev.event_cave_gate = false
+		_:
+			# 地図生成の不整合でも詰ませない。現場へ戻して行動を続けられる。
+			GameState.site = {}
+			_set_mode(Mode.EXPLORE)
+	_show_event_task_objective.call_deferred()
 
 
 ## 飛んでいる暗転を捨てて幕を上げる。
@@ -1603,7 +1330,9 @@ func _apply_mode(mode: Mode) -> void:
 	# メニュー中も探索の絵は出したままにする（メニューを半透明にしてあるので、
 	# 下にダンジョンが見える）。HUD は二重になるので隠す。
 	explore.visible = mode == Mode.EXPLORE or mode == Mode.MENU
-	hud.visible = mode == Mode.EXPLORE
+	hud.visible = mode == Mode.EXPLORE or (
+		mode == Mode.EVENT and event_view.is_talk()
+	)
 	battle.visible = mode == Mode.BATTLE
 	result.visible = mode == Mode.RESULT
 	# イベントは場面の上に開く窓。下の絵は残す。
@@ -1621,11 +1350,14 @@ func _apply_mode(mode: Mode) -> void:
 	# 戦いを離れたら監査用の控えを外す（P-5）。**戦闘中だけの値**。
 	if mode != Mode.BATTLE:
 		_battle_place = ""
-	explore.set_active(mode == Mode.EXPLORE and not _transition_input_locked)
+	explore.set_active(
+		mode == Mode.EXPLORE
+		and not _transition_input_locked
+		and _pending_gear.is_empty()
+	)
 	# 保留していた装備をここで聞く（C-9）。歩ける状態になったので。
 	if mode == Mode.EXPLORE and not _pending_gear.is_empty():
-		var next_gear: String = _pending_gear.pop_front()
-		_on_gear_gained.call_deferred(next_gear)
+		_continue_pending_flow.call_deferred()
 	if mode != Mode.TITLE:
 		title.close()
 	if mode != Mode.PROLOGUE:
@@ -1646,10 +1378,15 @@ func _apply_mode(mode: Mode) -> void:
 		_refresh_hud()
 
 
-## 物語の拍を開く。
+## 物語の拍を始める。三択だけは選択窓、それ以外は地図上の実操作へ直結する。
 func _open_story(beat: Dictionary) -> void:
+	if String(beat.get("phase", "")) != "choice":
+		_begin_story_operation(beat, {})
+		return
 	_story_beat = beat
-	event_view.open_story(beat, GameState.world.story, GameState.floor_number)
+	if not event_view.open_story(beat, GameState.world.story, GameState.floor_number):
+		_story_beat = {}
+		return
 	event_view.set_blocked([])
 	Sound.play_bgm("story")
 	Sound.play("story_open")
@@ -1659,30 +1396,125 @@ func _open_story(beat: Dictionary) -> void:
 var _story_beat: Dictionary = {}
 
 
-## 拍で手を選んだ（選択の無い拍では空の手が来る）。
+## 物語の手を選んだ。ここでは報酬も進行も確定せず、現地の工程へ渡す。
 func _on_story_choice(choice: Dictionary) -> void:
 	var id := String(choice.get("id", ""))
-	if id != "":
-		# 選んだ手は世界が覚える。終幕でこれを回収する。
-		GameState.world.story_choice = id
-		Sound.play("story_choice")
-		hud.toast(String(choice.get("label", "")))
-	GameState.advance_story()
+	if id == "":
+		push_error("物語の選択肢に id が無い")
+		return
+	# 選んだ手は世界が覚える。終幕でこれを回収する。
+	GameState.world.story_choice = id
+	Sound.play("story_choice")
+	var beat := _story_beat
 	_story_beat = {}
-	# 拍が済んだら、その場所の続き（イベント／町／洞）へそのまま進む。
-	var at := GameState.world_pos
+	_begin_story_operation(beat, choice)
+
+
+## 一拍を実行中の目的へ変え、その場所の地図へ入る。
+func _begin_story_operation(beat: Dictionary, choice: Dictionary) -> void:
+	var task := StoryOperationScript.build(
+		GameState.world.story, beat, choice, GameState.world_pos
+	)
+	if not StoryOperationScript.valid(task):
+		push_error("物語の実行工程が不正: %s" % String(beat.get("id", "")))
+		return
+	GameState.story_task = task
+	_story_beat = {}
 	_play_field_bgm()
 	_set_mode(Mode.EXPLORE)
-	if not _event_at(at).is_empty():
-		_open_event(at)
-	elif GameState.world.site_at(at).get("kind", "") != "":
-		_on_site_entered(at)
+	_enter_story_task_site()
+
+
+## 実行中の物語目的が結びついた町・洞・城へ入る。
+func _enter_story_task_site() -> void:
+	var task: Dictionary = GameState.story_task
+	if not StoryOperationScript.valid(task):
+		return
+	var at := StoryOperationScript.position(task)
+	var entered := GameState.enter_site(at)
+	match String(task.get("kind", "")):
+		StoryOperationScript.TOWN_ACTION:
+			if String(entered.get("kind", "")) == "town":
+				_open_town()
+		StoryOperationScript.CAVE_SEARCH:
+			if String(entered.get("kind", "")) == "cave":
+				_guardian_beaten = false
+				_dungeon_floors.clear()
+				_enter_floor()
+		StoryOperationScript.BOSS:
+			# 物語の決戦も通常の城門条件を迂回しない。
+			var left := GameState.seals_remaining()
+			if left > 0:
+				Sound.play("cancel")
+				hud.toast("とびらは 固く 閉ざされている。封が あと %d つ。" % left)
+				GameState.world_pos = (
+					_site_return_pos
+					if _site_return_pos.x >= 0
+					else GameState.step_outside_site(at)
+				)
+				_site_return_pos = Vector2i(-1, -1)
+				GameState.site = {}
+				_enter_world()
+				explore.suppress_site_once(at)
+				return
+			hud.toast("城の門が ひらいた。ここから先は 戻れない。")
+			_battle_opening_context.append(String(task.get("cue", "")))
+			_on_boss_reached()
+		_:
+			push_error("画面で実行できない物語工程: %s" % task.get("kind", ""))
+	_show_story_task_objective.call_deferred()
+
+
+## 町／洞でプレイヤーが実際に目的を果たしたときだけ、一拍を進める。
+func _complete_story_task(first_line: String = "") -> void:
+	if not StoryOperationScript.valid(GameState.story_task):
+		return
+	var task: Dictionary = GameState.story_task.duplicate(true)
+	var lines: Array[String] = EventEffects.grant(
+		GameState, task.get("runtime_effects", []), GameState.floor_number, _battle_rng
+	)
+	GameState.story_task = {}
+	GameState.advance_story()
+	var result := String(task.get("result", "")).strip_edges()
+	if result != "":
+		lines.push_front(result)
+	if first_line != "":
+		lines.push_front(first_line)
+	if not lines.is_empty():
+		hud.toast("\n".join(lines))
+	_refresh_hud()
+
+
+func _show_story_task_objective() -> void:
+	var objective := StoryOperationScript.objective(GameState.story_task)
+	if objective != "":
+		hud.toast(objective)
+	_refresh_hud()
 
 
 ## 街道のイベントを踏んだ。
 func _on_event_reached(pos: Vector2i) -> void:
 	GameState.world_pos = pos
 	GameState.stand_on_world(pos)
+	if not GameState.story_task.is_empty():
+		_set_mode(Mode.EXPLORE)
+		_show_story_task_objective()
+		return
+	# 引き受け済みなら、同じ場所で再び選択肢を出さない。
+	if EventOperationScript.is_at(GameState.event_task, pos):
+		if String(GameState.event_task.get("kind", "")) == EventOperationScript.FIGHT:
+			_pending_fight_grade = int(GameState.event_task.get("fight_grade", 1))
+			_continue_pending_flow()
+		else:
+			_set_mode(Mode.EXPLORE)
+			_show_event_task_objective()
+		return
+	if not GameState.event_task.is_empty():
+		# 同時に二件を引き受けて後の選択で上書きしない。先の目的を終えれば、
+		# この出来事は未完のまま残り、踏み直して選べる。
+		_set_mode(Mode.EXPLORE)
+		_show_event_task_objective()
+		return
 	_open_event(pos)
 
 
@@ -1701,6 +1533,12 @@ func _event_at(at: Vector2i) -> Dictionary:
 
 ## イベントを開く。**払えない手は選べないようにしてから出す。**
 func _open_event(at: Vector2i) -> void:
+	if not GameState.story_task.is_empty():
+		_show_story_task_objective()
+		return
+	if not GameState.event_task.is_empty():
+		_show_event_task_objective()
+		return
 	var found := _event_at(at)
 	if found.is_empty():
 		return
@@ -1712,31 +1550,31 @@ func _open_event(at: Vector2i) -> void:
 
 
 ## いま選んでいる手が払えるか。EventView は GameState を知らないので、ここで調べる。
-func _blocked_for(found: Dictionary) -> Array[String]:
+func _blocked_for(found: Dictionary) -> Dictionary:
 	var choices: Array = found.get("choices", [])
-	if choices.is_empty():
-		return []
-	# 先頭の手だけを見るのではなく、全部払えないときだけ止める。
-	# （1 つでも選べるなら画面は開いてよい）
-	var any_ok := false
-	for c in choices:
-		if EventEffects.unpayable(GameState, c.get("costs", []), GameState.floor_number).is_empty():
-			any_ok = true
-			break
-	if any_ok:
-		return []
-	return EventEffects.unpayable(
-		GameState, choices[0].get("costs", []), GameState.floor_number
-	)
+	var blocked := {}
+	for i in choices.size():
+		var reasons := EventEffects.unpayable(
+			GameState, choices[i].get("costs", []), GameState.floor_number
+		)
+		if not reasons.is_empty():
+			blocked[i] = reasons
+	return blocked
 
 
 var _event_pos := Vector2i(-1, -1)
 
 
-## 手を選んだ。払って、得て、要るなら戦う。
+## 手を選んだ。代償を払い、**実行する目的**を引き受ける。
+##
+## 報酬はここでは渡さない。街道を進む／町で話す／洞を調べる／戦いに勝つ、の
+## どれかを実入力で終えたときだけ `_complete_event_task()` が渡す。
 func _on_event_choice(choice: Dictionary) -> void:
-	if EventEffects.choice_completes_event(choice):
-		GameState.event_done[_event_pos] = true
+	var instance := _event_at(_event_pos)
+	var cost_fight_grade := EventEffects.fight_grade(choice.get("costs", []))
+	var visible_elite_challenge := (
+		bool(instance.get("visible_elite", false)) and cost_fight_grade >= 2
+	)
 	var danger := GameState.floor_number
 	var lines: Array[String] = []
 	lines.append_array(EventEffects.pay(GameState, choice.get("costs", []), danger))
@@ -1754,32 +1592,30 @@ func _on_event_choice(choice: Dictionary) -> void:
 	elif not choice.get("risks", []).is_empty():
 		lines.append("あぶないところは 起きなかった。")
 
-	lines.append_array(
-		EventEffects.grant(GameState, choice.get("rewards", []), danger, _battle_rng)
-	)
+	var fight_grade := maxi(cost_fight_grade, EventEffects.fight_grade(fired))
+	if visible_elite_challenge:
+		# 戦利品は勝利後に三択で渡す。戦うと決めた時点では増やさない。
+		_pending_elite_rule_id = String(instance.get("elite_rule_id", ""))
+		_pending_elite_reward = true
+	elif bool(choice.get("defer", false)):
+		# 明示的な見送りだけは目的を作らず、再訪できる。
+		lines.append(Terms.EVENT_DEFER_OUTCOME)
+	else:
+		GameState.event_task = EventOperationScript.build(
+			instance, choice, fired, _event_pos, danger
+		)
+		lines.append(Terms.EVENT_TASK_STARTED %
+			EventOperationScript.objective(GameState.event_task))
 
-	# 前に同じ傾向を選んでいたら一言添える（世界が覚えている感じを作る）。
-	var echoed := _remember_choice()
-	if echoed != "":
-		lines.append(echoed)
-	if GameState.event_shop_bonus > 0:
-		pass  # 町の品数は ShopView が読む
-	_refresh_hud()
-
-	# 戦いを含む手は、そのまま戦闘へ入る（払ったあとに逃げられない）。
-	var fight_grade := maxi(
-		EventEffects.fight_grade(choice.get("costs", [])),
-		EventEffects.fight_grade(fired)
-	)
+	# 戦いを含む手は開始説明を読んだあとに戦闘へ入る。
 	if fight_grade > 0:
 		lines.append("身がまえる 間もなく、敵が 来た。")
 		_pending_fight_grade = fight_grade
-	if bool(choice.get("defer", false)):
-		lines.append(Terms.EVENT_DEFER_OUTCOME)
 	if lines.is_empty():
 		# この行へ来た選択肢は品質 Gate の漏れ。無言で成功に見せない。
 		lines.append(Terms.EVENT_UNRESOLVED)
-	# **結果は同じ窓で読ませる。** toast だと流れて、選んだ意味が確かめられない。
+	_refresh_hud()
+	# これは結果ではなく開始確認。実行工程を終えるまでイベントは済みにしない。
 	_story_beat = {}
 	event_view.open_outcome(String(choice.get("label", "")), lines, danger)
 	_outcome_open = true
@@ -1793,10 +1629,59 @@ var _pending_fight_grade := 0
 var _outcome_open := false
 
 
+func _elite_reward_choices() -> Array:
+	return [
+		{
+			"id": "gear", "label": Terms.ELITE_REWARD_GEAR,
+			"costs": ["none"], "risks": [], "rewards": ["equipment"],
+		},
+		{
+			"id": "supply", "label": Terms.ELITE_REWARD_SUPPLY,
+			"costs": ["none"], "risks": [], "rewards": ["item", "heal"],
+		},
+		{
+			"id": "route", "label": Terms.ELITE_REWARD_ROUTE,
+			"costs": ["none"], "risks": [], "rewards": ["map_reveal", "route_safe"],
+		},
+	]
+
+
+func _open_elite_reward() -> void:
+	_elite_reward_open = true
+	event_view.open({
+		"elite_reward": true,
+		"skin": {
+			"title": Terms.ELITE_REWARD_TITLE, "actor": "",
+			"cause": Terms.ELITE_REWARD_CAUSE, "flavor": "",
+		},
+		"choices": _elite_reward_choices(),
+	}, GameState.floor_number)
+	event_view.set_blocked([])
+	_set_mode(Mode.EVENT)
+
+
+func _on_elite_reward_choice(choice: Dictionary) -> void:
+	_elite_reward_open = false
+	var picked: Dictionary = choice if not choice.is_empty() else _elite_reward_choices()[0]
+	var lines: Array[String] = EventEffects.grant(
+		GameState, picked.get("rewards", []), GameState.floor_number, _battle_rng
+	)
+	if lines.is_empty():
+		lines.append(Terms.EVENT_UNRESOLVED)
+	_refresh_hud()
+	_story_beat = {}
+	event_view.open_outcome(String(picked.get("label", "")), lines, GameState.floor_number)
+	_outcome_open = true
+	_set_mode(Mode.EVENT)
+
+
 ## 選んだ手の傾向を覚え、前に同じ傾向を選んでいれば一言返す。
 func _remember_choice() -> String:
 	var event := _event_at(_event_pos)
-	var tags: Array = event.get("tags", [])
+	return _remember_event_tags(event.get("tags", []))
+
+
+func _remember_event_tags(tags: Array) -> String:
 	var echoed := ""
 	for raw in tags:
 		var tag := String(raw)
@@ -1806,18 +1691,83 @@ func _remember_choice() -> String:
 	return echoed
 
 
+## 行動工程を終えた。ここが任意イベント報酬の唯一の配布点。
+func _complete_event_task(done_line: String = "") -> void:
+	if not EventOperationScript.valid(GameState.event_task):
+		return
+	var task: Dictionary = GameState.event_task.duplicate(true)
+	var at := EventOperationScript.position(task)
+	var current_world_pos := GameState.world_pos
+	var lines: Array[String] = []
+	lines.append(done_line if done_line != "" else
+		EventOperationScript.completion_line(String(task.get("kind", ""))))
+
+	# 生物相の変更などは、3歩進んだ到着地点ではなく出来事が起きた地点へ返す。
+	GameState.world_pos = at
+	_event_resolution_active = true
+	lines.append_array(EventEffects.grant(
+		GameState,
+		task.get("rewards", []),
+		int(task.get("danger", GameState.floor_number)),
+		_battle_rng
+	))
+	_event_resolution_active = false
+	GameState.world_pos = current_world_pos
+
+	var echoed := _remember_event_tags(task.get("tags", []))
+	if echoed != "":
+		lines.append(echoed)
+	GameState.event_done[at] = true
+	GameState.event_task = {}
+	_event_pos = at
+	_event_task_battle_active = false
+	_refresh_hud()
+	Sound.play("learn")
+	event_view.open_outcome(
+		String(task.get("choice_label", task.get("event_title", ""))),
+		lines,
+		int(task.get("danger", GameState.floor_number))
+	)
+	_outcome_open = true
+	_set_mode(Mode.EVENT)
+
+
+func _advance_event_task_travel() -> void:
+	if String(GameState.event_task.get("kind", "")) != EventOperationScript.TRAVEL:
+		return
+	var task: Dictionary = GameState.event_task.duplicate(true)
+	task["progress"] = mini(
+		int(task.get("progress", 0)) + 1, int(task.get("goal", 1))
+	)
+	task["ready"] = int(task["progress"]) >= int(task.get("goal", 1))
+	GameState.event_task = task
+	_refresh_hud()
+	if bool(task.get("ready", false)):
+		_complete_ready_event_task.call_deferred()
+	else:
+		_show_event_task_objective()
+
+
+func _complete_ready_event_task() -> void:
+	if (
+		_mode == Mode.EXPLORE
+		and bool(GameState.event_task.get("ready", false))
+	):
+		_complete_event_task()
+
+
+func _show_event_task_objective() -> void:
+	if GameState.event_task.is_empty():
+		return
+	var objective := EventOperationScript.objective(GameState.event_task)
+	if objective != "":
+		hud.toast(Terms.EVENT_TASK_STARTED % objective)
+
+
 ## 結果の窓を閉じた。戦いが要るならここで入る。
 func _close_outcome() -> void:
 	_outcome_open = false
-	_set_mode(Mode.EXPLORE)
-	if _pending_boss_after_beat:
-		_pending_boss_after_beat = false
-		_on_boss_reached()
-		return
-	if _pending_fight_grade > 0:
-		var grade := _pending_fight_grade
-		_pending_fight_grade = 0
-		_on_event_encounter(grade)
+	_continue_pending_flow()
 
 
 ## 見送った。**必ず立ち去れる**（踏み直せばまた開く）。
@@ -1833,6 +1783,10 @@ func _on_poison_tick() -> void:
 		hurt += m.step_poison()
 	if hurt > 0:
 		_refresh_hud()
+	# 世界の街道を実際に歩いたぶんだけ進める。町や洞の足踏みは護送・迂回の
+	# 進行に数えない。
+	if _town == null and _map == null:
+		_advance_event_task_travel()
 
 
 ## 主の間が隣に来た。踏むと戻れないので、踏む前に知らせる。
@@ -1893,7 +1847,7 @@ func _escape_site() -> void:
 ## 二度始められてしまう）。
 func _suspend_run() -> void:
 	if not GameState.save_suspend():
-		hud.toast("いまは ちゅうだんできない。")
+		hud.toast("今は中断できない。")
 		_set_mode(Mode.EXPLORE)
 		return
 	Sound.play("confirm")
@@ -1947,8 +1901,12 @@ func _abandon_run() -> void:
 
 
 func _refresh_hud() -> void:
+	var objective := StoryOperationScript.objective(GameState.story_task)
+	if objective == "":
+		objective = EventOperationScript.objective(GameState.event_task)
 	hud.refresh(
-		GameState.active_party(), GameState.floor_number, _place_label()
+		GameState.active_party(), GameState.floor_number, _place_label(),
+		objective
 	)
 
 
@@ -1993,13 +1951,18 @@ func _on_encounter() -> void:
 func _on_event_encounter(grade: int) -> void:
 	var foes := (
 		Encounter.build_elite(
-			_battle_rng, GameState.floor_number, 100, GameState.biome_here()
+			_battle_rng, GameState.floor_number, 100, GameState.biome_here(),
+			_pending_elite_rule_id
 		)
 		if grade >= 2 else
 		Encounter.build(
 			_battle_rng, GameState.floor_number, 100, GameState.biome_here()
 		)
 	)
+	_event_task_battle_active = (
+		String(GameState.event_task.get("kind", "")) == EventOperationScript.FIGHT
+	)
+	_pending_elite_rule_id = ""
 	_begin_battle(foes, false)
 
 
@@ -2043,13 +2006,29 @@ func _begin_battle(foes: Array[Battler], is_boss: bool) -> void:
 	)
 	Sound.play("encounter")
 	Sound.play_bgm("boss" if is_boss else "battle")
-	battle.start(system, members)
+	# **型付き配列は三項演算子で渡さない。** `x if c else [] as Array[String]` は
+	# 実行時に素の `Array` になり、`Array[String]` を受ける引数で必ず弾かれる
+	# （通常遭遇も含めて**戦闘が 1 回も始まらなくなっていた**）。
+	# 受け取る型の変数を先に作り、そこへ入れてから渡す。
+	var opening_lines: Array[String] = []
+	if is_boss:
+		opening_lines.assign(_battle_opening_context)
+	battle.start(system, members, opening_lines)
+	_battle_opening_context.clear()
 	_flash_into_battle()
 
 
 func _on_battle_finished(victory: bool) -> void:
 	if victory and _boss_battle:
 		# 主を倒した。ランが「生還」で終わる唯一の経路。
+		if String(GameState.story_task.get("kind", "")) == StoryOperationScript.BOSS:
+			GameState.story_task = {}
+			GameState.advance_story()
+			# 後日談は別の「次へ」画面にせず、この直後の戦記で選択結果と一緒に回収する。
+			var epilogue := GameState.world.next_beat()
+			if String(epilogue.get("operation", {}).get("kind", "")) \
+					== StoryOperationScript.CHRONICLE:
+				GameState.advance_story()
 		_boss_battle = false
 		Sound.play("victory")
 		_finish_run(true)
@@ -2067,9 +2046,32 @@ func _on_battle_finished(victory: bool) -> void:
 	if victory:
 		_guardian_battle = false
 		_play_field_bgm()
+		if _pending_elite_reward:
+			_pending_elite_reward = false
+			if battle.was_escaped():
+				# 逃げても印は消えない。脇道へ戻れば同じ型へ再挑戦できる。
+				_set_mode(Mode.EXPLORE)
+			else:
+				GameState.event_done[_event_pos] = true
+				_open_elite_reward()
+			return
+		if _event_task_battle_active:
+			_event_task_battle_active = false
+			if battle.was_escaped():
+				# 代償は支払い済みだが報酬はまだ。現場へ戻れば同じ戦いへ挑める。
+				_set_mode(Mode.EXPLORE)
+				hud.toast(Terms.EVENT_TASK_RETRY)
+			else:
+				_complete_event_task()
+			return
 		_set_mode(Mode.EXPLORE)
+		if bool(GameState.event_task.get("ready", false)):
+			_complete_ready_event_task.call_deferred()
 		return
 	_guardian_battle = false
+	_event_task_battle_active = false
+	# 敗北を命の綱でしのいでも、勝利報酬は渡さない。イベントは未完のまま残る。
+	_pending_elite_reward = false
 	# 全滅。**「命の綱」があれば 1 度だけ肩代わりする。**
 	# 恒久強化が能力値に触れないという前提を崩さずに、拠点の投資を
 	# 「勝てるようになる」ではなく「もう一度立てる」へ効かせる軸。
@@ -2156,6 +2158,15 @@ func _transition_to_result(defeat: bool) -> void:
 ## 洞の階段。いちばん深い階まで来たら、次は下ではなく外へ出る。
 func _on_descend() -> void:
 	Sound.play("stairs")
+	if String(GameState.story_task.get("kind", "")) == StoryOperationScript.CAVE_SEARCH:
+		# 目的地へ着いたことを先に確定し、次に踏んだとき通常の階段として使う。
+		_complete_story_task()
+		return
+	if String(GameState.event_task.get("kind", "")) == EventOperationScript.CAVE_SEARCH:
+		# 階段へ辿り着いたこと自体が探索の実行証拠。結果を読んでから、もう一度
+		# 階段を踏めば通常どおり降りられる。
+		_complete_event_task()
+		return
 	if int(GameState.site.get("floor", 1)) >= GameState.cave_depth():
 		# 洞の底。封があるなら、まず番人と戦う。
 		var seal := GameState.seal_here()
@@ -2185,6 +2196,15 @@ func _on_descend() -> void:
 	_enter_floor()
 
 
+## 洞の上り階段。2階以降は直前の階へ、1階では入場前の世界位置へ戻る。
+func _on_ascend() -> void:
+	Sound.play("stairs")
+	if GameState.ascend():
+		_enter_floor(true)
+	else:
+		_leave_site()
+
+
 ## 店。町なら町の在庫（世界が覚える）、洞の中ならその階の在庫。
 func _on_shop_entered() -> void:
 	if GameState.run_contract_enabled("closed_market"):
@@ -2211,8 +2231,13 @@ func _on_shop_entered() -> void:
 ##
 ## ラン内で失う資源なので、必ずゴールドに加えて装備か物資束も出す。
 ## 抽選はこの階の乱数から引くので、同じシードなら同じ中身が出る。
-func _on_chest(amount: int) -> void:
+func _on_chest(amount: int, summons_elite: bool = false) -> void:
 	Sound.play("chest")
+	_dev_chests_taken += 1
+	# 呼んでしまう箱の中身は、装備窓を横取りさせずに列へ積む（D-9 と同じ道）。
+	# ここを素通しにすると、装備を選ぶ窓と戦闘開始が競争して片方が消える。
+	var was_resolving := _event_resolution_active
+	_event_resolution_active = _event_resolution_active or summons_elite
 	var reward: Dictionary = ChestReward.roll(_battle_rng, GameState.floor_number, amount)
 	var gold_amount := int(reward.get("gold", 0))
 	GameState.earn_gold(gold_amount)
@@ -2227,9 +2252,60 @@ func _on_chest(amount: int) -> void:
 		var count := int(reward.get("item_count", 1))
 		GameState.add_item(item_id, count)
 		bonus_text = "%s %dこ" % [Database.item(item_id).get("name", item_id), count]
+	_event_resolution_active = was_resolving
 
 	var found := "%d %s" % [gold_amount, Terms.GOLD]
 	if bonus_text != "":
 		found = "%s / %s" % [bonus_text, found]
-	hud.toast("たからばこ！ %s" % found)
+	var message := "たからばこ！ %s" % found
+	# **予告は湧く前に出す。** 取った物と同じ一言に載せる ―― 別々に出すと
+	# あとの一言が前の一言を消して、どちらか片方しか読めない。
+	# 読み逃しても、残りの箱に付いた赤い印が「これ以上は呼ぶ」を残し続ける。
+	if not summons_elite and _map != null and not _map.chests.is_empty() \
+			and GreedWatch.summons(_map.chests_taken):
+		message = "%s\n%s" % [message, Terms.GREED_WARNING]
+	hud.toast(message)
 	_refresh_hud()
+	if String(GameState.story_task.get("kind", "")) == StoryOperationScript.CAVE_SEARCH:
+		# 箱の中身を物語結果で上書きしない。最初の行として同じ通知へ残す。
+		_complete_story_task(message)
+	if String(GameState.event_task.get("kind", "")) == EventOperationScript.CAVE_SEARCH:
+		_complete_event_task()
+	if summons_elite:
+		_summon_greed_elite()
+
+
+## 欲が呼んだ格上を控えへ積む（R-3）。
+##
+## その場で `_begin_battle` を呼ばない。宝箱の装備窓がまだ開くところなので、
+## 割り込むと窓と戦闘が競争する。**装備を確かめてから敵が来る**順に揃える。
+func _summon_greed_elite() -> void:
+	if _map == null:
+		return
+	# 型は DetRng だけで決める。同じ種・同じ洞・同じ階・同じ順番なら同じ型。
+	# `_battle_rng` を使わないので、呼んでも他の抽選はずれない。
+	_pending_greed_elite = GreedWatch.kind_id(
+		GameState.rng_for("greed").fork("take:%d" % _map.chests_taken)
+	)
+	if _pending_greed_elite == "":
+		return
+	# 結果窓が開いている（洞の調べ物を同時に終えた）ときは、閉じたときに
+	# `_close_outcome` が同じ列を進める。ここで割り込まない。
+	if _mode == Mode.EXPLORE:
+		_continue_pending_flow()
+
+
+## 控えている欲の格上の型（空なら無い）。
+var _pending_greed_elite := ""
+
+
+func _begin_greed_battle(kind_id: String) -> void:
+	var foes := Encounter.build_elite(
+		_battle_rng, GameState.floor_number, 100, GameState.biome_here(), kind_id
+	)
+	if foes.is_empty():
+		_set_mode(Mode.EXPLORE)
+		return
+	_dev_greed_summons += 1
+	hud.toast(Terms.GREED_SUMMONED % GreedWatch.kind_name(kind_id))
+	_begin_battle(foes, false)

@@ -179,6 +179,25 @@ static func item_ids_for_floor(floor_number: int) -> Array:
 	return result
 
 
+## その階の出店へ並べる消耗品。戦具は宝箱・イベント・出撃支給だけに置く。
+## `item_ids_for_floor()` 自体を狭めると宝箱の抽選からも消えるため、入口を分ける。
+static func item_ids_for_shop(floor_number: int) -> Array:
+	var result: Array = []
+	for id in item_ids_for_floor(floor_number):
+		if bool(item(String(id)).get("shop", true)):
+			result.append(id)
+	return result
+
+
+## 解禁済みの、なくならない戦具。宝箱側が通常物資とは別枠で抽選する。
+static func reusable_item_ids_for_floor(floor_number: int) -> Array:
+	var result: Array = []
+	for id in item_ids_for_floor(floor_number):
+		if bool(item(String(id)).get("reusable", false)):
+			result.append(id)
+	return result
+
+
 static func job_ids() -> Array:
 	_ensure()
 	var ids := jobs.keys()

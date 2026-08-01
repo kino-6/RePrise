@@ -17,6 +17,7 @@ signal battle_finished(victory: bool)
 
 const WINDOW_TEX: Texture2D = preload("res://assets/ui/window.png")
 const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
+const BattleOpeningGate := preload("res://src/battle/battle_opening.gd")
 ## 敵の絵。数が増えたので preload の列挙はやめ、初回に読んで覚えておく。
 ## _draw() の中で読むと、読み込み中の白い板が描かれてしまう。
 const FALLBACK_SPRITE := "gel"
@@ -50,6 +51,7 @@ const ROOT_COLS := 4
 ## サブウィンドウは 1 列。行数はこれを超えたらページ送り。
 const LIST_ROWS := 4
 const LIST_LINE := 20
+const GEAR_TOOL_PREFIX := "gear:"
 
 const LINE_DELAY := 0.55
 ## オート戦闘のときのメッセージ送り。手で押さないので短くする。
@@ -82,7 +84,14 @@ const BLINK := 0.3
 const AUTO_FLASH := 0.18
 const FLASH := 0.55
 
-enum State { TURN_START, COMMAND, LIST, TARGET, MESSAGE, DONE }
+## 戦場が見えてから開戦文を保つ最低時間。
+##
+## 遭遇演出の裏で TURN_START が走ると、戦場が見えた最初のフレームがすでに
+## 被弾エフェクトになる。開戦文は通常ログとは別の状態で止め、文字速度が「はやい」
+## でもこの時間までは攻撃・効果音・エフェクトを一切始めない。
+const OPENING_MIN_HOLD := BattleOpeningGate.MIN_HOLD
+
+enum State { OPENING, TURN_START, COMMAND, LIST, TARGET, MESSAGE, DONE }
 
 ## 第 1 階層の項目。順番は固定する（毎回同じ位置にあることが速さになる）。
 enum Root { FIGHT, SPELL, SKILL, ITEM, GUARD, ESCAPE, AUTO }
@@ -107,6 +116,14 @@ var _actor: Battler = null
 var _queue: Array[String] = []
 var _shown: Array[String] = []
 var _timer := 0.0
+## 自動プレイの無進行検出用。画面名ではなく、実際に戦闘の処理が1件進むたび増やす。
+var _progress_serial := 0
+
+## 遭遇トランジションが完全に開くまでは false。見えない戦場を進めないための Gate。
+var _opening_revealed := false
+var _opening_lines: Array[String] = []
+## `--shot=battle_opening` で、実際の開戦文を原寸のまま止めるためだけの印。
+var _debug_hold_opening := false
 
 ## 第 1 階層
 var _roots: Array[int] = []
@@ -152,19 +169,55 @@ func _ready() -> void:
 
 
 ## party_members は戦闘後に経験値と熟練度を書き戻すために受け取る。
-func start(battle: BattleSystem, party_members: Array[PartyMember]) -> void:
+func start(
+	battle: BattleSystem, party_members: Array[PartyMember],
+	context_lines: Array[String] = []
+) -> void:
 	system = battle
 	members = party_members
-	_state = State.TURN_START
+	_state = State.OPENING
 	_queue.clear()
-	_shown.clear()
+	# 物語は別窓で止めず、実際の主戦が始まる一拍へ短く載せる。
+	_opening_lines = context_lines.duplicate()
+	_opening_lines.append_array(BattleOpeningGate.lines(system))
+	_shown = _opening_lines.duplicate()
+	_progress_serial = 0
+	_opening_revealed = false
+	_debug_hold_opening = false
 	_outcome_shown = false
 	_victory = false
 	_escaped = false
 	_auto = AutoTactic.last_mode
+	# Main の遭遇トランジション終了通知が来るまで、戦闘ロジックを1フレームも進めない。
+	set_process(false)
+	set_process_unhandled_input(false)
+	_refresh()
+
+
+## 戦場が完全に見えてから呼ぶ。開戦文を読ませ終えるまで TURN_START へ渡さない。
+func reveal_opening() -> void:
+	if system == null or _state != State.OPENING or _opening_revealed:
+		return
+	_opening_revealed = true
+	_timer = (
+		3600.0
+		if _debug_hold_opening
+		else BattleOpeningGate.hold(_opening_lines, Settings.line_delay())
+	)
 	set_process(true)
 	set_process_unhandled_input(true)
 	_refresh()
+
+
+## 開発用。開戦文の文字割り付けと敵の初動表示を、その場で止めて確認する。
+func debug_hold_opening() -> void:
+	_debug_hold_opening = true
+	if _opening_revealed and _state == State.OPENING:
+		_timer = 3600.0
+
+
+func is_showing_opening() -> bool:
+	return _state == State.OPENING
 
 
 # --------------------------------------------------------------------------
@@ -180,6 +233,14 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 	match _state:
+		State.OPENING:
+			if not _opening_revealed:
+				return
+			_timer -= delta
+			if BattleOpeningGate.can_advance(_opening_revealed, _timer):
+				_shown.clear()
+				_state = State.TURN_START
+				_refresh()
 		State.TURN_START:
 			_begin_turn()
 		State.MESSAGE:
@@ -283,11 +344,26 @@ func is_awaiting_command() -> bool:
 	return _state == State.COMMAND
 
 
+func was_escaped() -> bool:
+	return _escaped
+
+
+## 開発用。長い戦闘を「同じ画面に居る」だけで停止扱いしないための署名。
+func dev_progress_signature() -> String:
+	return "%d:%d" % [_progress_serial, _state]
+
+
 ## 開発用。サブウィンドウの見え方を撮るのに使う。
-func debug_open_item_menu() -> void:
+func debug_open_item_menu(prefer_gear: bool = false) -> void:
 	if _state != State.COMMAND:
 		return
 	_open_list("item")
+	if prefer_gear:
+		for i in _list_ids.size():
+			if _list_ids[i].begins_with(GEAR_TOOL_PREFIX):
+				_list_index = i
+				break
+		_refresh()
 
 
 func debug_open_spell_menu() -> void:
@@ -315,6 +391,22 @@ func debug_open_ultimate_menu() -> void:
 	_refresh()
 
 
+## 撮影用。道具を許可したオートが、実際の在庫を減らす直前の行動を表示する。
+func debug_show_auto_item() -> void:
+	if _state != State.COMMAND or system == null or system.allies.size() < 2:
+		return
+	# 回復技を持つ者の手番でも、撮影では道具判断そのものを通す。
+	_actor.abilities = ["attack"]
+	var target: Battler = system.allies[1] if system.allies[1] != _actor else system.allies[0]
+	target.hp = maxi(target.max_hp / 10, 1)
+	Settings.auto_items = true
+	_auto = AutoTactic.Mode.SAFE
+	AutoTactic.remember(_auto)
+	_auto_act()
+	# 自動送りで次の手へ進む前に、道具名と許可表示を原寸確認する。
+	set_process(false)
+
+
 # --------------------------------------------------------------------------
 # 第 1 階層
 # --------------------------------------------------------------------------
@@ -331,6 +423,61 @@ func _abilities_in(menu: String) -> Array[String]:
 	return result
 
 
+## 道具欄へ出す参照。手持ちの道具に、現在の行動者が装備している使用可能品を足す。
+## 装備は `gear:` を付け、同名IDの道具と混ざらないようにする。
+func _available_item_refs() -> Array[String]:
+	var result: Array[String] = []
+	for id in GameState.inventory_ids():
+		result.append(String(id))
+	if _actor == null or _actor.id < 0 or _actor.id >= members.size():
+		return result
+	var member: PartyMember = members[_actor.id]
+	for slot in ["weapon", "armor", "accessory"]:
+		var gear_id := String(member.equipment.get(slot, ""))
+		if gear_id == "":
+			continue
+		var use_data: Variant = Database.gear(gear_id).get("battle_use", {})
+		if typeof(use_data) == TYPE_DICTIONARY and not use_data.is_empty():
+			result.append("%s%s" % [GEAR_TOOL_PREFIX, gear_id])
+	return result
+
+
+func _gear_id(item_ref: String) -> String:
+	return item_ref.trim_prefix(GEAR_TOOL_PREFIX) if item_ref.begins_with(GEAR_TOOL_PREFIX) else ""
+
+
+## 道具と装備使用を、同じ一覧で読める item 形式へ揃える。
+func _item_data(item_ref: String) -> Dictionary:
+	var gear_id := _gear_id(item_ref)
+	if gear_id == "":
+		return Database.item(item_ref)
+	var gear := Database.gear(gear_id)
+	var raw: Variant = gear.get("battle_use", {})
+	if typeof(raw) != TYPE_DICTIONARY or raw.is_empty():
+		return {}
+	var data: Dictionary = raw.duplicate(true)
+	data["name"] = String(gear.get("name", gear_id))
+	return data
+
+
+func _item_use_key(item_ref: String) -> String:
+	var gear_id := _gear_id(item_ref)
+	return "gear:%s" % gear_id if gear_id != "" else "item:%s" % item_ref
+
+
+## 個数欄。消耗品は残数、戦具は戦闘中の残り、装備は出所を見せる。
+func _item_amount_label(item_ref: String) -> String:
+	var data := _item_data(item_ref)
+	var left := system.tool_uses_left(_actor, _item_use_key(item_ref), data)
+	if left >= 0:
+		return "%d/%d" % [left, int(data.get("uses_per_battle", 0))]
+	if _gear_id(item_ref) != "":
+		return Terms.ITEM_EQUIPPED
+	if bool(data.get("reusable", false)):
+		return Terms.ITEM_REUSABLE
+	return "%dこ" % GameState.item_count(item_ref)
+
+
 func _open_root_menu() -> void:
 	_roots.clear()
 	_roots.append(Root.FIGHT)
@@ -338,7 +485,7 @@ func _open_root_menu() -> void:
 		_roots.append(Root.SPELL)
 	if not _abilities_in("skill").is_empty():
 		_roots.append(Root.SKILL)
-	if not GameState.inventory.is_empty():
+	if not _available_item_refs().is_empty():
 		_roots.append(Root.ITEM)
 	_roots.append(Root.GUARD)
 	_roots.append(Root.ESCAPE)
@@ -412,8 +559,7 @@ func _open_list(kind: String) -> void:
 	_list_kind = kind
 	_list_ids.clear()
 	if kind == "item":
-		for id in GameState.inventory_ids():
-			_list_ids.append(String(id))
+		_list_ids = _available_item_refs()
 	else:
 		_list_ids = _abilities_in(kind)
 	if _list_ids.is_empty():
@@ -467,9 +613,18 @@ func _begin_ability(ability_id: String) -> void:
 
 
 func _begin_item(item_id: String) -> void:
+	var item := _item_data(item_id)
+	if item.is_empty():
+		Sound.play("cancel")
+		return
+	var reason := system.tool_unavailable_reason(_actor, _item_use_key(item_id), item)
+	if reason != "":
+		Sound.play("cancel")
+		_refresh()
+		return
 	_pending_item = item_id
 	_pending_ability = ""
-	_begin_target(String(Database.item(item_id).get("target", "one_ally")))
+	_begin_target(String(item.get("target", "one_ally")))
 
 
 func _begin_target(scope: String) -> void:
@@ -528,13 +683,28 @@ func _input_target(event: InputEvent) -> void:
 func _execute(target: Battler) -> void:
 	_list_kind = ""
 	if _pending_item != "":
-		# 在庫を減らすのは GameState の仕事。BattleSystem には効果だけを解かせる。
-		if not GameState.consume_item(_pending_item):
+		var item_ref := _pending_item
+		var item := _item_data(item_ref)
+		var gear_id := _gear_id(item_ref)
+		# 装備は現在の行動者が実際に着けているものだけ。道具は所持を再確認する。
+		if (
+			(gear_id != "" and item_ref not in _available_item_refs())
+			or (gear_id == "" and GameState.item_count(item_ref) <= 0)
+		):
 			_state = State.COMMAND
 			_refresh()
 			return
-		var item := Database.item(_pending_item)
-		var item_lines := system.use_item(_actor, _pending_item, target)
+		var item_lines := (
+			system.use_gear(_actor, gear_id, target)
+			if gear_id != "" else system.use_item(_actor, item_ref, target)
+		)
+		if not system.last_action_consumed:
+			_resume_actor = _actor
+			_pending_item = ""
+			_show(item_lines)
+			return
+		if gear_id == "" and not bool(item.get("reusable", false)):
+			GameState.consume_item(item_ref)
 		if String(item.get("effect", "")) == "item_damage":
 			var element := String(item.get("element", ""))
 			Sound.play(
@@ -619,10 +789,16 @@ func _try_escape() -> void:
 
 ## オート戦闘の 1 手。判断は AutoTactic に任せ、ここは実行だけを持つ。
 func _auto_act() -> void:
-	var plan := AutoTactic.decide(system, _actor, _auto)
-	_pending_ability = String(plan["ability"])
-	_pending_item = ""
-	_execute(plan["target"])
+	var allowed_items := {}
+	if Settings.auto_items:
+		# 設定名どおり、オートへ渡すのは消耗品だけ。戦具と装備の使いどころは奪わない。
+		for id in GameState.inventory:
+			if not bool(Database.item(String(id)).get("reusable", false)):
+				allowed_items[id] = GameState.inventory[id]
+	var plan := AutoTactic.decide(system, _actor, _auto, allowed_items)
+	_pending_item = String(plan.get("item", ""))
+	_pending_ability = String(plan.get("ability", ""))
+	_execute(plan.get("target"))
 
 
 # --------------------------------------------------------------------------
@@ -639,6 +815,7 @@ func _is_big_hit(ability_id: String) -> bool:
 
 
 func _show(lines: Array[String]) -> void:
+	_progress_serial += 1
 	# 誰かに当たった行動なら点滅させる。当たった相手は BattleSystem が持っている
 	# （文字列を見て判断すると、文言を変えた瞬間に演出が消える）。
 	# 点滅もオート中は短く。ここが 0.3 のままだと、待ちを詰めても 1 手番が縮まない。
@@ -709,8 +886,8 @@ func _resolve_outcome() -> void:
 	if _victory:
 		var reward := system.rewards()
 		var gained_exp := GameState.run_exp_reward(int(reward["exp"]))
-		lines.append("たたかいに かった！")
-		lines.append("%d の けいけんちと %d %sを えた" % [
+		lines.append("戦いに勝利した！")
+		lines.append("経験値%dと%d%sを獲得" % [
 			gained_exp, reward["gold"], Terms.GOLD
 		])
 		GameState.earn_gold(int(reward["gold"]))
@@ -727,13 +904,13 @@ func _resolve_outcome() -> void:
 			if m.hp <= 0:
 				continue  # 倒れていた者には入らない
 			if m.gain_exp(gained_exp) > 0:
-				lines.append("%sは レベル %d に あがった！" % [m.name, m.level])
+				lines.append("%sはレベル%dに上がった！" % [m.name, m.level])
 			for ability_id in m.gain_mastery(mastery):
 				# ラン中に覚えた技は、全滅しても拠点に残る
 				var ability_name: String = Database.ability(ability_id).get("name", ability_id)
-				lines.append("%sは %s を おぼえた！" % [m.name, ability_name])
+				lines.append("%sは%sを覚えた！" % [m.name, ability_name])
 	else:
-		lines.append("パーティは ぜんめつした…")
+		lines.append("パーティは全滅した…")
 
 	_show(lines)
 
@@ -773,6 +950,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	#     切り替えは戦闘中いつでも通す（止め方が無いオートは信用されない）。
 	if event.is_action_pressed("auto"):
 		Sound.play("confirm")
+		# 開戦文の最中は作戦だけ替える。actor はまだ選んでいないので行動させない。
+		if _state == State.OPENING:
+			_auto = AutoTactic.next_mode(_auto)
+			AutoTactic.remember(_auto)
+			_refresh()
+			return
 		_cycle_auto()
 		return
 
@@ -1118,7 +1301,7 @@ func _draw_message_or_command() -> void:
 	for i in _shown.size():
 		# オート中は右上に作戦を出しているので、その幅ぶん狭めて折り返す
 		# （切らずに置いたら 42px 重なった）。
-		var width := 300.0 if _auto != AutoTactic.Mode.OFF else 460.0
+		var width := 280.0 if _auto != AutoTactic.Mode.OFF else 460.0
 		_cell(origin + Vector2(0, i * 19), width).line(_shown[i], PixelUI.C_TEXT)
 
 	# オート中は止め方を出す。始め方だけ見えていて止め方が見えないのは不親切で、
@@ -1127,10 +1310,13 @@ func _draw_message_or_command() -> void:
 	# **作戦の説明は隅に出さない。** 戦闘中の隅に長い文を置くと、読まないのに
 	# 場所を取るだけになる。呼び名（守備重視 / 攻撃重視）で足りる。
 	if _auto != AutoTactic.Mode.OFF:
+		var item_mark := (
+			Terms.AUTO_ITEMS_SHORT_ON if Settings.auto_items else Terms.AUTO_ITEMS_SHORT_OFF
+		)
 		PixelUI.draw_text_right(
 			self, Vector2(MESSAGE_RECT.end.x - 12, MESSAGE_RECT.position.y + 6),
-			"%s　Ｑ きりかえ　Ｘ かいじょ" % AutoTactic.label(_auto),
-			PixelUI.C_ACTIVE, PixelUI.SIZE_SUB
+			"%s　%s　Ｘ解除" % [AutoTactic.label(_auto), item_mark],
+			PixelUI.C_ACTIVE, PixelUI.SIZE_TEXT
 		)
 
 
@@ -1157,7 +1343,7 @@ func _draw_root_menu(origin: Vector2) -> void:
 		# 逃げられる見込みを添える。0% は主（逃げられない相手）。
 		if _roots[i] == Root.ESCAPE:
 			var odds := escape_odds()
-			label = "にげる ×" if odds <= 0 else "にげる %d%%" % odds
+			label = "逃げる ×" if odds <= 0 else "逃げる %d%%" % odds
 		var tint := PixelUI.C_TEXT if on else PixelUI.C_TEXT_DIM
 		if _roots[i] == Root.AUTO and _auto != AutoTactic.Mode.OFF:
 			tint = PixelUI.C_ACTIVE
@@ -1211,7 +1397,8 @@ func _draw_list() -> void:
 		var at := origin + Vector2(0, 20 + (i - first) * LIST_LINE)
 		var on := i == _list_index and _state == State.LIST
 		var unavailable := (
-			""
+			system.tool_unavailable_reason(
+				_actor, _item_use_key(_list_ids[i]), _item_data(_list_ids[i]))
 			if _list_kind == "item"
 			else system.ability_unavailable_reason(_actor, _list_ids[i])
 		)
@@ -1228,9 +1415,9 @@ func _draw_list() -> void:
 		# 技名が長い行だけ MP に食い込む作りだった（外部化で名前が伸びると必ず出る）。
 		_cell(at, LIST_NAME_W).line(_row_name(i), tint)
 		if _list_kind == "item":
-			var it := Database.item(_list_ids[i])
+			var it := _item_data(_list_ids[i])
 			_cell(at + Vector2(LIST_NAME_W, 2), LIST_MP_W).line(
-				"%d こ" % GameState.item_count(_list_ids[i]),
+				_item_amount_label(_list_ids[i]),
 				PixelUI.C_TEXT_DIM, PixelUI.SIZE_SUB)
 			_cell(at + Vector2(LIST_NAME_W + LIST_MP_W, 2), LIST_COST_W).line(
 				"%d" % _actor.scaled_cost(int(it.get("cost", 100))),
@@ -1257,11 +1444,16 @@ func _draw_list() -> void:
 	var desc := ""
 	if _list_index < _list_ids.size():
 		var data := (
-			Database.item(_list_ids[_list_index]) if _list_kind == "item"
+			_item_data(_list_ids[_list_index]) if _list_kind == "item"
 			else Database.ability(_list_ids[_list_index])
 		)
 		desc = String(data.get("desc", ""))
-		if _list_kind != "item":
+		if _list_kind == "item":
+			var reason := system.tool_unavailable_reason(
+				_actor, _item_use_key(_list_ids[_list_index]), data)
+			if reason != "":
+				desc = Terms.ABILITY_CANNOT_USE % reason
+		else:
 			var unavailable := system.ability_unavailable_reason(
 				_actor, _list_ids[_list_index])
 			if unavailable != "":
@@ -1276,7 +1468,8 @@ func _draw_list() -> void:
 func _row_name(i: int) -> String:
 	var id := _list_ids[i]
 	if _list_kind == "item":
-		return String(Database.item(id).get("name", id))
+		var name := String(_item_data(id).get("name", id))
+		return Terms.ITEM_EQUIPPED_PREFIX % name if _gear_id(id) != "" else name
 	return String(Database.ability(id).get("name", id))
 
 

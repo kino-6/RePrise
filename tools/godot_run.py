@@ -2,6 +2,7 @@
 
     python tools/godot_run.py --shot=title
     python tools/godot_run.py --headless --script tests/test_core.gd
+    python tools/godot_run.py --timeout=600 --headless --script tests/balance.gd -- --runs=100
     python tools/godot_run.py --reap          # 居残りを掃除するだけ
 
 **なぜ要るか。** 撮影や自動プレイの Godot が居残る。1 回や 2 回なら気づかないが、
@@ -24,6 +25,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+RUNNER_LOG_DIR = ROOT / ".godot" / "runner_logs"
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -33,6 +35,23 @@ NAMES = ("Godot_v4.7.1-stable_win64.exe", "godot.exe")
 
 ## 既定の待ち時間。撮影は数秒、通しの検査は数分かかる。
 DEFAULT_TIMEOUT = 300.0
+
+
+def _timeout_args(argv: list[str]) -> tuple[float, list[str]]:
+    """`--timeout=秒` を runner 自身で消費し、Godot へは渡さない。"""
+    timeout = DEFAULT_TIMEOUT
+    forwarded: list[str] = []
+    for arg in argv:
+        if not arg.startswith("--timeout="):
+            forwarded.append(arg)
+            continue
+        try:
+            timeout = float(arg.split("=", 1)[1])
+        except ValueError as error:
+            raise ValueError("--timeout は秒数で指定する") from error
+        if timeout <= 0.0:
+            raise ValueError("--timeout は0より大きい秒数で指定する")
+    return timeout, forwarded
 
 
 def _kill_tree(pid: int) -> None:
@@ -87,18 +106,41 @@ def run(args: list[str], timeout: float = DEFAULT_TIMEOUT) -> tuple[int, str]:
     **どう終わっても木ごと落とす。** 正常終了でも、時間切れでも、
     こちらが例外で抜けても。
     """
-    cmd = ["godot", "--accessibility", "disabled"] + args
+    # Codex の制限ユーザーは、通常ユーザーが作った user://logs を読めても
+    # 書けないことがある。Godot 4.7.1 はログの世代交代失敗からクラッシュするため、
+    # runner のログは常に作業領域へ逃がす。`--` より後ろへ置くとゲーム引数に
+    # なってしまうので、境界の直前へ差し込む。
+    forwarded = list(args)
+    if "--log-file" not in forwarded:
+        RUNNER_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        runner_log = RUNNER_LOG_DIR / f"run_{os.getpid()}_{time.time_ns()}.log"
+        boundary = forwarded.index("--") if "--" in forwarded else len(forwarded)
+        forwarded[boundary:boundary] = ["--log-file", str(runner_log)]
+    cmd = ["godot", "--accessibility", "disabled"] + forwarded
+    # user:// も通常ユーザーの AppData ではなく、呼び出しごとの隔離領域へ置く。
+    # 撮影・自動プレイは実セーブを触らない契約だが、OS側の権限エラーで起動前に
+    # 落ちるのを防ぐ意味でも物理的に分ける。
+    run_id = f"run_{os.getpid()}_{time.time_ns()}"
+    sandbox_appdata = ROOT / ".godot" / "runner_user" / run_id
+    sandbox_appdata.mkdir(parents=True, exist_ok=True)
+    run_env = os.environ.copy()
+    run_env["APPDATA"] = str(sandbox_appdata)
+    run_env["LOCALAPPDATA"] = str(sandbox_appdata)
     proc = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",
+        env=run_env,
     )
     try:
         out, _ = proc.communicate(timeout=timeout)
         return proc.returncode, out or ""
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as error:
         _kill_tree(proc.pid)
-        proc.communicate()
-        return 124, "（時間切れ %.0f 秒で落とした）" % timeout
+        tail, _ = proc.communicate()
+        partial = error.output or tail or ""
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", errors="replace")
+        return 124, str(partial) + "\n（時間切れ %.0f 秒で落とした）" % timeout
     finally:
         if proc.poll() is None:
             _kill_tree(proc.pid)
@@ -110,11 +152,16 @@ def main(argv: list[str]) -> int:
     if not argv:
         print(__doc__)
         return 2
+    try:
+        timeout, argv = _timeout_args(argv)
+    except ValueError as error:
+        print(str(error))
+        return 2
     # `--path` が無ければ、このリポジトリを見るようにする。
     args = list(argv)
     if "--path" not in args and "--script" not in args:
         args = ["--path", str(ROOT), "--"] + args
-    code, out = run(args)
+    code, out = run(args, timeout=timeout)
     sys.stdout.write(out)
     # **終わったら念のため掃除する。** 走らせたぶんが残っていなくても、
     # 前の失敗の残りが居ることがある。

@@ -125,7 +125,7 @@ static func category_keys() -> Array[String]:
 
 static func _catalog_for_floor(floor_number: int) -> Dictionary:
 	var result := {
-		"item": Database.item_ids_for_floor(floor_number),
+		"item": Database.item_ids_for_shop(floor_number),
 		"weapon": [],
 		"armor": [],
 		"accessory": [],

@@ -127,7 +127,7 @@ func _draw_prompt() -> void:
 	# 明滅させる。止まっている画面に 1 つだけ動きがあると、入力待ちだと分かる。
 	if fmod(_time, BLINK_CYCLE) > BLINK_CYCLE * 0.78:
 		return
-	var text := "Ｚキーで はじめる　　Ｘキーで せってい"
+	var text := "Ｚキーで始める　　Ｘキーで設定"
 	if GameState.has_suspend():
-		text = "Ｚキーで つづきから　　Ｘキーで せってい"
+		text = "Ｚキーで続きから　　Ｘキーで設定"
 	PixelUI.draw_text_center(self, 274, text, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)

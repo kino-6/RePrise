@@ -122,9 +122,10 @@
 
 追加ボスの追加指定:
 
-- Thorn-Crowned King: colossal spectral stag, vast asymmetric branch-antler
-  crown, cracked slate mask, deep-wine gem eye, moss mantle, shrine bells and
-  armored chest.
+- Thorn-Crowned King: upright inhuman sovereign, broken black-lacquer and ivory
+  reliquary crown, smooth funerary mask, broad armored mantle, long split cloak
+  and a single deep-crimson accent. No antlers, deer skull, hooves, four-legged
+  stance, moss, bells or warm-brown-dominant materials.
 - Crucible Colossus: two-legged obsidian furnace titan, caldera shoulders,
   circular ember core, hammer-like forearm, shield-like forearm and sealed
   horned head.

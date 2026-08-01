@@ -53,7 +53,10 @@ def main() -> int:
         "dirty": bool(_git("status", "--porcelain")),
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(stamp, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # Windows の既定変換で CRLF にすると、変更行の CR を `git diff --check` が
+    # trailing whitespace と判定する。生成物もリポジトリの LF に固定する。
+    with OUT.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(stamp, ensure_ascii=False, indent=2) + "\n")
     print("刻印: %s %s%s" % (
         stamp["hash"] or "(git なし)", stamp["date"], "  変更あり" if stamp["dirty"] else ""
     ))

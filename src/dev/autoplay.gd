@@ -39,12 +39,16 @@ var _manifest: Array[String] = []
 
 ## いま押しているキー。次のフレームで離す。
 var _held := ""
+var _held_keycode := 0
+var _keypad_input := false
+var _keypad_counts: Dictionary = {}
 
 ## 画面の遷移を記録する。同じ画面に貼り付いたままなら詰まっている。
 var _timeline: Array[String] = []
 var _last_status := ""
 var _last_screen := ""
 var _mode_time := 0.0
+var _last_progress_signature := ""
 var _stuck_report: Array[String] = []
 
 ## 走らせるたびに数字で比べられるようにする集計。
@@ -56,7 +60,9 @@ var _town_time := 0.0
 var _talks := 0
 
 ## 直近の画面の並び。2 つの画面を往復する足踏みを見つけるために持つ。
-const OSCILLATION_WINDOW := 8
+# 町では「案内役2人＋仕事場」を順に開くため、EVENT↔EXPLORE が8遷移までは
+# 正常に起きる。正規の町巡回を詰まり扱いせず、それを越えて往復する場合を拾う。
+const OSCILLATION_WINDOW := 12
 var _recent: Array[String] = []
 var _oscillation_noted := false
 var _battles := 0
@@ -93,10 +99,13 @@ static func _clear_dir(path: String) -> void:
 	dir.list_dir_end()
 
 
-func start(main_node: Node, seconds: float, seed_value: int = 12345) -> void:
+func start(
+	main_node: Node, seconds: float, seed_value: int = 12345, keypad_input: bool = false
+) -> void:
 	_main = main_node
 	_limit = seconds
 	_rng = DetRng.new(seed_value)
+	_keypad_input = keypad_input
 	# **実行ごとに別の場所へ保存する**（P-2）。
 	#
 	# 以前は毎回 `000_<MODE>.png` から書いていて、既存を区別しなかった。
@@ -119,11 +128,18 @@ func _process(delta: float) -> void:
 	# 見ている）に 1 フレームも届かない。人が押している時間を作るために、
 	# 離すのは必ず次のフレームにする。最初にこれを間違えて「60 秒歩かなかった」。
 	if _held != "":
-		var up := InputEventAction.new()
-		up.action = _held
-		up.pressed = false
-		Input.parse_input_event(up)
+		if _held_keycode != 0:
+			var key_up := InputEventKey.new()
+			key_up.physical_keycode = _held_keycode
+			key_up.pressed = false
+			Input.parse_input_event(key_up)
+		else:
+			var action_up := InputEventAction.new()
+			action_up.action = _held
+			action_up.pressed = false
+			Input.parse_input_event(action_up)
 		_held = ""
+		_held_keycode = 0
 
 	_elapsed += delta
 	_track_mode(delta)
@@ -177,7 +193,10 @@ func _track_mode(delta: float) -> void:
 		# 危険度 10 まで行っても「最も危険 1」と出ていた（2 度目の同じ抜け）。
 		var at := status.find("危険度")
 		if at >= 0:
-			_deepest = maxi(_deepest, int(status.substr(at + 3)))
+			# 後ろに「目的: 3/3歩」が続いても、その数字を危険度へ連結しない。
+			# int("1 ... 3/3") は 133 と解釈され、実測ログが嘘になっていた。
+			var danger_text := status.substr(at + 3).get_slice(" ", 0)
+			_deepest = maxi(_deepest, int(danger_text))
 
 		# **2 状態のあいだを往復しているのも詰まり。**
 		_recent.append(status)
@@ -214,8 +233,18 @@ func _track_mode(delta: float) -> void:
 			_shop_visit_categories.clear()
 		_last_screen = screen
 		_mode_time = 0.0
+		_last_progress_signature = _progress_signature()
 		return
-	_mode_time += delta
+	# 戦闘は同じ画面のまま数十秒続く。画面滞在ではなく、行動・ログが
+	# 25秒まったく進まなかった時だけ停止とみなす。
+	if screen == "BATTLE":
+		var progress := _progress_signature()
+		_mode_time = progress_wait(
+			_mode_time, _last_progress_signature, progress, delta
+		)
+		_last_progress_signature = progress
+	else:
+		_mode_time += delta
 	# 同じ画面に 25 秒貼り付いたら、そこで詰まっている可能性が高い。
 	if _mode_time > 25.0:
 		_stuck_report.append(
@@ -223,6 +252,21 @@ func _track_mode(delta: float) -> void:
 			% [_elapsed, status, _mode_time]
 		)
 		_mode_time = 0.0
+
+
+func _progress_signature() -> String:
+	return (
+		String(_main.dev_progress_signature())
+		if _main != null and _main.has_method("dev_progress_signature")
+		else _status()
+	)
+
+
+## 単独Gate用。画面ではなく進行署名が変わったら待ち時間をゼロへ戻す。
+static func progress_wait(
+	waited: float, previous: String, current: String, delta: float
+) -> float:
+	return 0.0 if current != previous else waited + delta
 
 
 ## 画面ごとに「人がやりそうなこと」を送る。
@@ -316,7 +360,10 @@ func _send_input() -> void:
 			# 読む前に決定を連打すると、出来事を「謎の選択肢が一瞬出た」
 			# としか検査できない。最低1秒は本文と選択肢を画面に残す。
 			if _mode_time >= 1.0:
-				_press("confirm")
+				# 先頭が支払不能でも決定連打で貼り付かない。ときどき次の手へ動き、
+				# 実際の「払えない選択肢」も通し検査する。
+				_press("ui_down" if int(_mode_time * INPUTS_PER_SECOND) % 5 == 0
+					else "confirm")
 		"MAP":
 			if _mode_time >= 0.8:
 				_press("cancel")
@@ -359,11 +406,13 @@ var _town_entered := -1.0
 
 ## 出口へ向かっている最中か。**滞在の再開を止めるための印。**
 var _town_leaving := false
-## 0: 宿 / 1: 住人1 / 2: 住人2 / 3: 店 / 4: 出口。
+## 0: 宿 / 1: 住人1 / 2: 住人2 / 3: 仕事場 / 4: 物資箱 / 5: 店 / 6: 出口。
 var _town_phase := 0
 var _town_inn_baseline := 0
 var _town_shop_baseline := 0
 var _town_talk_baseline := 0
+var _town_facility_baseline := 0
+var _town_chest_baseline := 0
 var _shop_visit_categories := {}
 
 
@@ -391,6 +440,16 @@ func _town_step() -> String:
 		_town_talk_baseline = (
 			int(_main.dev_talks())
 			if _main.has_method("dev_talks")
+			else 0
+		)
+		_town_facility_baseline = (
+			int(_main.dev_facility_visits())
+			if _main.has_method("dev_facility_visits")
+			else 0
+		)
+		_town_chest_baseline = (
+			int(_main.dev_town_chests())
+			if _main.has_method("dev_town_chests")
 			else 0
 		)
 	if _town_phase == 0:
@@ -428,16 +487,38 @@ func _town_step() -> String:
 			_town_phase = 3
 	if _town_phase == 3:
 		if (
+			_main.has_method("dev_facility_visits")
+			and int(_main.dev_facility_visits()) > _town_facility_baseline
+		):
+			_town_phase = 4
+		else:
+			var to_facility := String(_main.dev_step_to_town_facility())
+			if to_facility != "":
+				return to_facility
+			_town_phase = 4
+	if _town_phase == 4:
+		if (
+			_main.has_method("dev_town_chests")
+			and int(_main.dev_town_chests()) > _town_chest_baseline
+		):
+			_town_phase = 5
+		else:
+			var to_chest := String(_main.dev_step_to_town_chest())
+			if to_chest != "":
+				return to_chest
+			_town_phase = 5
+	if _town_phase == 5:
+		if (
 			_main.has_method("dev_shop_opens")
 			and int(_main.dev_shop_opens()) > _town_shop_baseline
 		):
-			_town_phase = 4
+			_town_phase = 6
 			_town_leaving = true
 		else:
 			var to_shop := String(_main.dev_step_to_shop())
 			if to_shop != "":
 				return to_shop
-			_town_phase = 4
+			_town_phase = 6
 			_town_leaving = true
 	# **出ると決めたら出きるまで出口へ向かう。**
 	#
@@ -505,6 +586,17 @@ func _check_oscillation() -> void:
 
 
 func _press(action: String) -> void:
+	if _keypad_input:
+		var keycode := Settings.primary_keypad_key(action)
+		if keycode != 0:
+			var key_down := InputEventKey.new()
+			key_down.physical_keycode = keycode
+			key_down.pressed = true
+			Input.parse_input_event(key_down)
+			_held = action
+			_held_keycode = keycode
+			_keypad_counts[action] = int(_keypad_counts.get(action, 0)) + 1
+			return
 	var down := InputEventAction.new()
 	down.action = action
 	down.pressed = true
@@ -524,6 +616,12 @@ func _capture() -> void:
 
 func _report() -> void:
 	print("=== 自動プレイ %.0f 秒 ===" % _elapsed)
+	if _keypad_input:
+		var counts: Array[String] = []
+		for action in ["ui_up", "ui_down", "ui_left", "ui_right", "confirm", "cancel"]:
+			if int(_keypad_counts.get(action, 0)) > 0:
+				counts.append("%s %d回" % [Settings.action_label(action), int(_keypad_counts[action])])
+		print("入力      : テンキー（%s）" % " / ".join(counts))
 	print("画面の遷移:")
 	for line in _timeline:
 		print("  " + line)
@@ -542,6 +640,17 @@ func _report() -> void:
 		print("店を利用  : %d 回" % int(_main.dev_shop_opens()))
 	if _main != null and _main.has_method("dev_talks"):
 		print("住人と話す: %d 回" % int(_main.dev_talks()))
+	if _main != null and _main.has_method("dev_facility_uses"):
+		print("仕事場利用: %d 回（接触 %d 回）" % [
+			int(_main.dev_facility_uses()), int(_main.dev_facility_visits())
+		])
+	if _main != null and _main.has_method("dev_town_chests"):
+		print("町の物資箱: %d 回" % int(_main.dev_town_chests()))
+	# 欲が呼んだ格上（R-3）。**開けた数と湧いた数を並べる**（1 つ目では湧かない）。
+	if _main != null and _main.has_method("dev_greed_summons"):
+		print("洞の宝箱  : %d 個開けて 格上 %d 体" % [
+			int(_main.dev_chests_taken()), int(_main.dev_greed_summons())
+		])
 	print("店の分類  : %d / 4（%s）" % [
 		_shop_categories.size(), "・".join(_shop_categories.keys())
 	])

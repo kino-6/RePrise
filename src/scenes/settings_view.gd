@@ -3,7 +3,7 @@ extends Node2D
 
 const ConfirmFlow := preload("res://src/game/confirm_flow.gd")
 
-## 設定。音量・文字の速さ・キーの割り当て。
+## 設定。音量・文字の速さ・オートの道具・キーの割り当て。
 ##
 ## タイトルと探索メニューの両方から開ける。中身は `src/game/settings.gd` にあり、
 ## この画面は触るだけ（保存も適用も向こうの仕事）。
@@ -17,10 +17,10 @@ const CURSOR_TEX: Texture2D = preload("res://assets/ui/cursor.png")
 
 const PANEL_RECT := Rect2(56, 40, 400, 200)
 const HINT_RECT := Rect2(56, 248, 400, 56)
-## 6行を窓へ収める。26pxのまま1行足すと「とじる」が内枠を越える。
-const ROW := 23
+## 7行を窓へ収める。最後の「とじる」まで内枠に残す。
+const ROW := 20
 
-enum Row { VOLUME, SPEED, KEYS, ERASE_SAVE, ABANDON_RUN, CLOSE }
+enum Row { VOLUME, SPEED, AUTO_ITEMS, KEYS, ERASE_SAVE, ABANDON_RUN, CLOSE }
 
 var _index := 0
 var _keys_open := false
@@ -251,6 +251,8 @@ func _nudge(delta: int) -> void:
 			Settings.text_speed = posmod(
 				Settings.text_speed + delta, Settings.TEXT_SPEEDS.size()
 			)
+		Row.AUTO_ITEMS:
+			Settings.auto_items = not Settings.auto_items
 		_:
 			return
 	Settings.apply()
@@ -332,7 +334,7 @@ func _draw() -> void:
 	PixelUI.draw_window(self, PANEL_RECT, WINDOW_TEX)
 	var origin := PixelUI.content(PANEL_RECT).position + Vector2(16, 4)
 
-	_wide(origin).line("せってい", PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
+	_wide(origin).line(Terms.MENU_SETTINGS, PixelUI.C_ACTIVE, PixelUI.SIZE_HEAD)
 	if _keys_open:
 		_draw_keys(origin)
 	elif _erase_open:
@@ -354,6 +356,8 @@ func _draw() -> void:
 		_wide(hint).line(Terms.RUN_ABANDON_HINT, PixelUI.C_TEXT_DIM)
 	elif _notice != "":
 		_wide(hint).line(_notice, PixelUI.C_ACTIVE)
+	elif _index == Row.AUTO_ITEMS:
+		_wide(hint).line(Terms.AUTO_ITEMS_HINT, PixelUI.C_TEXT_DIM)
 	else:
 		_wide(hint).line("←→ で かえる　Ｘ で とじる", PixelUI.C_TEXT_DIM)
 
@@ -366,8 +370,12 @@ func _wide(at: Vector2) -> UiPanel:
 
 func _draw_root(origin: Vector2) -> void:
 	var rows := [
-		["おと", "%d" % Settings.volume if Settings.volume > 0 else "なし"],
+		["おと", "%d" % Settings.volume if Settings.volume > 0 else Terms.NONE],
 		["もじの はやさ", Settings.speed_label()],
+		[
+			Terms.AUTO_ITEMS,
+			Terms.AUTO_ITEMS_ON if Settings.auto_items else Terms.AUTO_ITEMS_OFF,
+		],
 		["キーの わりあて", "▶"],
 		[
 			Terms.SAVE_ERASE,

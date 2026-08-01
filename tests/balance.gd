@@ -2,8 +2,8 @@ extends SceneTree
 
 ## 世界のシミュレータ。
 ##
-##   godot --headless --script res://tests/balance.gd
-##   godot --headless --script res://tests/balance.gd -- --runs=500 --detail
+##   python tools/godot_run.py --headless --script tests/balance.gd
+##   python tools/godot_run.py --timeout=600 --headless --script tests/balance.gd -- --runs=100 --detail
 ##
 ## **測る側と遊ぶ側で同じコードを通す。** ここが今回いちばん大事な作り。
 ##
@@ -26,14 +26,15 @@ extends SceneTree
 ## 出すのは 1 つの数字ではなく分布。「主に挑めた 31%」だけでは、
 ## 遠くて届かないのか、道中で削られて死ぬのかが分からない。
 
-## 何ラン回すか（`--runs=` で上書きできる）。
-## 何ランぶん回すか。
+## 何ラン回すか（`--runs=` で上書きできる）。この値は**方針ごと**なので、
+## 100 を指定すると、直行・寄り道・封・全周の合計では 400 ランになる。
 ##
 ## **勝率の判定と、1 戦の長さの測定では必要な数がまるで違う。**
-## 勝率は 1 ランに 1 回しか結果が出ないので 200 要るが、戦闘の長さは
+## 開発中は決定的な固定100ランを、広い帯から外れる回帰の検知に使う。
+## 500 は数値調整の確定・リリース前の再測定にだけ使う。戦闘の長さは
 ## 1 ランで数十戦あるため 40 ランでも数百〜千戦になる。
-## 長さを見たいだけのときは `--runs=40` で足りる（200 は数分かかる）。
-const DEFAULT_RUNS := 200
+## 長さを見たいだけのときは `--runs=40` で足りる。
+const DEFAULT_RUNS := 100
 
 ## 1 戦の打ち切り。無限ループ（互いに削れない編成）から抜けるための保険。
 const MAX_TURNS := 400
@@ -162,6 +163,7 @@ func _run_policy(policy: Policy) -> Dictionary:
 		"death_level_sum": 0, "death_danger_sum": 0,
 		"gold_sum": 0, "gold_runs": 0,
 		"world_span": 0,
+		"greed_elites": 0,
 		"turns_by_foes": {},
 		"turns_by_danger": {},
 	}
@@ -171,6 +173,7 @@ func _run_policy(policy: Policy) -> Dictionary:
 		report["steps"] = int(report["steps"]) + int(result["steps"])
 		report["battles"] = int(report["battles"]) + int(result["battles"])
 		report["world_span"] = int(report["world_span"]) + int(result["span"])
+		report["greed_elites"] = int(report["greed_elites"]) + int(result["greed_elites"])
 		var into: Dictionary = report["turns_by_foes"]
 		for key in result["turns_by_foes"]:
 			var add: Array = result["turns_by_foes"][key]
@@ -257,6 +260,7 @@ const BOSS_PROBE_LEVEL := 14
 var _boss_probe := 0
 
 const ChestReward := preload("res://src/dungeon/chest_reward.gd")
+const TownInteractionScript := preload("res://src/world/town_interaction.gd")
 
 
 func _print_report(title: String, r: Dictionary) -> void:
@@ -270,6 +274,9 @@ func _print_report(title: String, r: Dictionary) -> void:
 	print("  1 ランの歩数 : 平均 %.0f 歩（門から城まで %.0f 歩）" % [
 		int(r["steps"]) / runs, int(r["world_span"]) / runs])
 	print("  1 ランの戦闘 : 平均 %.1f 回" % [int(r["battles"]) / runs])
+	# 欲が呼んだ格上（R-3）。**避ける方針では 0 に近く、寄る方針では立つ。**
+	# ここが常に 0 なら線が繋がっていないし、戦闘数と同じ桁なら呼びすぎ。
+	print("  欲が呼んだ格上 : 平均 %.2f 回" % [int(r["greed_elites"]) / runs])
 	if int(r["level_runs"]) > 0:
 		print("  城に着いた時 : 平均 Lv %.1f / ゴールド %d" % [
 			int(r["level_sum"]) / float(r["level_runs"]),
@@ -415,6 +422,9 @@ func _simulate(seed_value: int, policy: Policy) -> Dictionary:
 		# 宿で休んだ回数と、拾って着けていない装備。
 		"rests": 0,
 		"gear_stock": [] as Array[String],
+		"town_chests": {},
+		# 欲が呼んだ格上の数（R-3）。**0 のまま動かないなら、線が繋がっていない。**
+		"greed_elites": 0,
 	}
 
 	# 行き先の列。
@@ -501,6 +511,18 @@ func _walk(
 			# Sim は「町のある世界でも一度も回復しない」測り方になっていた。
 			if String(world.site_at(at).get("kind", "")) == "town":
 				_rest(members, state)
+				# 自動戦闘は道具を使わないので、町箱の道具は勝率へ効かない。
+				# ゴールドだけは経済集計へ入れ、同じ町を横切っても一度だけにする。
+				var chest_key := str(at)
+				var opened: Dictionary = state["town_chests"]
+				if not opened.has(chest_key):
+					var site: Dictionary = world.site_at(at)
+					var reward: Dictionary = TownInteractionScript.supply_chest_reward(
+						int(site.get("danger", 1)), rng.fork("town_chest:%s" % chest_key)
+					)
+					state["gold"] = int(state["gold"]) + int(reward.get("gold", 0))
+					opened[chest_key] = true
+					state["town_chests"] = opened
 			continue
 		weighted += world.encounter_weight(at.x, at.y)
 		walked += 1
@@ -531,13 +553,15 @@ func _delve(
 		var here: int = mini(danger + floor_number - 1, WorldMap.MAX_DANGER)
 		state["danger"] = here
 		var map := DungeonGenerator.generate(rng.fork("cave:%d" % floor_number), here, false)
+		var biome := String(site.get("biome", ""))
 		# **経路の近くの宝箱だけ開ける。**
 		#
 		# 全部開けると寛容すぎる ―― 階段までの道すがら、部屋の隅の箱までは
 		# 寄らない。逆に 0 個にすると、初期装備のまま 10 階を戦うことになる
 		# （それが直す前の状態で、「深いほど勝てない」が実際より強く出ていた）。
-		_open_chests(members, rng, state, _chests_on_route(map), here)
-		var biome := String(site.get("biome", ""))
+		if not _open_chests(members, rng, state, _chests_on_route(map), here, biome):
+			state["dead"] = true
+			return
 		var steps := map.route(map.start_pos, map.stairs_pos).size()
 		var weighted := 0
 		var walked := 0
@@ -593,22 +617,67 @@ func _rest(members: Array[PartyMember], state: Dictionary) -> void:
 ## 飛ばしていたせいで、Sim は初期装備のまま 10 階ぶんを戦っていた。
 ## 実プレイでは危険度が上がるほど良い装備が出るので、ここが抜けると
 ## 「深いほど勝てない」が実際より強く出る。
+##
+## **2 つ目以降は「欲」で、格上が来る**（R-3 / `GreedWatch`）。
+## 判定は `GreedWatch` から引く ―― ここへ式を書き写すと、測っている選択と
+## 遊べる選択が別物になる。全滅したら false。
 func _open_chests(
 	members: Array[PartyMember], rng: DetRng, state: Dictionary,
-	count: int, danger: int
-) -> void:
-	var stock: Array[String] = state.get("gear_stock", [] as Array[String])
+	count: int, danger: int, biome: String
+) -> bool:
+	var taken := 0
 	for _i in count:
+		var summons := GreedWatch.summons(taken)
+		# **人は万全なときだけ手を伸ばす。** ここを「常に取る」にすると
+		# 欲を通し続ける party しか測らないことになり、避ける線が数字に出ない。
+		if summons and not _steady_enough(members):
+			break
 		var reward: Dictionary = ChestReward.roll(rng, danger, CHEST_GOLD)
 		state["gold"] = int(state["gold"]) + int(reward.get("gold", 0))
 		var gear_id := String(reward.get("gear", ""))
 		if gear_id != "":
+			var stock: Array[String] = state.get("gear_stock", [] as Array[String])
 			stock.append(gear_id)
-	state["gear_stock"] = stock
+			state["gear_stock"] = stock
+		taken += 1
+		# **取った物を着けてから敵が来る**（遊ぶ側の並びと同じ）。
+		_equip_stock(members, state)
+		if not summons:
+			continue
+		state["greed_elites"] = int(state.get("greed_elites", 0)) + 1
+		var foes := Encounter.build_elite(
+			rng, danger, 100, biome,
+			GreedWatch.kind_id(rng.fork("greed:%d:%d" % [danger, taken]))
+		)
+		if foes.is_empty():
+			continue
+		if not _fight(members, foes, rng, danger, state):
+			return false
+	_equip_stock(members, state)
+	return true
+
+
+## 欲を通すかどうかの目安。**全員立っていて、体力に余裕がある**とき。
+##
+## 数字そのものは「削られていたら手を止める」を表すだけで、難度の調整弁ではない。
+## ここを動かして帯を合わせにいくと、測っている遊び方が静かに変わる。
+func _steady_enough(members: Array[PartyMember]) -> bool:
+	var hp := 0
+	var max_hp := 0
+	for m in members:
+		if m.hp <= 0:
+			return false
+		hp += m.hp
+		max_hp += m.max_hp()
+	return max_hp > 0 and hp * 100 / max_hp >= 70
+
+
+## 拾った装備を着ける。**人と同じ処理で着せる。** ここに別の判断を書くと、
+## 測っている強さと遊べる強さが別物になる（毒で手番が消えていたのと同じ事故）。
+func _equip_stock(members: Array[PartyMember], state: Dictionary) -> void:
+	var stock: Array[String] = state.get("gear_stock", [] as Array[String])
 	if stock.is_empty():
 		return
-	# **人と同じ処理で着せる。** ここに別の判断を書くと、測っている強さと
-	# 遊べる強さが別物になる（毒で手番が消えていたのと同じ事故）。
 	for move in BestGear.plan(members, stock):
 		var member: PartyMember = members[int(move["member"])]
 		var removed := member.equip(String(move["gear"]))
@@ -634,6 +703,7 @@ func _result(
 		"gold": int(state["gold"]),
 		"level": level,
 		"span": span,
+		"greed_elites": int(state.get("greed_elites", 0)),
 		"turns_by_foes": state["turns_by_foes"],
 		"turns_by_danger": state["turns_by_danger"],
 	}

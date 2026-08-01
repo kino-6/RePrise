@@ -3,85 +3,143 @@ extends SceneTree
 const ChestReward := preload("res://src/dungeon/chest_reward.gd")
 const ConfirmFlow := preload("res://src/game/confirm_flow.gd")
 const ChronicleAIText := preload("res://src/game/chronicle_ai.gd")
+const TownInteractionScript := preload("res://src/world/town_interaction.gd")
+const BattleOpeningScript := preload("res://src/battle/battle_opening.gd")
+const BattleTextSource := preload("res://src/ui/battle_text.gd")
 
 ## 決定性の検証。
 ##
 ##   godot --headless --script res://tests/test_core.gd
+##   godot --headless --script res://tests/test_core.gd -- --suite=combat
+##   python tools/test_core.py  # 8領域を別プロセスで並列実行
 ##
 ## ローグライクは「同じシードなら同じ結果」が崩れた瞬間に、リプレイも
 ## 不具合の再現もバランスの自動調整も全部できなくなる。ここは常に緑に保つ。
 
 var _passed := 0
 var _failed := 0
+var _shard_index := 0
+var _shard_count := 1
+
+
+const SUITE_NAMES: Array[String] = [
+	"determinism", "presentation", "progression", "world", "town", "narrative",
+	"persistence", "combat",
+]
 
 
 func _initialize() -> void:
-	print("=== 決定性テスト ===")
-	_test_rng_determinism()
-	_test_rng_range()
-	_test_rng_fork_independence()
-	_test_scheduler_order()
-	_test_scheduler_preview_matches_reality()
-	_test_scheduler_tiebreak()
-	_test_action_cost_matters()
-	_test_cover_and_buff_expiry()
-	_test_dungeon_determinism()
-	_test_dungeon_reachable()
-	_test_encounter_gap()
-	_test_docs_hygiene()
-	_test_no_white_flash()
-	_test_single_ai_connection()
-	_test_chronicle_ai_fact_gate()
-	_test_cross_world_placements_wired()
-	_test_twelve_arcs_rotate()
-	_test_eight_stage_mastery()
-	_test_signature_abilities()
-	_test_inherit_signs()
-	_test_sign_effects()
-	_test_reward_reachability()
-	_test_elite_rules()
-	_test_upgrades_add_choices()
-	_test_turn_plates_stay_unique()
-	_test_town_layouts_differ()
-	_test_arc_endings_in_chronicle()
-	_test_data_integrity()
-	_test_save_migration()
-	_test_save_to_disk()
-	_test_save_erase()
-	_test_suspend()
-	_test_guardian_and_escape()
-	_test_roster()
-	_test_field_poison()
-	_test_settings()
-	_test_run_abandon_confirmation()
-	_test_dungeon_route()
-	_test_world_generation()
-	_test_town_generation()
-	_test_quest_text()
-	_test_vocabulary()
-	_test_version()
-	_test_event_effects()
-	_test_battle_fx()
-	_test_cross_world_catalog()
-	_test_cross_world_progress()
-	_test_text_wrap()
-	_test_database_loaded()
-	_test_final_floor()
-	_test_boss_encounter()
-	_test_every_floor_populated()
-	_test_shop()
-	_test_equipment_catalog()
-	_test_item_catalog()
-	_test_run_loot_rewards()
-	_test_echo_and_upgrades()
-	_test_run_rules()
-	_test_mastery_persists()
-	_test_job_change()
-	_test_advanced_jobs()
+	_read_shard()
+	var selected := _selected_suite()
+	if selected != "all" and selected not in SUITE_NAMES:
+		push_error("未知のテストスイート: %s（%s）" % [selected, ", ".join(SUITE_NAMES)])
+		quit(2)
+		return
+	print("=== 決定性テスト [%s] ===" % selected)
+	for test_case in _test_cases():
+		if selected == "all" or String(test_case.suite) == selected:
+			var callable: Callable = test_case.callable
+			if (
+				selected == "world" and _shard_index > 0
+				and String(callable.get_method()) != "_test_world_generation"
+			):
+				continue
+			callable.call()
 
 	print("---")
 	print("成功 %d / 失敗 %d" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
+
+
+func _selected_suite() -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--suite="):
+			return arg.trim_prefix("--suite=")
+	return "all"
+
+
+func _read_shard() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if not arg.begins_with("--shard="):
+			continue
+		var parts := arg.trim_prefix("--shard=").split("/")
+		if parts.size() != 2:
+			continue
+		_shard_count = maxi(int(parts[1]), 1)
+		_shard_index = clampi(int(parts[0]), 0, _shard_count - 1)
+
+
+## 領域ごとの独立スイート。従来の一括実行ではこの並びをそのまま通す。
+## 並列ランナーは suite 単位で別プロセスにするので、static状態や一時保存が混ざらない。
+func _test_cases() -> Array[Dictionary]:
+	return [
+		{"suite": "determinism", "callable": _test_rng_determinism},
+		{"suite": "determinism", "callable": _test_rng_range},
+		{"suite": "determinism", "callable": _test_rng_fork_independence},
+		{"suite": "determinism", "callable": _test_scheduler_order},
+		{"suite": "determinism", "callable": _test_scheduler_preview_matches_reality},
+		{"suite": "determinism", "callable": _test_scheduler_tiebreak},
+		{"suite": "determinism", "callable": _test_action_cost_matters},
+		{"suite": "determinism", "callable": _test_cover_and_buff_expiry},
+		{"suite": "determinism", "callable": _test_dungeon_determinism},
+		{"suite": "determinism", "callable": _test_dungeon_reachable},
+		{"suite": "determinism", "callable": _test_encounter_gap},
+		{"suite": "presentation", "callable": _test_docs_hygiene},
+		{"suite": "presentation", "callable": _test_no_white_flash},
+		{"suite": "presentation", "callable": _test_battle_opening_gate},
+		{"suite": "presentation", "callable": _test_single_ai_connection},
+		{"suite": "presentation", "callable": _test_chronicle_ai_fact_gate},
+		{"suite": "world", "callable": _test_cross_world_placements_wired},
+		{"suite": "progression", "callable": _test_twelve_arcs_rotate},
+		{"suite": "progression", "callable": _test_eight_stage_mastery},
+		{"suite": "progression", "callable": _test_signature_abilities},
+		{"suite": "progression", "callable": _test_inherit_signs},
+		{"suite": "progression", "callable": _test_sign_effects},
+		{"suite": "progression", "callable": _test_reward_reachability},
+		{"suite": "combat", "callable": _test_elite_rules},
+		{"suite": "combat", "callable": _test_greed_summons_elite},
+		{"suite": "progression", "callable": _test_upgrades_add_choices},
+		{"suite": "combat", "callable": _test_turn_plates_stay_unique},
+		{"suite": "town", "callable": _test_town_layouts_differ},
+		{"suite": "narrative", "callable": _test_arc_endings_in_chronicle},
+		{"suite": "presentation", "callable": _test_data_integrity},
+		{"suite": "persistence", "callable": _test_save_migration},
+		{"suite": "persistence", "callable": _test_save_to_disk},
+		{"suite": "persistence", "callable": _test_save_erase},
+		{"suite": "persistence", "callable": _test_suspend},
+		{"suite": "combat", "callable": _test_guardian_and_escape},
+		{"suite": "progression", "callable": _test_roster},
+		{"suite": "persistence", "callable": _test_field_poison},
+		{"suite": "persistence", "callable": _test_settings},
+		{"suite": "persistence", "callable": _test_run_abandon_confirmation},
+		{"suite": "world", "callable": _test_dungeon_route},
+		{"suite": "world", "callable": _test_world_generation},
+		{"suite": "town", "callable": _test_town_generation},
+		{"suite": "town", "callable": _test_town_interactions},
+		{"suite": "narrative", "callable": _test_quest_text},
+		{"suite": "presentation", "callable": _test_vocabulary},
+		{"suite": "persistence", "callable": _test_version},
+		{"suite": "narrative", "callable": _test_event_effects},
+		{"suite": "combat", "callable": _test_battle_fx},
+		{"suite": "narrative", "callable": _test_cross_world_catalog},
+		{"suite": "narrative", "callable": _test_cross_world_progress},
+		{"suite": "presentation", "callable": _test_text_wrap},
+		{"suite": "presentation", "callable": _test_database_loaded},
+		{"suite": "combat", "callable": _test_final_floor},
+		{"suite": "combat", "callable": _test_boss_encounter},
+		{"suite": "combat", "callable": _test_every_floor_populated},
+		{"suite": "town", "callable": _test_shop},
+		{"suite": "town", "callable": _test_equipment_catalog},
+		{"suite": "combat", "callable": _test_item_catalog},
+		{"suite": "combat", "callable": _test_reusable_battle_tools},
+		{"suite": "combat", "callable": _test_auto_item_permission},
+		{"suite": "combat", "callable": _test_run_loot_rewards},
+		{"suite": "progression", "callable": _test_echo_and_upgrades},
+		{"suite": "progression", "callable": _test_run_rules},
+		{"suite": "progression", "callable": _test_mastery_persists},
+		{"suite": "progression", "callable": _test_job_change},
+		{"suite": "progression", "callable": _test_advanced_jobs},
+	]
 
 
 # --------------------------------------------------------------------------
@@ -319,6 +377,7 @@ func _test_dungeon_determinism() -> void:
 func _test_dungeon_reachable() -> void:
 	# 到達不能な階段を作ると、そのランはそこで詰む。全シードで通ることを確認する。
 	var all_ok := true
+	var returns_ok := true
 	var checked := 0
 	for seed_value in range(1, 40):
 		var map := DungeonGenerator.generate(DetRng.new(seed_value * 977), 2)
@@ -326,7 +385,16 @@ func _test_dungeon_reachable() -> void:
 		if not _reachable(map, map.start_pos, map.stairs_pos):
 			all_ok = false
 			print("    シード %d で階段に到達できない" % seed_value)
+		if (
+			map.upstairs_pos == map.stairs_pos
+			or map.get_tile(map.upstairs_pos.x, map.upstairs_pos.y) != DungeonMap.T_UP_STAIRS
+			or map.route(map.start_pos, map.upstairs_pos).size() != 1
+			or map.route(map.down_arrival_pos, map.stairs_pos).size() != 1
+			or not _reachable(map, map.down_arrival_pos, map.upstairs_pos)
+		):
+			returns_ok = false
 	_check("%d 個のシードすべてで階段に到達できる" % checked, all_ok)
+	_check("%d 個のシードすべてに見える戻り階段と往復経路がある" % checked, returns_ok)
 
 
 ## 戦闘直後の連続遭遇防止。地形重みやイベント補正より先に実歩数で止める。
@@ -515,6 +583,86 @@ func _test_elite_rules() -> void:
 		"多数の種で全部の型が出る", seen.size() == Encounter.ELITE_KINDS.size(),
 		"(%d / %d 型)" % [seen.size(), Encounter.ELITE_KINDS.size()]
 	)
+	var foretold := Encounter.build_elite(DetRng.new(7), 6, 100, "", "mirror")
+	_check("世界で予告した型を実戦へ固定できる",
+		not foretold.is_empty() and foretold[0].elite_rule == "mirror")
+
+
+## 欲が呼ぶ格上（R-3）。
+##
+## 見るのは「呼ばれ方」であって強さではない。強さは `_test_elite_rules` と
+## `balance.gd` が見ている。ここで守るのは 4 つ。
+##
+##   * 欲を通さなければ **1 度も湧かない**（避けた人が損をしない）
+##   * 通せば **決定的に湧く**（運で湧いたり湧かなかったりしない）
+##   * **湧く前に予告が出る**（後出しにしない）
+##   * R-1 の「置かれた 1 体」と**二重に数えない**
+func _test_greed_summons_elite() -> void:
+	# 1. ただで取れるうちは呼ばない。**ここが 0 だと避ける側が損をする。**
+	_check("ただで取れる数は 1 以上", GreedWatch.FREE_TAKES >= 1)
+	for taken in range(0, GreedWatch.FREE_TAKES):
+		_check("%d 個目までは湧かない" % (taken + 1), not GreedWatch.summons(taken))
+
+	# 2. 欲を通せば決定的に湧く。運の要素を入れない（同じ振る舞い＝同じ結果）。
+	_check("2 つ目以降は必ず湧く", GreedWatch.summons(GreedWatch.FREE_TAKES))
+	_check("3 つ目以降も湧く", GreedWatch.summons(GreedWatch.FREE_TAKES + 1))
+
+	# 3. 予告と実際が同じ式から出る。**別の式にすると後出しが生まれる。**
+	#    印を出すのは「次が呼ぶか」、湧かせるのは「この一つが呼ぶか」で、
+	#    どちらも開ける前の数で決まる。
+	var warned := GreedWatch.summons(GreedWatch.FREE_TAKES)
+	var fired := GreedWatch.summons(GreedWatch.FREE_TAKES)
+	_equal("予告と実際が一致する", warned, fired)
+
+	# 4. 型は DetRng だけで決まる。同じ種・同じ振る舞いから同じ型。
+	var first := GreedWatch.kind_id(DetRng.new(4242).fork("greed:take:2"))
+	var again := GreedWatch.kind_id(DetRng.new(4242).fork("greed:take:2"))
+	_equal("同じ種・同じ振る舞いなら同じ型", first, again)
+	_check("呼ばれた型が実装に在る", not Encounter.elite_kind(first).is_empty(), first)
+	_check("型に呼び名がある", GreedWatch.kind_name(first) != "")
+
+	# 別の振る舞い（順番が違う）なら型も割れる。1 種類に固まっていない。
+	var kinds := {}
+	for i in 60:
+		kinds[GreedWatch.kind_id(DetRng.new(i * 31 + 5).fork("greed:take:2"))] = true
+	_check(
+		"呼ばれる型は 1 種類に固まらない", kinds.size() == Encounter.ELITE_KINDS.size(),
+		"(%d / %d 型)" % [kinds.size(), Encounter.ELITE_KINDS.size()]
+	)
+
+	# 5. 呼ばれた格上も「型はその戦いに 1 つ」を守る（R-1 と同じ読み方）。
+	var foes := Encounter.build_elite(DetRng.new(99), 5, 100, "", first)
+	var marked := 0
+	for foe in foes:
+		if foe.elite_rule != "":
+			marked += 1
+	_equal("呼ばれた群れでも型を持つのは 1 体", marked, 1)
+	_check("予告した型がそのまま出る", not foes.is_empty() and foes[0].elite_rule == first)
+
+	# 6. **R-1 と二重に数えない。** 欲は世界にイベントを増やさないので、
+	#    「避けられる格上ちょうど 1 件」という検算はそのまま通る。
+	var world := WorldGenerator.generate(DetRng.new(31337).fork("world"))
+	var before := world.events.size()
+	for take in range(1, 6):
+		var _kind := GreedWatch.kind_id(DetRng.new(31337).fork("greed:take:%d" % take))
+	_equal("欲は世界のイベントを増やさない", world.events.size(), before)
+	_check("置かれた格上は 1 体のまま", WorldGenerator.verify(world).is_empty(),
+		str(WorldGenerator.verify(world)))
+
+	# 7. 階を降りれば数え直す。**その階ごとの選択**であって、罰の累積ではない。
+	var floor_map := DungeonGenerator.generate(DetRng.new(77), 3, false)
+	_equal("新しい階は取った数 0 から始まる", floor_map.chests_taken, 0)
+
+	# 8. **実行時に通る経路まで繋がっている。** 判定が在るだけでは何も湧かない
+	#    （`_test_elite_rules` が型の実装を見ているのと同じ理由）。
+	var explore_src := FileAccess.get_file_as_string("res://src/scenes/explore_view.gd")
+	var main_src := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	var sim_src := FileAccess.get_file_as_string("res://tests/balance.gd")
+	_check("宝箱を開ける経路が判定を通る", explore_src.contains("GreedWatch.summons"))
+	_check("予告が画面へ出る", main_src.contains("Terms.GREED_WARNING"))
+	_check("呼ばれた格上が戦闘まで繋がる", main_src.contains("_begin_greed_battle"))
+	# **測る側と遊ぶ側は同じ式を使う。** 書き写すと黙ってずれる。
+	_check("測る側も同じ判定を通す", sim_src.contains("GreedWatch.summons"))
 
 
 ## 成長報酬が「到達できて、効く」（E-3）。
@@ -528,7 +676,7 @@ func _test_reward_reachability() -> void:
 
 	# **どの報酬にも到達の道がある。** 段が上がれば必ず何かが増える。
 	var levels := {"provisions": 0, "connections": 0, "seal_lore": 0,
-		"lifeline": 0, "handmemory": 0}
+		"lifeline": 0, "handmemory": 0, "relic_satchel": 0}
 	var reader := func(id: String) -> int: return int(levels.get(id, 0))
 	var base := RunChoice.count_at(reader)
 	var dead: Array[String] = []
@@ -565,6 +713,21 @@ func _test_reward_reachability() -> void:
 	var view := FileAccess.get_file_as_string("res://src/scenes/stronghold_view.gd")
 	_check("出撃前に選択が出る", view.contains("_draw_depart_choices"))
 	_check("左右で変えられる", view.contains("_cycle_depart_choice"))
+	_check("出撃内容は独立した入力段階", view.contains("State.DEPART"))
+	_check("上下で四項目を選べる", view.contains("const DEPART_CHOICES := 4"))
+	_check("一覧の決定だけで出撃しない", view.contains("_state = State.DEPART"))
+
+	var moving_wait := 0.0
+	var previous := "BATTLE:0"
+	for second in range(1, 31):
+		var current := "BATTLE:%d" % second
+		moving_wait = AutoPlay.progress_wait(moving_wait, previous, current, 1.0)
+		previous = current
+	_check("30秒同じ戦闘画面でも行動が進めば停止扱いしない", moving_wait == 0.0)
+	var stopped_wait := 0.0
+	for _second in 26:
+		stopped_wait = AutoPlay.progress_wait(stopped_wait, "BATTLE:7", "BATTLE:7", 1.0)
+	_check("進行署名が26秒止まれば停止候補になる", stopped_wait > 25.0)
 
 
 ## 継承印の効き目（E-2b）。**持っているだけでは効かない。**
@@ -667,7 +830,7 @@ func _test_upgrades_add_choices() -> void:
 
 	# **全体として、段を上げるたびに選択が増える。**
 	var levels := {"provisions": 0, "connections": 0, "seal_lore": 0,
-		"lifeline": 0, "handmemory": 0}
+		"lifeline": 0, "handmemory": 0, "relic_satchel": 0}
 	var reader := func(id: String) -> int: return int(levels.get(id, 0))
 	var before := RunChoice.count_at(reader)
 	var stalled: Array[String] = []
@@ -939,6 +1102,18 @@ func _test_single_ai_connection() -> void:
 	var factory := FileAccess.get_file_as_string("res://src/game/local_ai.gd")
 	_check("その 1 か所は LocalAI.create()", factory.contains("static func create("))
 	_check("AI の有無の判定も 1 か所", factory.contains("static func enabled("))
+	var fenced := LocalAI.extract_json(
+		"返答です。\n```json\n{\"title\":\"橋の見張り\",\"flavor\":\"水音が響く。\"}\n```"
+	)
+	_equal("AI返答のコードフェンスから辞書を取り出せる", String(fenced.get("title", "")), "橋の見張り")
+	_check(
+		"AIの壊れたJSONはエラーにせず不採用にする",
+		LocalAI.extract_json("{\"title\":\"途切れた返答\" \"actor\":\"旅人\"}").is_empty()
+	)
+	var braces := LocalAI.extract_json(
+		"{\"title\":\"波括弧 { も品名\",\"flavor\":\"閉じ括弧 } も本文。\"}"
+	)
+	_equal("AI文章内の波括弧をJSONの終端と誤認しない", String(braces.get("flavor", "")), "閉じ括弧 } も本文。")
 
 	# **返事を「適用する関数」だけが対象。**
 	#
@@ -1031,7 +1206,8 @@ func _test_no_white_flash() -> void:
 	_check("全トランジションに入力Gateがある", main.contains("func _begin_transition_input"))
 	_check(
 		"探索は覆いが開ききるまで再開しない",
-		main.contains("mode == Mode.EXPLORE and not _transition_input_locked")
+		main.contains("mode == Mode.EXPLORE")
+		and main.contains("and not _transition_input_locked")
 	)
 	_check(
 		"トランジション終了後にキー解放を待つ",
@@ -1062,6 +1238,46 @@ func _test_no_white_flash() -> void:
 			if coverage[i] < coverage[i - 1]:
 				monotonic = false
 		_check("%s の覆い率は戻らない" % kind, monotonic, str(coverage))
+
+
+## 戦闘開始を、遭遇トランジションの裏で進めない。
+##
+## 画面を隠すだけでは Node の `_process()` は動く。BattleView 自身を止めないと、
+## 戦場が見えた最初のフレームに敵の攻撃エフェクトが出る回帰を防げない。
+func _test_battle_opening_gate() -> void:
+	Database.reload()
+	var ally := _make_battler(1, "旅人", 8)
+	ally.abilities = ["attack"]
+	var enemy := _make_battler(100, "ゲル", 40, false)
+	enemy.source_id = "gel"
+	enemy.abilities = ["attack"]
+	var system := BattleSystem.new()
+	system.start([ally], [enemy], DetRng.new(8101), 1)
+
+	var lines := BattleOpeningScript.lines(system)
+	_check("開戦文は敵名を先に伝える", not lines.is_empty() and "ゲル" in lines[0], str(lines))
+	_check("敵が初手なら先に動くと伝える", lines.size() == 2 and "先に動く" in lines[1], str(lines))
+	_check("開戦文は速い文字設定でも一拍を保つ", BattleOpeningScript.MIN_HOLD >= 0.8)
+	_check(
+		"遷移終了前は残り時間に関係なく戦闘を始めない",
+		not BattleOpeningScript.can_advance(false, -30.0)
+	)
+	_check("開戦文の表示時間中は戦闘を始めない", not BattleOpeningScript.can_advance(true, 0.1))
+	_check("開戦文を読み終えた後だけ戦闘を始める", BattleOpeningScript.can_advance(true, 0.0))
+
+	var main := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	var view := FileAccess.get_file_as_string("res://src/scenes/battle_view.gd")
+	_check(
+		"戦闘開始Gateはトランジション完了通知につながる",
+		main.contains("battle.reveal_opening()")
+		and main.find("battle.reveal_opening()") > main.find("func _transition_visual_finished")
+	)
+	_check(
+		"BattleViewはトランジション終了まで自分の処理を止める",
+		view.contains("_state = State.OPENING")
+		and view.contains("set_process(false)")
+		and view.contains("func reveal_opening()")
+	)
 
 
 func _test_docs_hygiene() -> void:
@@ -1177,26 +1393,65 @@ func _test_data_integrity() -> void:
 func _test_settings() -> void:
 	var volume_before: int = Settings.volume
 	var speed_before: int = Settings.text_speed
+	var auto_items_before: bool = Settings.auto_items
+	var bindings_before: Dictionary = Settings.bindings.duplicate(true)
+	var input_before := {}
+	for action in Settings.ACTIONS:
+		var copied: Array[InputEvent] = []
+		for event in InputMap.action_get_events(action):
+			copied.append(event.duplicate())
+		input_before[action] = copied
 
 	Settings.volume = 3
 	Settings.text_speed = 2
+	Settings.auto_items = true
 	Settings.bindings = {"confirm": KEY_SPACE}
 	Settings.save_config()
 
 	Settings.volume = 10
 	Settings.text_speed = 0
+	Settings.auto_items = false
 	Settings.bindings = {}
 	Settings.load_config()
 	_check("音量が戻る", Settings.volume == 3)
 	_check("文字の速さが戻る", Settings.text_speed == 2)
+	_check("オートの道具許可が戻る", Settings.auto_items)
 	_check("キーの割り当てが戻る", int(Settings.bindings.get("confirm", 0)) == KEY_SPACE)
 	_check("速い設定のほうが待ち時間が短い", Settings.line_delay() < Settings.TEXT_SPEEDS[0])
+
+	Settings.apply()
+	var keypad_expect := {
+		"ui_up": [KEY_KP_8], "ui_down": [KEY_KP_2],
+		"ui_left": [KEY_KP_4], "ui_right": [KEY_KP_6],
+		"confirm": [KEY_KP_5, KEY_KP_ENTER],
+		"cancel": [KEY_KP_0, KEY_KP_PERIOD],
+	}
+	var key_owners := {}
+	for action in keypad_expect:
+		for keycode in keypad_expect[action]:
+			_check(
+				"テンキー %s が %s に割り当たる" % [OS.get_keycode_string(keycode), action],
+				Settings.input_has_physical_key(action, keycode)
+			)
+			_check("テンキーの役割が重ならない", not key_owners.has(keycode))
+			key_owners[keycode] = action
+	Settings.rebind("confirm", KEY_Z)
+	_check(
+		"主キーを変えてもテンキー決定が残る",
+		Settings.input_has_physical_key("confirm", KEY_KP_5)
+		and Settings.input_has_physical_key("confirm", KEY_KP_ENTER)
+	)
 
 	# 元へ戻して後始末（テストが遊ぶ人の設定を書き換えたままにしない）
 	Settings.volume = volume_before
 	Settings.text_speed = speed_before
-	Settings.bindings = {}
+	Settings.auto_items = auto_items_before
+	Settings.bindings = bindings_before
 	Settings.save_config()
+	for action in input_before:
+		InputMap.action_erase_events(action)
+		for event in input_before[action]:
+			InputMap.action_add_event(action, event)
 
 
 ## ラン放棄は「確認を2回した」だけでは足りず、各画面で明示的に
@@ -1511,6 +1766,11 @@ func _test_save_erase() -> void:
 ## 城まで歩けない世界を 1 つ出すだけで、そのランは丸ごと無駄になる。
 ## 生成物の到達性は目で見て確かめられないので、必ずここで測る。
 func _test_world_generation() -> void:
+	# 大量生成の部分は独立している。並列ランナーの2本目以降はここだけを担当し、
+	# 例示・故障注入を重複実行しない。
+	if _shard_index > 0:
+		_test_world_generation_batch()
+		return
 	var seeds := [1, 7, 42, 4242, 99991, 123456]
 	var all_reachable := true
 	var gates_on_land := true
@@ -1583,16 +1843,7 @@ func _test_world_generation() -> void:
 	# 生成器の自己検算。**ここが本体。**
 	# 世界は毎回違うので、目で見て確かめられるのはごく一部でしかない。
 	# 生成器に自分の出力を疑わせて、通ったものだけを世界にする。
-	var bad := []
-	for seed_value in range(1, 102):
-		var w := WorldGenerator.generate(DetRng.new(seed_value * 5171))
-		var problems := WorldGenerator.verify(w)
-		if not problems.is_empty():
-			bad.append("種%d: %s" % [seed_value, "/".join(problems)])
-	_check(
-		"101 個の世界すべてが生成器の検算を通る", bad.is_empty(),
-		"(落ちた: %s)" % str(bad.slice(0, 3))
-	)
+	_test_world_generation_batch()
 
 	# 検算が壊れた世界を見逃さないこと。**検算そのものを試す。**
 	# 通す側だけ試すと、いつも空を返す検算でもテストは緑になる。
@@ -1654,6 +1905,24 @@ func _test_world_generation() -> void:
 	_check("封の名が重複しない", names.size() == w2.seals.size())
 
 
+## 101世界の統計検算。`--shard=i/n` なら互いに重ならない種だけを受け持つ。
+func _test_world_generation_batch() -> void:
+	var bad: Array[String] = []
+	var checked := 0
+	for seed_value in range(1 + _shard_index, 102, _shard_count):
+		checked += 1
+		var w := WorldGenerator.generate(DetRng.new(seed_value * 5171))
+		var problems := WorldGenerator.verify(w)
+		if not problems.is_empty():
+			bad.append("種%d: %s" % [seed_value, "/".join(problems)])
+	_check(
+		"世界生成の分割検算 %d/%d（%d世界）" % [
+			_shard_index + 1, _shard_count, checked,
+		],
+		bad.is_empty(), "(落ちた: %s)" % str(bad.slice(0, 3))
+	)
+
+
 ## 町の生成。**迷わせないこと**と**用が足せること**を守る。
 ##
 ## 町は目的地であって迷路ではない。宿にも店にも出口にも辿り着けない町を
@@ -1671,6 +1940,7 @@ func _test_town_generation() -> void:
 	var road_art_variants := {}
 	var plaza_art_variants := {}
 	var town_art_ranges_valid := true
+	var town_objects_clear := true
 	for seed_value in range(1, 101):
 		var town_index := (seed_value - 1) % 4
 		var world_variant := seed_value % TownProfile.cycle_size()
@@ -1749,6 +2019,16 @@ func _test_town_generation() -> void:
 				if art < TownMap.ART_PLAZA_FIRST \
 						or art >= TownMap.ART_PLAZA_FIRST + TownMap.ART_VARIANTS:
 					town_art_ranges_valid = false
+		if (
+			town.supply_chest_pos.x < 0
+			or town.render_tile(town.supply_chest_pos.x, town.supply_chest_pos.y) != TownMap.ART_CHEST
+			or town.is_walkable(town.supply_chest_pos.x, town.supply_chest_pos.y)
+		):
+			town_objects_clear = false
+		for y in town.height:
+			for x in town.width:
+				if town.get_tile(x, y) == TownMap.T_SIGN and town.render_tile(x, y) != TownMap.ART_SIGN:
+					town_objects_clear = false
 
 	_check("町の宿・店・出口に必ず辿り着ける", reachable)
 	_check("町に人が居る", has_folk)
@@ -1760,6 +2040,7 @@ func _test_town_generation() -> void:
 	_check("町の街路・広場が専用描画番号へ分かれる", town_art_ranges_valid)
 	_check("町の街路4変種を座標だけで使い分ける", road_art_variants.size() == 4)
 	_check("町の広場4変種を座標だけで使い分ける", plaza_art_variants.size() == 4)
+	_check("町の案内札と開けられる物資箱は別の絵と判定を持つ", town_objects_clear)
 	_check(
 		"100町すべて生成契約を通る",
 		generation_problems.is_empty(),
@@ -1813,6 +2094,144 @@ func _test_town_generation() -> void:
 		"signal site_entered(pos: Vector2i, from: Vector2i)" in explore_source
 		and "_site_return_pos" in main_source
 	)
+
+
+## 町の人と仕事場が、文章を出すだけでなくラン中の状態へ接続されること。
+func _test_town_interactions() -> void:
+	Database.reload()
+	var state: Node = load("res://src/game/game_state.gd").new()
+	state.roster = _fresh_roster()
+	state.start_new_run(73119)
+	var town_pos := Vector2i(-1, -1)
+	for raw_pos in state.world.sites:
+		if String(state.world.sites[raw_pos].get("kind", "")) == "town":
+			town_pos = raw_pos
+			break
+	_check("仕事場試験に使う町がある", town_pos.x >= 0)
+	if town_pos.x < 0:
+		return
+	state.enter_site(town_pos)
+	var town_index := int(state.site.get("index", 0))
+	var town := TownGenerator.generate(
+		state.rng_for("town"), state.floor_number,
+		String(state.site.get("tileset", "dungeon")), town_index,
+		posmod(state.run_seed, TownProfile.cycle_size())
+	)
+
+	var elder: Dictionary = {}
+	var all_talks_useful := true
+	for raw_pos in town.folk:
+		var person: Dictionary = town.folk[raw_pos]
+		if String(person.get("kind", "")) == "elder":
+			elder = person
+			continue
+		var preview: Dictionary = TownInteractionScript.talk(
+			state, town, town_index, person
+		)
+		if (
+			String(preview.get("speaker", "")) == ""
+			or (preview.get("lines", []) as Array).size() < 2
+		):
+			all_talks_useful = false
+	_check("全住人の会話に話者と実用情報がある", all_talks_useful)
+
+	var known_before: int = state.world.seals.filter(
+		func(s: Dictionary) -> bool: return bool(s.get("known", false))
+	).size()
+	var guide_talk: Dictionary = TownInteractionScript.talk(
+		state, town, town_index, elder
+	)
+	var known_after: int = state.world.seals.filter(
+		func(s: Dictionary) -> bool: return bool(s.get("known", false))
+	).size()
+	_check("案内役の会話で未知の封が地図へ増える", known_after == known_before + 1)
+	_check("案内役の結果を会話窓で読める", (guide_talk.get("lines", []) as Array).size() >= 2)
+	TownInteractionScript.talk(state, town, town_index, elder)
+	var known_repeat: int = state.world.seals.filter(
+		func(s: Dictionary) -> bool: return bool(s.get("known", false))
+	).size()
+	_check("同じ町の案内役を連打して封を増やせない", known_repeat == known_after)
+
+	var before := JSON.stringify({
+		"inventory": state.inventory,
+		"shop": state.event_shop_bonus,
+		"boons": state.event_boons,
+		"route": state.event_route_changes,
+		"boss": state.event_boss_intel,
+	})
+	var service: Dictionary = TownInteractionScript.use_facility(
+		state, town, town_index, DetRng.new(9101)
+	)
+	var after := JSON.stringify({
+		"inventory": state.inventory,
+		"shop": state.event_shop_bonus,
+		"boons": state.event_boons,
+		"route": state.event_route_changes,
+		"boss": state.event_boss_intel,
+	})
+	_check("町の仕事場はラン中の状態を実際に変える", bool(service.get("changed", false)) and before != after)
+	var after_first := after
+	var repeat: Dictionary = TownInteractionScript.use_facility(
+		state, town, town_index, DetRng.new(9101)
+	)
+	var after_repeat := JSON.stringify({
+		"inventory": state.inventory,
+		"shop": state.event_shop_bonus,
+		"boons": state.event_boons,
+		"route": state.event_route_changes,
+		"boss": state.event_boss_intel,
+	})
+	_check("同じ仕事場から報酬を繰り返し得られない", not bool(repeat.get("changed", true)) and after_repeat == after_first)
+
+	var chest_before := JSON.stringify({
+		"inventory": state.inventory,
+		"gold": state.gold,
+	})
+	var chest_reward: Dictionary = TownInteractionScript.open_supply_chest(
+		state, town, town_index, DetRng.new(9221)
+	)
+	var chest_after := JSON.stringify({
+		"inventory": state.inventory,
+		"gold": state.gold,
+	})
+	_check("町の物資箱はラン中の道具とゴールドを増やす",
+		bool(chest_reward.get("changed", false)) and chest_before != chest_after)
+	var chest_repeat: Dictionary = TownInteractionScript.open_supply_chest(
+		state, town, town_index, DetRng.new(9221)
+	)
+	var chest_after_repeat := JSON.stringify({
+		"inventory": state.inventory,
+		"gold": state.gold,
+	})
+	_check("同じ町の物資箱は二度受け取れない",
+		not bool(chest_repeat.get("changed", true)) and chest_after_repeat == chest_after)
+
+	var industries := {}
+	for row in TownProfile.INDUSTRIES:
+		industries[String(row.get("id", ""))] = true
+	_check("8生業すべてに別の仕事場効果がある",
+		industries.size() == 8
+		and industries.keys().all(func(id: Variant) -> bool:
+			return String(id) == "farming" or TownInteractionScript.FACILITY_REWARDS.has(String(id))))
+	_check("町会話は流れる通知でなく閉じるまで残る窓を使う",
+		"func open_talk(" in FileAccess.get_file_as_string("res://src/scenes/event_view.gd")
+		and "event_view.open_talk" in FileAccess.get_file_as_string("res://src/scenes/main.gd"))
+	_check("町の物資箱は実入力から報酬窓へ接続される",
+		"signal town_chest_opened" in FileAccess.get_file_as_string("res://src/scenes/explore_view.gd")
+		and "explore.town_chest_opened.connect(_on_town_chest)" in FileAccess.get_file_as_string("res://src/scenes/main.gd"))
+	var main_source := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	var state_source := FileAccess.get_file_as_string("res://src/game/game_state.gd")
+	# 撮影と `--inspect=` は S-1 で `src/dev/` へ移した。**見る先を移すだけで、
+	# 見る中身は変えない** ―― 分割のたびに検査を緩めると、守っていたはずの
+	# 接続が黙って外れる。
+	var capture_source := FileAccess.get_file_as_string("res://src/dev/capture_scenes.gd")
+	var probe_source := FileAccess.get_file_as_string("res://src/dev/dev_probe.gd")
+	_check("町の実描画へ秒数なしで直接入れる",
+		"--inspect=" in probe_source and "town_facility_repeat" in capture_source)
+	_check("開発足場は本編と別のファイルに置く",
+		not ("func _capture(" in main_source) and "dev.handle_debug_args(self)" in main_source)
+	_check("実描画の検査はユーザーのセーブを触らない",
+		"begins_with(\"--inspect=\")" in state_source)
 
 
 ## AI が書いた文字列の検算。**繋ぐ前にここを固める。**
@@ -2009,6 +2428,19 @@ func _test_event_effects() -> void:
 					bad.append("種%d: skin の %s が空" % [seed_value, key])
 			if inst.get("choices", []).is_empty():
 				bad.append("種%d: 選択肢が無い" % seed_value)
+			if bool(inst.get("visible_elite", false)):
+				if pos in w.main_road:
+					bad.append("種%d: 格上が街道を塞ぐ" % seed_value)
+				var near_road := false
+				for road in w.main_road:
+					if absi(pos.x - road.x) + absi(pos.y - road.y) <= 2:
+						near_road = true
+						break
+				if not near_road:
+					bad.append("種%d: 格上が短い枝道にいない" % seed_value)
+				var kind := Encounter.elite_kind(String(inst.get("elite_rule_id", "")))
+				if kind.is_empty() or String(kind.get("rule", "")) not in String(inst.skin.cause):
+					bad.append("種%d: 予告した型と説明が一致しない" % seed_value)
 	_check("24 個の世界すべてが検算を通る（イベント込み）", bad.is_empty(), "(%s)" % str(bad.slice(0, 3)))
 	_check("イベントが世界に置かれる（%d 件）" % placed, placed >= 24 * 2)
 
@@ -2045,6 +2477,11 @@ func _test_suspend() -> void:
 	state.world.story_beat = 3
 	state.world.story_choice = "test_choice"
 	state.event_done[Vector2i(9, 9)] = true
+	state.event_task = {
+		"version": 1, "event_id": "broken_bridge", "choice_id": "repair",
+		"kind": "travel", "position": [9, 9], "goal": 3, "progress": 1,
+	}
+	state.town_actions_done["facility:2:test"] = true
 	state.event_tags["rescue"] = 2
 	state.event_encounter_bias = -2
 	state.event_bias_steps = 23
@@ -2090,6 +2527,15 @@ func _test_suspend() -> void:
 	_equal("物語の進みが戻る", back.world.story_beat, 3)
 	_equal("選んだ手が戻る", back.world.story_choice, "test_choice")
 	_check("済んだイベントが戻る", back.event_done.has(Vector2i(9, 9)))
+	_check("実行中イベントの工程が戻る",
+		String(back.event_task.get("event_id", "")) == "broken_bridge"
+		and String(back.event_task.get("choice_id", "")) == "repair"
+		and String(back.event_task.get("kind", "")) == "travel"
+		and int(back.event_task.get("progress", -1)) == 1
+		and int(back.event_task.get("goal", -1)) == 3
+		and int(back.event_task.get("position", [])[0]) == 9
+		and int(back.event_task.get("position", [])[1]) == 9)
+	_check("町で利用した仕事場が戻る", back.town_actions_done.has("facility:2:test"))
 	_equal("えらび方の記憶が戻る", int(back.event_tags.get("rescue", 0)), 2)
 	_equal("遭遇補正が戻る", back.event_encounter_bias, -2)
 	_equal("イベント効果の残り歩数が戻る", back.event_bias_steps, 23)
@@ -2400,6 +2846,39 @@ func _test_dungeon_route() -> void:
 	_check("経路が 1 マスずつ繋がっている", contiguous)
 	_check("届かない場所には空の経路", map.route(map.start_pos, Vector2i(-5, -5)).is_empty())
 
+	var state: Node = load("res://src/game/game_state.gd").new()
+	state.start_new_run(80631)
+	var cave := Vector2i(-1, -1)
+	for raw_pos in state.world.sites:
+		if String(state.world.sites[raw_pos].get("kind", "")) == "cave":
+			cave = raw_pos
+			break
+	_check("階層往復用の洞がある", cave.x >= 0)
+	if cave.x >= 0:
+		state.enter_site(cave)
+		var base_danger: int = state.floor_number
+		state.descend()
+		_check("下り階段で2階へ進む", int(state.site.get("floor", 0)) == 2)
+		_check("2階から上り階段を使える", state.ascend())
+		_equal("上り階段で直前の1階へ戻る", int(state.site.get("floor", 0)), 1)
+		_equal("戻ると危険度も1階の値へ戻る", state.floor_number, base_danger)
+		_check("1階の上りは階数を0にしない", not state.ascend())
+		_equal("1階から戻ろうとしても階数は1", int(state.site.get("floor", 0)), 1)
+
+	var main_source := FileAccess.get_file_as_string("res://src/scenes/main.gd")
+	var explore_source := FileAccess.get_file_as_string("res://src/scenes/explore_view.gd")
+	_check(
+		"上り階段は実入力から階層移動へ接続される",
+		"signal ascended" in explore_source
+		and "explore.ascended.connect(_on_ascend)" in main_source
+	)
+	_check(
+		"戻った階の箱・店・乱数を作り直さない",
+		"_dungeon_floors.has(cave_floor)" in main_source
+		and 'saved_floor["encounter_rng"]' in main_source
+		and 'saved_floor["battle_rng"]' in main_source
+	)
+
 
 ## 折り返しは戦記（将来 LLM の文章が流れる場所）が溢れないための保証。
 func _test_text_wrap() -> void:
@@ -2629,7 +3108,7 @@ func _test_item_catalog() -> void:
 	var malformed: Array[String] = []
 	var known_effects := [
 		"heal_hp", "heal_mp", "revive", "cleanse",
-		"heal_cleanse", "item_damage", "haste",
+		"heal_cleanse", "heal_all", "item_damage", "haste",
 	]
 	for item_id in all_items:
 		var item: Dictionary = Database.item(String(item_id))
@@ -2658,6 +3137,99 @@ func _test_item_catalog() -> void:
 	_check("火炎びんは炎弱点へ固定系ダメージを与える", int(damage_a.damage) >= 75, str(damage_a))
 
 
+## 戦具は失わずに使える一方、回復を無限に引き出して消耗戦を消さない。
+## 装備使用も同じ効果契約と使用回数へ通す。
+func _test_reusable_battle_tools() -> void:
+	Database.reload()
+	var reusable := Database.reusable_item_ids_for_floor(10)
+	_equal("なくならない戦具は3種", reusable.size(), 3)
+	var malformed: Array[String] = []
+	for id in reusable:
+		var item := Database.item(String(id))
+		if not bool(item.get("battle_only", false)) or bool(item.get("shop", true)):
+			malformed.append(String(id))
+	_check("戦具は戦闘専用で店売りしない", malformed.is_empty(), str(malformed))
+	var shop_items := Database.item_ids_for_shop(10)
+	_check("戦具は通常の出店へ混ざらない", reusable.all(func(id): return id not in shop_items))
+
+	const TOOL_TEST_PREFIX := "user://test_reusable_tool"
+	var state = load("res://src/game/game_state.gd").new()
+	state.use_save_paths(TOOL_TEST_PREFIX)
+	state.roster = _fresh_roster()
+	state.upgrades = {"relic_satchel": 3}
+	_check("解放した戦具を出撃前に選べる", state.set_reusable_loadout("mending_stone"))
+	state.start_new_run(7182)
+	_equal("選んだ戦具を1個持ち込む", state.item_count("mending_stone"), 1)
+	state.add_item("mending_stone", 4)
+	_equal("同じ戦具を拾っても1個に畳む", state.item_count("mending_stone"), 1)
+	_check("通常の消費経路では戦具を失わない", not state.consume_item("mending_stone"))
+	_equal("消費を試しても戦具が残る", state.item_count("mending_stone"), 1)
+	_check(
+		"戦具だけではイベントの消耗品代価を払えない",
+		not EventEffects.unpayable(state, ["item"], 1).is_empty()
+	)
+
+	var actor := _make_battler(610, "使い手", 14)
+	var friend := _make_battler(611, "仲間", 11)
+	var foe := _make_battler(612, "敵", 8, false)
+	friend.hp = 10
+	var battle := BattleSystem.new()
+	battle.start(
+		[actor, friend] as Array[Battler], [foe] as Array[Battler], DetRng.new(7182), 6
+	)
+	var before := friend.hp
+	battle.use_item(actor, "mending_stone", friend)
+	_equal("命結びの石は味方を28回復", friend.hp - before, 28)
+	_equal("命結びの石はこの戦闘で使い切る",
+		battle.tool_uses_left(actor, "item:mending_stone", Database.item("mending_stone")), 0)
+	var after_first := friend.hp
+	battle.use_item(actor, "mending_stone", friend)
+	_equal("1戦1回を越えて回復しない", friend.hp, after_first)
+	_check("使い切り表示では手番も消費しない", not battle.last_action_consumed)
+
+	friend.hp = 10
+	actor.hp = 10
+	var group_battle := BattleSystem.new()
+	group_battle.start(
+		[actor, friend] as Array[Battler], [foe] as Array[Battler], DetRng.new(7183), 8
+	)
+	group_battle.use_item(actor, "pilgrim_chalice", null)
+	_check("巡礼の聖杯は生きている仲間全員を癒す", actor.hp > 10 and friend.hp > 10)
+
+	friend.hp = 5
+	var gear_battle := BattleSystem.new()
+	gear_battle.start(
+		[actor, friend] as Array[Battler], [foe] as Array[Battler], DetRng.new(7184), 4
+	)
+	gear_battle.use_gear(actor, "prayer_staff", friend)
+	_equal("祈りの錫杖は装備使用で22回復", friend.hp, 27)
+	_equal("装備使用も1戦1回を共有契約で守る", gear_battle.tool_uses_left(
+		actor, "gear:prayer_staff", Database.gear("prayer_staff").get("battle_use", {})), 0)
+
+	var saw_reusable := false
+	for seed_value in range(1, 501):
+		var reward := ChestReward.roll(DetRng.new(seed_value), 8, 20)
+		var item_id := String(reward.get("item", ""))
+		if item_id in reusable:
+			saw_reusable = saw_reusable or int(reward.get("item_count", 0)) == 1
+	_check("宝箱の別枠から戦具が見つかる", saw_reusable)
+
+	var equip_uses := 0
+	for gear_id in Database.all_equipment():
+		if not Database.gear(String(gear_id)).get("battle_use", {}).is_empty():
+			equip_uses += 1
+	_check("戦闘中に使える武器・防具が3種以上", equip_uses >= 3, str(equip_uses))
+	var view_source := FileAccess.get_file_as_string("res://src/scenes/battle_view.gd")
+	_check("装備使用は戦闘の道具欄へ接続される",
+		view_source.contains("_available_item_refs") and view_source.contains("system.use_gear"))
+
+	var test_dir := DirAccess.open("user://")
+	for suffix in [".json", ".bak.json", ".tmp.json", ".suspend.json"]:
+		if test_dir.file_exists(TOOL_TEST_PREFIX + suffix):
+			test_dir.remove(TOOL_TEST_PREFIX + suffix)
+	state.free()
+
+
 func _damage_item_result(seed_value: int) -> Dictionary:
 	var user := _make_battler(510, "道具使い", 12)
 	var target := _make_battler(511, "氷獣", 8, false)
@@ -2669,6 +3241,88 @@ func _damage_item_result(seed_value: int) -> Dictionary:
 	var before := target.hp
 	var lines := battle.use_item(user, "ember_vial", target)
 	return {"damage": before - target.hp, "lines": lines}
+
+
+## オートの道具は明示的に許可したときだけ、危機を戻す用途へ絞って使う。
+func _test_auto_item_permission() -> void:
+	Database.reload()
+	var actor := _make_battler(520, "使い手", 18)
+	actor.abilities = ["attack"]
+	var friend := _make_battler(521, "仲間", 12)
+	var foe := _make_battler(522, "敵", 9, false)
+	foe.source_id = "gel"
+	var battle := BattleSystem.new()
+	battle.start(
+		[actor, friend] as Array[Battler], [foe] as Array[Battler], DetRng.new(520), 4
+	)
+
+	friend.hp = 20
+	var denied := AutoTactic.decide(battle, actor, AutoTactic.Mode.SAFE)
+	_check(
+		"道具を許可しなければオートは消耗品を選ばない",
+		String(denied.get("item", "")) == ""
+	)
+	var healing := AutoTactic.decide(
+		battle, actor, AutoTactic.Mode.SAFE,
+		{"herb": 1, "medicine": 1, "elixir": 1}
+	)
+	_check(
+		"許可時は瀕死へ必要量を満たす最小の回復品を選ぶ",
+		String(healing.get("item", "")) == "medicine" and healing.get("target") == friend,
+		str(healing)
+	)
+	friend.max_hp = 40
+	friend.hp = 10
+	var preserves_cure := AutoTactic.decide(
+		battle, actor, AutoTactic.Mode.SAFE, {"herb": 1, "remedy": 1}
+	)
+	_check(
+		"傷だけなら複合の状態回復品を温存する",
+		String(preserves_cure.get("item", "")) == "herb",
+		str(preserves_cure)
+	)
+
+	friend.max_hp = 100
+	friend.hp = 0
+	var revival := AutoTactic.decide(
+		battle, actor, AutoTactic.Mode.AGGRESSIVE, {"feather": 1}
+	)
+	_check(
+		"攻撃重視でも許可された蘇生品は倒れた仲間へ使う",
+		String(revival.get("item", "")) == "feather" and revival.get("target") == friend,
+		str(revival)
+	)
+
+	friend.hp = friend.max_hp
+	friend.poison_turns = 2
+	var cleansing := AutoTactic.decide(
+		battle, actor, AutoTactic.Mode.SAFE, {"antidote": 1, "remedy": 1}
+	)
+	_check(
+		"守備重視は状態回復品を安い順で使う",
+		String(cleansing.get("item", "")) == "antidote" and cleansing.get("target") == friend,
+		str(cleansing)
+	)
+
+	friend.poison_turns = 0
+	foe.weak = ["fire"]
+	var reserved := AutoTactic.decide(
+		battle, actor, AutoTactic.Mode.AGGRESSIVE, {"ember_vial": 2, "quick_tonic": 1}
+	)
+	_check("攻撃道具と加速薬はオートで浪費しない", String(reserved.get("item", "")) == "")
+
+	var view_source := FileAccess.get_file_as_string("res://src/scenes/battle_view.gd")
+	var settings_source := FileAccess.get_file_as_string("res://src/scenes/settings_view.gd")
+	_check(
+		"戦闘画面は設定で許可した在庫だけをオート判断へ渡す",
+		view_source.contains("Settings.auto_items")
+		and view_source.contains('not bool(Database.item(String(id)).get("reusable", false))')
+	)
+	_check(
+		"設定画面からオートの道具許可を切り替えられる",
+		settings_source.contains("Row.AUTO_ITEMS")
+		and settings_source.contains("Settings.auto_items = not Settings.auto_items")
+	)
 
 
 ## 宝箱と盗むはラン終了時に失う報酬。恒久資源より大胆にしつつ、
@@ -2711,7 +3365,11 @@ func _test_run_loot_rewards() -> void:
 		"同じ敵から二度取れない",
 		battle.stolen_items.size() == before_items and battle.stolen_gold == before_gold
 	)
-	_check("二度目は空だと伝える", "もう なにも" in String(second_lines[0]))
+	# **文言そのものを書かない**（S-6a）。言い回しは見直しの対象なので、
+	# ここに写すと直すたびにテストが落ちる（実際、かなを漢字へ寄せた回で落ちた）。
+	# 見るのは「空だと伝える行が出るか」で、文は語彙から引く。
+	_check("二度目は空だと伝える",
+		String(second_lines[0]) == BattleTextSource.STEAL_FROM_1 % gel.name)
 
 	var equipped_thief := _make_battler(3, "手練れ", 18)
 	equipped_thief.effects = ["steal_up"]
@@ -2956,7 +3614,7 @@ func _test_database_loaded() -> void:
 	_check("職業が読める", Database.all_jobs().size() >= 4, str(Database.job_ids()))
 	_check("アビリティが読める", Database.all_abilities().size() >= 10)
 	_check("モンスターが読める", Database.all_monsters().size() >= 3)
-	_equal("せんしの名前", Database.job("soldier").get("name", ""), "せんし")
+	_equal("戦士の名前", Database.job("soldier").get("name", ""), "戦士")
 	_check("_comment が除かれている", not Database.jobs.has("_comment"))
 
 	# すべての職業の習得技が実在すること（データの綴り間違いは静かに壊れるので必ず検査）。

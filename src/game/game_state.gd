@@ -177,6 +177,20 @@ var event_biome_changes: Dictionary = {}
 ## 済んだイベント（同じものを二度出さない）。
 var event_done: Dictionary = {}
 
+## 選んだあと、まだ実行を終えていない任意イベント。
+##
+## 報酬を選択画面で即時配布せず、街道の移動・町の接触・洞の探索・戦闘勝利まで
+## 待たせるためのラン内状態。配列の座標だけを持つので中断JSONへそのまま書ける。
+var event_task: Dictionary = {}
+
+## 選択肢や説明だけで終わらせず、町・洞・主戦の実操作まで保持する物語の目的。
+## 任意イベントとは同時に進められるため、event_task と上書きし合わない。
+var story_task: Dictionary = {}
+
+## 町で一度だけ行えること。`facility:<町>` と `guide:<町>` を分けて持つ。
+## 世界は中断時に種から作り直すので、利用済みの印だけを保存する。
+var town_actions_done: Dictionary = {}
+
 ## これまでに選んだ手の傾向（tag -> 回数）。
 ##
 ## **世界がプレイヤーを覚えている**ようにするためのもの。後のイベントで
@@ -214,6 +228,7 @@ func _ready() -> void:
 		if (
 			String(arg).begins_with("--shot=")
 			or String(arg).begins_with("--play=")
+			or String(arg).begins_with("--inspect=")
 		):
 			volatile_session = true
 			break
@@ -368,6 +383,9 @@ func start_new_run(seed_value: int = -1) -> void:
 	event_route_changes = 0
 	event_biome_changes = {}
 	event_done = {}
+	event_task = {}
+	story_task = {}
+	town_actions_done = {}
 	event_tags = {}
 	run_active = true
 	runs_attempted += 1
@@ -447,6 +465,11 @@ func _apply_upgrades_to_run() -> void:
 		var waters := int(set_row.get("water", 0))
 		if waters > 0:
 			add_item("water", waters)
+		# 戦具は解放済み候補から選んだ1個だけ。消耗品の物量とは独立した判断にする。
+		for row in reusable_loadouts():
+			if String(row.get("id", "")) == reusable_loadout_id:
+				add_item(reusable_loadout_id)
+				break
 
 
 ## 道中の調合（E-2b / れんきんし「ちょうごうの印」）。
@@ -512,6 +535,18 @@ func descend() -> void:
 	floor_changed.emit(floor_number)
 
 
+## 洞の中で1階戻る。1階の上り階段は世界へ出るため、ここでは動かさない。
+func ascend() -> bool:
+	if String(site.get("kind", "")) != "cave" or int(site.get("floor", 1)) <= 1:
+		return false
+	site["floor"] = int(site.get("floor", 1)) - 1
+	floor_number = mini(
+		int(site.get("danger", 1)) + int(site.get("floor", 1)) - 1, WorldMap.MAX_DANGER
+	)
+	floor_changed.emit(floor_number)
+	return true
+
+
 ## 拠点地から出たあと、その 1 マス外へ降ろす。
 ##
 ## 中に居た場所（拠点地のマス）へそのまま戻すと、**一歩動いてまた入る**。
@@ -560,6 +595,9 @@ func enter_site(at: Vector2i) -> Dictionary:
 ## **順序を崩すと話が読めなくなる**ので、進みは 1 本道に保つ。
 func story_beat_at(pos: Vector2i) -> Dictionary:
 	if world == null:
+		return {}
+	# 今の拍は実操作が完了するまで進めず、同じ説明や選択を開き直さない。
+	if not story_task.is_empty():
 		return {}
 	var beat := world.next_beat()
 	if beat.is_empty():
@@ -782,6 +820,9 @@ func end_run(victory: bool, outcome: String = "") -> Dictionary:
 	event_route_changes = 0
 	event_biome_changes = {}
 	event_done = {}
+	event_task = {}
+	story_task = {}
+	town_actions_done = {}
 	event_tags = {}
 	active_run_rules = {}
 	save_game()
@@ -812,6 +853,10 @@ func earn_gold(amount: int) -> void:
 func add_item(item_id: String, count: int = 1) -> void:
 	if count <= 0 or not Database.all_items().has(item_id):
 		return
+	# なくならない戦具は同じ物を重ねても用途が増えない。宝箱の重複も1個へ畳む。
+	if bool(Database.item(item_id).get("reusable", false)):
+		inventory[item_id] = 1
+		return
 	inventory[item_id] = item_count(item_id) + count
 
 
@@ -824,6 +869,8 @@ func consume_item(item_id: String) -> bool:
 	var have := item_count(item_id)
 	if have <= 0:
 		return false
+	if bool(Database.item(item_id).get("reusable", false)):
+		return false
 	if have == 1:
 		inventory.erase(item_id)
 	else:
@@ -835,6 +882,17 @@ func consume_item(item_id: String) -> bool:
 func inventory_ids() -> Array:
 	var ids := inventory.keys()
 	ids.sort()
+	return ids
+
+
+## 渡す・調合するなど、失ってよい品だけの一覧。
+## 戦具は inventory に在るが、イベントの「どうぐ1つ」へ混ぜない。
+func consumable_inventory_ids() -> Array:
+	var ids: Array = []
+	for raw_id in inventory_ids():
+		var item_id := String(raw_id)
+		if not bool(Database.item(item_id).get("reusable", false)):
+			ids.append(item_id)
 	return ids
 
 
@@ -1003,6 +1061,7 @@ var inherit_signs: Array[String] = []
 ## 何を選んだかがランの性格になる。
 var supply_set_id := "coin"
 var shop_focus_id := ""
+var reusable_loadout_id := ""
 
 
 ## 選べる支給品の型（いまの段で）。
@@ -1034,6 +1093,25 @@ func set_shop_focus(id: String) -> bool:
 	for row in shop_focuses():
 		if String(row["id"]) == id:
 			shop_focus_id = id
+			save_game()
+			return true
+	return false
+
+
+## 解放済みの戦具候補。0段なら空で、持ち込み自体がまだ無い。
+func reusable_loadouts() -> Array[Dictionary]:
+	return RunChoice.reusable_loadouts(upgrade_level("relic_satchel"))
+
+
+## 次の出撃へ持ち込む戦具。空文字は「持ち込まない」。
+func set_reusable_loadout(id: String) -> bool:
+	if id == "":
+		reusable_loadout_id = ""
+		save_game()
+		return true
+	for row in reusable_loadouts():
+		if String(row["id"]) == id:
+			reusable_loadout_id = id
 			save_game()
 			return true
 	return false
@@ -1258,7 +1336,7 @@ const SAVE_VERSION := 5
 ## 恒久データを辞書にする。ファイル入出力と分けてあるので、
 ## 「書いて読み直しても壊れない」をテストから確かめられる。
 ## 中断の形式。
-const SUSPEND_VERSION := 1
+const SUSPEND_VERSION := 2
 
 
 ## 中断できるか（ラン中で、まだ終わっていない）。
@@ -1297,6 +1375,9 @@ func to_suspend() -> Dictionary:
 		"seals_broken": broken,
 		"seals_known": known,
 		"events_done": done,
+		"event_task": event_task.duplicate(true),
+		"story_task": story_task.duplicate(true),
+		"town_actions_done": town_actions_done.duplicate(),
 		"event_tags": event_tags.duplicate(),
 		"event_encounter_bias": event_encounter_bias,
 		"event_bias_steps": event_bias_steps,
@@ -1392,6 +1473,7 @@ func resume() -> bool:
 	event_map_reveals = int(d.get("event_map_reveals", 0))
 	event_route_changes = int(d.get("event_route_changes", 0))
 	event_biome_changes = d.get("event_biome_changes", {}).duplicate()
+	town_actions_done = d.get("town_actions_done", {}).duplicate()
 
 	var broken: Array = d.get("seals_broken", [])
 	for i in mini(broken.size(), world.seals.size()):
@@ -1408,6 +1490,8 @@ func resume() -> bool:
 		var pair: Array = raw
 		if pair.size() == 2:
 			event_done[Vector2i(int(pair[0]), int(pair[1]))] = true
+	event_task = d.get("event_task", {}).duplicate(true)
+	story_task = d.get("story_task", {}).duplicate(true)
 	world.story_beat = int(d.get("story_beat", 0))
 	world.story_choice = String(d.get("story_choice", ""))
 
@@ -1467,6 +1551,7 @@ func to_dict() -> Dictionary:
 		"inherit_signs": inherit_signs,
 		"supply_set": supply_set_id,
 		"shop_focus": shop_focus_id,
+		"reusable_loadout": reusable_loadout_id,
 		"run_rules": run_rule_choices,
 		"roster": roster.map(func(m: PartyMember) -> Dictionary: return m.to_dict()),
 		"active": active_indices,
@@ -1495,6 +1580,7 @@ func load_from_dict(data: Dictionary) -> bool:
 	inherit_signs.assign(data.get("inherit_signs", []))
 	supply_set_id = String(data.get("supply_set", "coin"))
 	shop_focus_id = String(data.get("shop_focus", ""))
+	reusable_loadout_id = String(data.get("reusable_loadout", ""))
 	upgrades = data.get("upgrades", {})
 	var raw_rules: Variant = data.get("run_rules", RunRules.default_config())
 	run_rule_choices = (
@@ -1662,6 +1748,9 @@ func _reset_after_save_erase() -> void:
 	event_route_changes = 0
 	event_biome_changes = {}
 	event_done = {}
+	event_task = {}
+	story_task = {}
+	town_actions_done = {}
 	event_tags = {}
 	lifeline_left = 0
 

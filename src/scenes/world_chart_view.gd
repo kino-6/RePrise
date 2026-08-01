@@ -32,6 +32,7 @@ const C_TOWN := Color8(236, 225, 181)
 const C_CAVE := Color8(226, 139, 64)
 const C_CASTLE := Color8(195, 69, 80)
 const C_CURRENT := Color8(91, 222, 235)
+const C_ELITE := Color8(235, 76, 76)
 
 var _world: WorldMap = null
 var _player_pos := Vector2i.ZERO
@@ -140,6 +141,13 @@ func _draw_map() -> void:
 				)
 			"castle":
 				_draw_marker(origin, pos, C_CASTLE, 7)
+	for raw_pos in _world.events:
+		var pos: Vector2i = raw_pos
+		if (
+			bool(_world.events[pos].get("visible_elite", false))
+			and not GameState.event_done.has(pos)
+		):
+			_draw_marker(origin, pos, C_ELITE, 5)
 
 	# 現在地は拠点の上からでも必ず読める輪郭にする。
 	var current := origin + Vector2(_player_pos * TILE_SCALE) + Vector2(1, 1)
@@ -189,6 +197,7 @@ func _draw_legend() -> void:
 	panel.line("□ %s" % Terms.MAP_TOWN, C_TOWN)
 	panel.line("▲ %s" % Terms.MAP_SEAL, C_CAVE)
 	panel.line("■ %s" % Terms.MAP_CASTLE, C_CASTLE)
+	panel.line("◆ %s" % Terms.MAP_ELITE, C_ELITE)
 	if _route_revealed:
 		panel.line("━ %s" % Terms.MAP_SAFE_ROUTE, C_ROUTE)
 	panel.skip(4.0)

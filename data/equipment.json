@@ -1,7 +1,7 @@
 {
   "_comment": "装備。slot: weapon / armor / accessory。weapon / armor の kind は jobs.json の equip 適性と照合する。accessory は全職共通。shop=false は宝箱・イベント限定、staple=true は危険度が離れても店に残る基本装備。ゴールドと同じくラン内資源で、全滅すると失う。cost_scale は行動コストの倍率差で、重い武器ほど次の手番が遅れる。",
   "short_sword": {
-    "name": "みじかい剣",
+    "name": "小剣",
     "slot": "weapon",
     "kind": "blade",
     "atk": 4,
@@ -12,7 +12,7 @@
     "stock": 1
   },
   "war_axe": {
-    "name": "いくさ斧",
+    "name": "戦斧",
     "slot": "weapon",
     "kind": "heavy",
     "atk": 11,
@@ -23,19 +23,27 @@
     "stock": 1
   },
   "flame_dagger": {
-    "name": "ほのおの短刀",
+    "name": "炎の短刀",
     "slot": "weapon",
     "kind": "knife",
     "atk": 7,
     "cost_scale": -10,
     "element": "fire",
-    "desc": "通常攻撃に炎が乗る。軽い。",
+    "desc": "通常攻撃に炎が乗る。道具として使うと炎を放つ。",
+    "battle_use": {
+      "desc": "何度でも敵1体へ炎を放つ。",
+      "effect": "item_damage",
+      "element": "fire",
+      "power": 30,
+      "target": "one_enemy",
+      "cost": 90
+    },
     "price": 168,
     "floor_min": 5,
     "stock": 1
   },
   "oak_staff": {
-    "name": "かしの杖",
+    "name": "樫の杖",
     "slot": "weapon",
     "kind": "focus",
     "atk": 2,
@@ -140,7 +148,15 @@
     "atk": 4,
     "mag": 6,
     "def": 3,
-    "desc": "魔力を保ちつつ、前線でも崩れにくい。",
+    "desc": "魔力を保つ。道具として使うと味方を癒す。",
+    "battle_use": {
+      "desc": "味方1人を癒す。1戦に1回。",
+      "effect": "heal_hp",
+      "power": 22,
+      "target": "one_ally",
+      "cost": 100,
+      "uses_per_battle": 1
+    },
     "price": 88,
     "floor_min": 2,
     "stock": 1
@@ -212,7 +228,7 @@
     "stock": 1
   },
   "thorn_whip": {
-    "name": "いばらの鞭",
+    "name": "茨の鞭",
     "slot": "weapon",
     "kind": "beast",
     "atk": 7,
@@ -248,7 +264,7 @@
     "stock": 1
   },
   "leather_vest": {
-    "name": "かわのむねあて",
+    "name": "革の胸当て",
     "slot": "armor",
     "kind": "light",
     "def": 5,
@@ -258,7 +274,7 @@
     "stock": 1
   },
   "chain_mail": {
-    "name": "くさりかたびら",
+    "name": "鎖の鎧",
     "slot": "armor",
     "kind": "heavy",
     "def": 12,
@@ -268,7 +284,7 @@
     "stock": 1
   },
   "silk_robe": {
-    "name": "きぬのローブ",
+    "name": "絹のローブ",
     "slot": "armor",
     "kind": "robe",
     "def": 6,
@@ -385,14 +401,22 @@
     "mag": 6,
     "agi": 6,
     "cost_scale": -6,
-    "desc": "守りを削り、術と手番を速める。",
+    "desc": "守りを削り、術と手番を速める。戦闘中にも力を引き出せる。",
+    "battle_use": {
+      "desc": "自分を加速する。1戦に1回。",
+      "effect": "haste",
+      "power": 0,
+      "target": "self",
+      "cost": 90,
+      "uses_per_battle": 1
+    },
     "price": 374,
     "floor_min": 9,
     "shop": false,
     "stock": 1
   },
   "swift_band": {
-    "name": "はやての腕輪",
+    "name": "疾風の腕輪",
     "slot": "accessory",
     "agi": 6,
     "cost_scale": -8,
@@ -402,7 +426,7 @@
     "stock": 1
   },
   "guard_ring": {
-    "name": "まもりの指輪",
+    "name": "守りの指輪",
     "slot": "accessory",
     "def": 4,
     "hp": 12,
@@ -411,10 +435,10 @@
     "stock": 1
   },
   "thief_glove": {
-    "name": "ぬすっとの手袋",
+    "name": "盗賊の手袋",
     "slot": "accessory",
     "agi": 2,
-    "desc": "レアを狙いやすくなり、コモン品を 2 こ盗む。",
+    "desc": "希少品を狙いやすくなり、通常品を2個盗む。",
     "effect": "steal_up",
     "price": 104,
     "floor_min": 3,

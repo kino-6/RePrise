@@ -56,7 +56,7 @@
     }
   },
   "elder_gel": {
-    "name": "ゲルのぬし",
+    "name": "ゲルの主",
     "sprite": "gel",
     "hp": 58,
     "mp": 12,
@@ -115,7 +115,7 @@
     }
   },
   "shade": {
-    "name": "かげのもの",
+    "name": "影の者",
     "sprite": "shade",
     "hp": 52,
     "mp": 24,
@@ -149,7 +149,7 @@
     ]
   },
   "golem": {
-    "name": "いしのしもべ",
+    "name": "石のしもべ",
     "sprite": "golem",
     "hp": 130,
     "mp": 0,
@@ -212,7 +212,7 @@
     }
   },
   "arcane_hound": {
-    "name": "まどうりょうけん",
+    "name": "魔導猟犬",
     "sprite": "arcane_hound",
     "hp": 24,
     "mp": 0,
@@ -237,7 +237,7 @@
     "floor_max": 5
   },
   "lantern_mimic": {
-    "name": "くらいあかり",
+    "name": "誘い灯",
     "sprite": "lantern_mimic",
     "hp": 30,
     "mp": 6,
@@ -268,7 +268,7 @@
     ]
   },
   "plague_moth": {
-    "name": "えきが",
+    "name": "疫蛾",
     "sprite": "plague_moth",
     "hp": 22,
     "mp": 14,
@@ -294,7 +294,7 @@
     "floor_max": 6
   },
   "ruin_automaton": {
-    "name": "いせききへい",
+    "name": "遺跡機兵",
     "sprite": "ruin_automaton",
     "hp": 62,
     "mp": 0,
@@ -323,7 +323,7 @@
     ]
   },
   "frost_stalker": {
-    "name": "ひょうがじゅう",
+    "name": "氷牙獣",
     "sprite": "frost_stalker",
     "hp": 42,
     "mp": 10,
@@ -354,7 +354,7 @@
     ]
   },
   "mire_oracle": {
-    "name": "ぬまのめ",
+    "name": "沼の目",
     "sprite": "mire_oracle",
     "hp": 42,
     "mp": 30,
@@ -384,7 +384,7 @@
     "floor_max": 10
   },
   "fungal_knight": {
-    "name": "きんがいきし",
+    "name": "菌骸騎士",
     "sprite": "fungal_knight",
     "hp": 68,
     "mp": 8,
@@ -412,7 +412,7 @@
     "floor_max": 10
   },
   "ember_wraith": {
-    "name": "ほむらぼうれい",
+    "name": "焔亡霊",
     "sprite": "ember_wraith",
     "hp": 46,
     "mp": 34,
@@ -445,7 +445,7 @@
     ]
   },
   "crystal_drake": {
-    "name": "しょうりんりゅう",
+    "name": "晶鱗竜",
     "sprite": "crystal_drake",
     "hp": 89,
     "mp": 28,
@@ -476,7 +476,7 @@
     ]
   },
   "void_scribe": {
-    "name": "きょじじゅつし",
+    "name": "虚字術師",
     "sprite": "void_scribe",
     "hp": 62,
     "mp": 40,
@@ -506,7 +506,7 @@
     "floor_max": 10
   },
   "chain_ogre": {
-    "name": "くさりおに",
+    "name": "鎖鬼",
     "sprite": "chain_ogre",
     "hp": 111,
     "mp": 0,
@@ -537,7 +537,7 @@
     ]
   },
   "shattered_seraph": {
-    "name": "かけたてんし",
+    "name": "欠けた天使",
     "sprite": "shattered_seraph",
     "hp": 93,
     "mp": 30,
@@ -564,7 +564,7 @@
     "floor_max": 10
   },
   "thorn_crowned_king": {
-    "name": "けいかんのこおう",
+    "name": "荊冠の古王",
     "sprite": "thorn_crowned_king",
     "boss": true,
     "hp": 640,
@@ -594,7 +594,7 @@
     "floor_max": 10
   },
   "crucible_colossus": {
-    "name": "ろしんきょぞう",
+    "name": "炉心巨像",
     "sprite": "crucible_colossus",
     "boss": true,
     "hp": 700,
@@ -624,7 +624,7 @@
     "floor_max": 10
   },
   "frostbound_oracle": {
-    "name": "ひょうそうのしんたく",
+    "name": "氷葬の神託",
     "sprite": "frostbound_oracle",
     "boss": true,
     "hp": 560,
@@ -655,7 +655,7 @@
     "floor_max": 10
   },
   "clockwork_hound": {
-    "name": "からくりいぬ",
+    "name": "機巧犬",
     "sprite": "clockwork_hound",
     "hp": 34,
     "mp": 0,
@@ -682,7 +682,7 @@
     "floor_max": 8
   },
   "sentry_orb": {
-    "name": "かんしきゅう",
+    "name": "監視球",
     "sprite": "sentry_orb",
     "hp": 30,
     "mp": 20,
@@ -709,7 +709,7 @@
     "floor_max": 9
   },
   "lancer": {
-    "name": "ていこくそうへい",
+    "name": "帝国槍兵",
     "sprite": "lancer",
     "hp": 54,
     "mp": 0,
@@ -734,7 +734,7 @@
     "floor_max": 9
   },
   "rifleman": {
-    "name": "ていこくじゅうへい",
+    "name": "帝国銃兵",
     "sprite": "rifleman",
     "hp": 44,
     "mp": 4,
@@ -760,7 +760,7 @@
     "floor_max": 10
   },
   "medic": {
-    "name": "ていこくえいせいへい",
+    "name": "帝国衛生兵",
     "sprite": "medic",
     "hp": 44,
     "mp": 30,
@@ -786,7 +786,7 @@
     "floor_max": 10
   },
   "sapper": {
-    "name": "ていこくこうへい",
+    "name": "帝国工兵",
     "sprite": "sapper",
     "hp": 50,
     "mp": 16,
@@ -811,7 +811,7 @@
     "floor_max": 10
   },
   "boiler_automaton": {
-    "name": "じょうききどうへい",
+    "name": "蒸気機動兵",
     "sprite": "boiler_automaton",
     "hp": 78,
     "mp": 0,
@@ -842,7 +842,7 @@
     ]
   },
   "ash_revenant": {
-    "name": "はいのもうじゃ",
+    "name": "灰の亡者",
     "sprite": "ash_revenant",
     "hp": 58,
     "mp": 12,
@@ -869,7 +869,7 @@
     "floor_max": 10
   },
   "officer": {
-    "name": "ていこくしかん",
+    "name": "帝国士官",
     "sprite": "officer",
     "hp": 68,
     "mp": 20,
@@ -895,7 +895,7 @@
     "floor_max": 10
   },
   "magus": {
-    "name": "ていこくまどうへい",
+    "name": "帝国魔導兵",
     "sprite": "magus",
     "hp": 52,
     "mp": 36,
@@ -927,7 +927,7 @@
     ]
   },
   "iron_cavalier": {
-    "name": "てつきへい",
+    "name": "鉄騎兵",
     "sprite": "iron_cavalier",
     "hp": 94,
     "mp": 0,
@@ -958,7 +958,7 @@
     ]
   },
   "siege_walker": {
-    "name": "こうじょうほこうき",
+    "name": "工場歩行機",
     "sprite": "siege_walker",
     "hp": 132,
     "mp": 10,
@@ -991,7 +991,7 @@
     ]
   },
   "iron_margrave": {
-    "name": "てつのへんきょうはく",
+    "name": "鉄の辺境伯",
     "sprite": "iron_margrave",
     "boss": true,
     "hp": 660,
@@ -1021,7 +1021,7 @@
     "floor_max": 10
   },
   "land_dreadnought": {
-    "name": "りくじょうせんかん",
+    "name": "陸上戦艦",
     "sprite": "land_dreadnought",
     "boss": true,
     "hp": 760,
@@ -1051,7 +1051,7 @@
     "floor_max": 10
   },
   "aetheric_war_engine": {
-    "name": "れいきせんそうき",
+    "name": "霊気戦争機",
     "sprite": "aetheric_war_engine",
     "boss": true,
     "hp": 620,

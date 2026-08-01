@@ -1,7 +1,7 @@
 {
   "_comment": "cost は CTB の行動コスト（100 が標準）。次の手番までの待ち時間そのものなので、MP と並ぶ第 2 のリソース軸になる。kind: physical / magical / heal / buff / debuff / special。target: one_enemy / group_enemy / all_enemies / one_ally / all_allies / one_ally_dead / self。element: fire / ice / bolt / dark（敵の耐性で倍率が変わる）。hits: 多段攻撃の回数。menu: spell=じゅもん / skill=とくぎ（無指定はコマンド直置き）。呪文名は他社の固有名詞を使わず独自に作る（docs/battle_design.md）。",
   "attack": {
-    "name": "こうげき",
+    "name": "攻撃",
     "desc": "ふつうに攻撃する。",
     "kind": "physical",
     "target": "one_enemy",
@@ -11,7 +11,7 @@
     "role": "基礎"
   },
   "guard": {
-    "name": "ぼうぎょ",
+    "name": "防御",
     "desc": "次の手番まで被害を半減。手番が早く回る。",
     "kind": "special",
     "target": "self",
@@ -21,7 +21,7 @@
     "role": "基礎"
   },
   "power_slash": {
-    "name": "おおぶり",
+    "name": "大振り",
     "desc": "渾身の一撃。次の手番が大きく遅れる。",
     "kind": "physical",
     "target": "one_enemy",
@@ -32,7 +32,7 @@
     "role": "大技"
   },
   "guard_stance": {
-    "name": "かばう",
+    "name": "身代わり",
     "desc": "味方ひとりへの攻撃を 肩代わりする。",
     "kind": "buff",
     "target": "one_ally",
@@ -44,7 +44,7 @@
     "role": "庇護"
   },
   "whirlwind": {
-    "name": "つむじぎり",
+    "name": "旋風斬り",
     "desc": "敵全体を薙ぐ。重いが、群れごと巻き込む。",
     "kind": "physical",
     "target": "all_enemies",
@@ -55,7 +55,7 @@
     "role": "範囲"
   },
   "double_slash": {
-    "name": "れんげき",
+    "name": "連撃",
     "desc": "三度 斬りつける。重いが、まとめて入る。",
     "kind": "physical",
     "target": "one_enemy",
@@ -161,7 +161,7 @@
     "role": "属性"
   },
   "quick_stab": {
-    "name": "はやわざ",
+    "name": "早業",
     "desc": "浅いが、ほとんど手番を消費しない。",
     "kind": "physical",
     "target": "one_enemy",
@@ -172,7 +172,7 @@
     "role": "速攻"
   },
   "steal": {
-    "name": "ぬすむ",
+    "name": "盗む",
     "desc": "敵から 持ち物を掠め取る。",
     "kind": "special",
     "target": "one_enemy",
@@ -184,7 +184,7 @@
     "role": "副次目的"
   },
   "shadow_step": {
-    "name": "しゅくち",
+    "name": "縮地",
     "desc": "自分の手番を強引に引き寄せる。",
     "kind": "buff",
     "target": "self",
@@ -196,7 +196,7 @@
     "role": "行動順"
   },
   "poison_blade": {
-    "name": "どくば",
+    "name": "毒刃",
     "desc": "毒を塗った刃。手番ごとに削れる。",
     "kind": "physical",
     "target": "one_enemy",
@@ -208,7 +208,7 @@
     "role": "状態追撃"
   },
   "bulwark": {
-    "name": "まもりのかまえ",
+    "name": "守りの構え",
     "desc": "味方全員を かばう構えに入る。",
     "kind": "buff",
     "target": "all_allies",
@@ -220,7 +220,7 @@
     "role": "庇護"
   },
   "smite": {
-    "name": "せいだん",
+    "name": "聖断",
     "desc": "光をまとって斬る。闇のものに よく効く。",
     "kind": "physical",
     "target": "one_enemy",
@@ -243,7 +243,7 @@
     "role": "治療"
   },
   "shuriken": {
-    "name": "しゅりけん",
+    "name": "手裏剣",
     "desc": "敵 1 グループへ刃を投げる。軽い。",
     "kind": "physical",
     "target": "group_enemy",
@@ -254,7 +254,7 @@
     "role": "範囲"
   },
   "smoke": {
-    "name": "けむりだま",
+    "name": "煙玉",
     "desc": "煙で目をくらます。鈍らせ、逃げやすくなる。",
     "kind": "debuff",
     "target": "all_enemies",
@@ -266,7 +266,7 @@
     "role": "副次目的"
   },
   "assassinate": {
-    "name": "ひっさつ",
+    "name": "必殺",
     "desc": "弱った相手にとどめを刺す。手負いほど深く入る。",
     "kind": "physical",
     "target": "one_enemy",
@@ -290,7 +290,7 @@
     "role": "中断"
   },
   "arrow": {
-    "name": "とおや",
+    "name": "遠矢",
     "desc": "遠くから射る。軽い。",
     "kind": "physical",
     "target": "one_enemy",
@@ -301,7 +301,7 @@
     "role": "速攻"
   },
   "arrow_storm": {
-    "name": "みだれや",
+    "name": "乱れ矢",
     "desc": "敵 1 グループへ 2 本ずつ射る。",
     "kind": "physical",
     "target": "group_enemy",
@@ -313,7 +313,7 @@
     "role": "範囲"
   },
   "magic_blade": {
-    "name": "まけん",
+    "name": "魔剣",
     "desc": "刃に炎をまとわせて斬る。",
     "kind": "physical",
     "target": "one_enemy",
@@ -337,7 +337,7 @@
     "role": "属性"
   },
   "rapid_shot": {
-    "name": "そくしゃ",
+    "name": "速射",
     "desc": "4 連射。1 発は軽い。",
     "kind": "physical",
     "target": "one_enemy",
@@ -349,7 +349,7 @@
     "role": "連撃"
   },
   "herb_smoke": {
-    "name": "やくえん",
+    "name": "薬煙",
     "desc": "味方全体を薬の煙で癒す。",
     "kind": "heal",
     "target": "all_allies",
@@ -372,7 +372,7 @@
     "role": "行動順"
   },
   "beast_fang": {
-    "name": "けもののきば",
+    "name": "獣の牙",
     "desc": "牙を立てる。傷が残り、毒のように蝕む。",
     "kind": "physical",
     "target": "group_enemy",
@@ -384,7 +384,7 @@
     "role": "状態追撃"
   },
   "play": {
-    "name": "あそぶ",
+    "name": "遊ぶ",
     "desc": "何が起きるか分からない。とても軽い。",
     "kind": "special",
     "target": "one_enemy",
@@ -396,7 +396,7 @@
     "role": "賭け"
   },
   "pierce_shot": {
-    "name": "つらぬき",
+    "name": "貫き",
     "desc": "守りを無視して撃つ。硬い相手に効く。",
     "kind": "physical",
     "target": "one_enemy",
@@ -408,7 +408,7 @@
     "role": "貫通"
   },
   "bomb": {
-    "name": "ばくやく",
+    "name": "爆薬",
     "desc": "敵 1 グループを爆ぜさせる。炎。",
     "kind": "physical",
     "target": "group_enemy",
@@ -420,7 +420,7 @@
     "role": "属性"
   },
   "time_stop": {
-    "name": "ときとまれ",
+    "name": "時よ止まれ",
     "desc": "敵全体の動きを鈍らせ、そのぶん自分が先に動く。",
     "kind": "debuff",
     "target": "all_enemies",
@@ -432,7 +432,7 @@
     "role": "行動順"
   },
   "beast_roar": {
-    "name": "じゅうのほうこう",
+    "name": "獣の咆哮",
     "desc": "敵全体を怯ませて眠らせる。",
     "kind": "debuff",
     "target": "all_enemies",
@@ -444,7 +444,7 @@
     "role": "中断"
   },
   "sage_strike": {
-    "name": "けんじゃのいちげき",
+    "name": "賢者の一撃",
     "desc": "敵全体を雷で打ち、味方の傷も塞ぐ。",
     "kind": "magical",
     "target": "all_enemies",
@@ -457,7 +457,7 @@
     "role": "副次目的"
   },
   "wild_card": {
-    "name": "きまぐれ",
+    "name": "気まぐれ",
     "desc": "三つの出目から ましなものを選ぶ。敵 1 グループへ。",
     "kind": "special",
     "target": "group_enemy",
@@ -469,7 +469,7 @@
     "role": "賭け"
   },
   "counter_stance": {
-    "name": "むかえうち",
+    "name": "迎え撃ち",
     "desc": "構えて待つ。受けた傷を そのまま返す。",
     "kind": "buff",
     "target": "self",
@@ -481,7 +481,7 @@
     "role": "庇護"
   },
   "chain_prayer": {
-    "name": "いのりのくさり",
+    "name": "祈りの鎖",
     "desc": "全員を癒し、いちばん深い傷の者を 速める。",
     "kind": "heal",
     "target": "all_allies",
@@ -493,7 +493,7 @@
     "role": "治療"
   },
   "triune": {
-    "name": "みつのことわり",
+    "name": "三つの理",
     "desc": "炎と氷と雷を 同時に通す。",
     "kind": "magical",
     "target": "all_enemies",
@@ -505,7 +505,7 @@
     "role": "属性"
   },
   "shadow_take": {
-    "name": "かげぬすみ",
+    "name": "影盗み",
     "desc": "奪って、そのまま先へ回る。",
     "kind": "special",
     "target": "one_enemy",
@@ -517,7 +517,7 @@
     "role": "副次目的"
   },
   "oath_shield": {
-    "name": "たてのちかい",
+    "name": "盾の誓い",
     "desc": "全員を 自分の背へ置く。",
     "kind": "buff",
     "target": "all_allies",
@@ -529,7 +529,7 @@
     "role": "庇護"
   },
   "afterimage": {
-    "name": "ざんえい",
+    "name": "残影",
     "desc": "倒しきれば すぐ次が動ける。",
     "kind": "physical",
     "target": "one_enemy",
@@ -541,7 +541,7 @@
     "role": "速攻"
   },
   "venom_rain": {
-    "name": "どくのあめ",
+    "name": "毒の雨",
     "desc": "群れごと蝕む。",
     "kind": "physical",
     "target": "group_enemy",
@@ -554,7 +554,7 @@
     "role": "状態追撃"
   },
   "rune_edge": {
-    "name": "るんのやいば",
+    "name": "ルーンの刃",
     "desc": "刃に属性を移す。しばらく通常攻撃に乗る。",
     "kind": "buff",
     "target": "self",
@@ -566,7 +566,7 @@
     "role": "副次目的"
   },
   "call_beast": {
-    "name": "よびごえ",
+    "name": "呼び声",
     "desc": "数が多いほど 応えるものが増える。",
     "kind": "magical",
     "target": "all_enemies",
@@ -578,7 +578,7 @@
     "role": "属性"
   },
   "reload": {
-    "name": "そうてん",
+    "name": "装填",
     "desc": "弾を込める。次の一撃が 守りを抜いて重くなる。",
     "kind": "buff",
     "target": "self",
@@ -590,7 +590,7 @@
     "role": "貫通"
   },
   "compound": {
-    "name": "ちょうごう",
+    "name": "調合",
     "desc": "薬と爆薬を 同時に撒く。",
     "kind": "magical",
     "target": "all_enemies",
@@ -602,7 +602,7 @@
     "role": "副次目的"
   },
   "stillness": {
-    "name": "せいしのり",
+    "name": "静止の理",
     "desc": "構えを解かせ、動きを止める。",
     "kind": "debuff",
     "target": "all_enemies",
@@ -614,7 +614,7 @@
     "role": "中断"
   },
   "time_wedge": {
-    "name": "ときのくさび",
+    "name": "時の楔",
     "desc": "味方ひとりの手番を 今へ引き寄せる。",
     "kind": "buff",
     "target": "one_ally",
@@ -626,7 +626,7 @@
     "role": "行動順"
   },
   "tame": {
-    "name": "てなずけ",
+    "name": "手なずけ",
     "desc": "倒さずに 戦いから降ろす。弱った相手ほど応じる。",
     "kind": "special",
     "target": "one_enemy",
@@ -638,7 +638,7 @@
     "role": "副次目的"
   },
   "grand_gamble": {
-    "name": "おおばくち",
+    "name": "大博打",
     "desc": "全部の出目を まとめて通す。良いも悪いも 全部くる。",
     "kind": "special",
     "target": "group_enemy",
@@ -650,7 +650,7 @@
     "role": "賭け"
   },
   "counter_phalanx": {
-    "name": "はんこうじん",
+    "name": "反攻陣",
     "desc": "味方を背に置き、受けた傷を返す。戦闘中 1 回。",
     "kind": "special",
     "target": "all_allies",
@@ -664,7 +664,7 @@
     "role": "全体庇護"
   },
   "veteran_barrage": {
-    "name": "ひゃくせんれんぱ",
+    "name": "百戦連破",
     "desc": "八連撃。倒した後の残りは別の敵へ向かう。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -679,7 +679,7 @@
     "role": "再配分"
   },
   "sanctuary": {
-    "name": "せいじょうけん",
+    "name": "聖浄圏",
     "desc": "味方全員の傷と異常を同時に治す。戦闘中 1 回。",
     "kind": "special",
     "target": "all_allies",
@@ -693,7 +693,7 @@
     "role": "全体治療"
   },
   "returning_bell": {
-    "name": "かんめいのかね",
+    "name": "還命の鐘",
     "desc": "倒れた味方を全員起こし、生者は一度だけ踏みとどまる。戦闘中 1 回。",
     "kind": "special",
     "target": "all_allies",
@@ -708,7 +708,7 @@
     "role": "全体蘇生"
   },
   "phase_reveal": {
-    "name": "じゃくそうかんぱ",
+    "name": "弱相看破",
     "desc": "弱点と耐性を見抜き、次の魔法で耐性を抜く。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -722,7 +722,7 @@
     "role": "耐性看破"
   },
   "fourfold_collapse": {
-    "name": "ししょうほうらく",
+    "name": "四象崩落",
     "desc": "炎・氷・雷・闇を順に通し、それぞれの効き目を残す。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -736,7 +736,7 @@
     "role": "四属性"
   },
   "shade_pilfer": {
-    "name": "かげさらい",
+    "name": "影奪い",
     "desc": "攻めながら奪う。奪い済みなら自分の手番を早める。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -750,7 +750,7 @@
     "role": "奪取速攻"
   },
   "time_pilfer": {
-    "name": "ときさらい",
+    "name": "時奪い",
     "desc": "敵の手番を奪い、最も遅い味方へ渡す。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -764,7 +764,7 @@
     "role": "手番移送"
   },
   "unyielding_line": {
-    "name": "ふらくじん",
+    "name": "不落陣",
     "desc": "全員をかばい、守りながら反撃する。戦闘中 1 回。",
     "kind": "special",
     "target": "all_allies",
@@ -778,7 +778,7 @@
     "role": "不落庇護"
   },
   "vow_of_life": {
-    "name": "せいめいのたて",
+    "name": "生命の盾",
     "desc": "味方全員を一度だけ戦闘不能から守り、自分は後ろへ回る。戦闘中 1 回。",
     "kind": "special",
     "target": "all_allies",
@@ -792,7 +792,7 @@
     "role": "致死防護"
   },
   "shadow_double": {
-    "name": "かげみ",
+    "name": "影身",
     "desc": "二つの影で次の二撃を無効にする。戦闘中 1 回。",
     "kind": "special",
     "target": "self",
@@ -806,7 +806,7 @@
     "role": "二撃回避"
   },
   "thousand_shadow_break": {
-    "name": "せんえいくずし",
+    "name": "千影崩し",
     "desc": "六連撃。倒した後も影が次の敵を追う。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -821,7 +821,7 @@
     "role": "追尾連撃"
   },
   "hunter_mark": {
-    "name": "しゅひょう",
+    "name": "狩標",
     "desc": "敵の情報を暴き、次の三撃の傷を深くする。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -835,7 +835,7 @@
     "role": "狩猟標識"
   },
   "sky_arrow_rain": {
-    "name": "てんしのあめ",
+    "name": "天矢の雨",
     "desc": "八本の矢。倒した後の矢は別の敵へ降る。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -850,7 +850,7 @@
     "role": "全群掃射"
   },
   "opposition_edge": {
-    "name": "そうこくじん",
+    "name": "相克刃",
     "desc": "敵に最も通る属性を刃へ移して斬る。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -864,7 +864,7 @@
     "role": "弱点選刃"
   },
   "fourfold_edge": {
-    "name": "しそうれんじん",
+    "name": "四相連刃",
     "desc": "炎・氷・雷・闇の刃を一度ずつ通す。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -878,7 +878,7 @@
     "role": "四相剣"
   },
   "guardian_pact": {
-    "name": "しゅごじゅうけい",
+    "name": "守護獣契",
     "desc": "傷が深ければ癒し、余裕があれば守りと速さを得る。戦闘中 1 回。",
     "kind": "special",
     "target": "all_allies",
@@ -892,7 +892,7 @@
     "role": "状況召喚"
   },
   "astral_beast_array": {
-    "name": "せいじゅうれつざ",
+    "name": "星獣列座",
     "desc": "星獣が攻撃・治療・足止めを一度に担う。戦闘中 1 回。",
     "kind": "special",
     "target": "all_enemies",
@@ -906,7 +906,7 @@
     "role": "三役召喚"
   },
   "lockbreaker_round": {
-    "name": "ふうきだん",
+    "name": "封機弾",
     "desc": "構えた敵の守りを抜いて撃ち、行動を中断する。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -921,7 +921,7 @@
     "role": "予告破壊"
   },
   "full_barrage": {
-    "name": "ぜんだんかいほう",
+    "name": "全弾解放",
     "desc": "守りを抜く六連射。後の二手は通常行動だけになる。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -936,7 +936,7 @@
     "role": "弾倉解放"
   },
   "chain_compound": {
-    "name": "れんせいちょうごう",
+    "name": "連成調合",
     "desc": "最も傷ついた味方を癒し、敵全体へ毒薬を撒く。戦闘中 1 回。",
     "kind": "special",
     "target": "all_enemies",
@@ -950,7 +950,7 @@
     "role": "二重調合"
   },
   "wise_furnace": {
-    "name": "けんろてんか",
+    "name": "賢炉転化",
     "desc": "満ちた MP を全て攻撃と全体回復へ変える。戦闘中 1 回。",
     "kind": "special",
     "target": "all_enemies",
@@ -965,7 +965,7 @@
     "role": "全資源転化"
   },
   "formula_reprise": {
-    "name": "じゅつしきさいえん",
+    "name": "術式再演",
     "desc": "直前に味方が使った通常魔法を、消費なしで再演する。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -980,7 +980,7 @@
     "role": "術式再演"
   },
   "twin_ring_cast": {
-    "name": "そうかんえいしょう",
+    "name": "双環詠唱",
     "desc": "習得中の攻撃魔法から異なる二つを連続で唱える。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -995,7 +995,7 @@
     "role": "二術連唱"
   },
   "time_exchange": {
-    "name": "こくこうかん",
+    "name": "刻交換",
     "desc": "敵と、最も遅い味方の手番を交換する。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -1009,7 +1009,7 @@
     "role": "手番交換"
   },
   "zero_time_field": {
-    "name": "れいこくかい",
+    "name": "零刻界",
     "desc": "味方全員を次へ揃え、自分は MP を失って最後尾へ回る。戦闘中 1 回。",
     "kind": "special",
     "target": "all_allies",
@@ -1023,7 +1023,7 @@
     "role": "零刻整列"
   },
   "pacify": {
-    "name": "なだめる",
+    "name": "鎮める",
     "desc": "弱った非ボスを倒さず戦いから降ろす。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -1038,7 +1038,7 @@
     "role": "確定懐柔"
   },
   "beast_procession": {
-    "name": "ひゃくじゅうこう",
+    "name": "百獣行",
     "desc": "敵数・味方の傷・敵の構えに応じ、三体の獣が動く。戦闘中 1 回。",
     "kind": "special",
     "target": "all_enemies",
@@ -1052,7 +1052,7 @@
     "role": "戦況獣行"
   },
   "fate_cards": {
-    "name": "うんめいふだ",
+    "name": "運命札",
     "desc": "二枚の運命から、より良い結果を選ぶ。戦闘中 1 回。",
     "kind": "special",
     "target": "one_enemy",
@@ -1066,7 +1066,7 @@
     "role": "選択乱数"
   },
   "curtain_return": {
-    "name": "まくがえし",
+    "name": "幕返し",
     "desc": "最も不利な状況を見抜き、蘇生・治療・中断・攻撃で返す。戦闘中 1 回。",
     "kind": "special",
     "target": "all_enemies",

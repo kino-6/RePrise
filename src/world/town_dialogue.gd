@@ -32,6 +32,27 @@ static func role_lines(role: String) -> Array:
 	)
 
 
+## 会話窓へ出す役名。画像IDとは分け、呼び名だけ差し替えられるようにする。
+static func role_name(role: String) -> String:
+	_ensure()
+	var names: Dictionary = _data.get("role_names", {})
+	return String(names.get(role, "町の人"))
+
+
+## 生業に対応する仕事場の表示文。仕組みは TownInteraction、文章はここに置く。
+static func facility(industry_id: String) -> Dictionary:
+	_ensure()
+	var facilities: Dictionary = _data.get("facilities", {})
+	var entry: Variant = facilities.get(industry_id, {})
+	if typeof(entry) != TYPE_DICTIONARY:
+		return {
+			"name": "町の仕事場",
+			"hint": "町の仕事場で、旅の準備を整えられる。",
+			"repeat": "この仕事場は利用済みだ。",
+		}
+	return (entry as Dictionary).duplicate()
+
+
 static func profile_lines(group: String, profile_id: String) -> Array:
 	_ensure()
 	var profiles: Dictionary = _data.get("profiles", {})
